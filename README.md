@@ -39,6 +39,26 @@ npm run build:single # un solo index.html autocontenido en dist-single/
 
 El workflow `.github/workflows/pages.yml` prueba, compila y publica en GitHub Pages en cada push a `main` (activa Pages con «GitHub Actions» como fuente).
 
+## Uso en clase sin servidor: avance, entregable y panel del profesor
+
+- **Identificación:** al abrir ClassBots por primera vez, Chispa pide el nombre y, si se quiere, el grupo. Todo se guarda solo en ese navegador.
+- **Métricas que se registran** por capítulo y por paso de misión:
+  - tiempo activo: bloques de 15 s con la pestaña visible y actividad reciente;
+  - ejecuciones, envíos y envíos fallidos;
+  - intentos y tiempo hasta superarlo, y si lo superó al primer envío;
+  - errores de compilación, de estructura y de ejecución, con su categoría (sintaxis, tipos, encapsulamiento, herencia, polimorfismo, null…);
+  - pruebas que fallaron, pistas abiertas, sugerencias de IA y si se usó la solución (solo es posible en modo profesor).
+- **Mi avance** (botón con el nombre del estudiante en la barra superior) muestra:
+  - un resumen: capítulos, tiempo, intentos por capítulo, porcentaje al primer envío, avance por mundo y temas donde más tropezó;
+  - **⬇ Descargar mi avance**: un `.json` con su código, progreso y métricas. Es el **entregable** y también sirve para seguir en otro equipo.
+  - **⬆ Cargar un avance**: disponible también desde la bienvenida.
+  - **Cambiar de estudiante**, para computadores compartidos.
+- **Panel del profesor** (aparece en modo profesor, que se activa con cinco clics en el título):
+  - arrastra los `.json` de la clase y verás los indicadores del grupo, los capítulos con más dificultad, los errores más frecuentes y una tabla ordenable por estudiante;
+  - al abrir un estudiante, ves su detalle por capítulo con el código que escribió;
+  - exporta **CSV resumen** y **CSV por capítulo**, separados por `;`, que Excel en español abre directamente.
+- **Integridad:** cada archivo lleva una firma. Si alguien lo edita a mano, el panel lo marca con ⚠ y el CSV dice «NO» en «Archivo íntegro». Es una protección contra cambios casuales, no seguridad fuerte: sin servidor, las soluciones y la firma viajan en el código del navegador.
+
 ## Editor
 
 Basado en CodeMirror 6, con un asistente propio que entiende las clases del proyecto:

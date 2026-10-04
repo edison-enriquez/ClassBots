@@ -15,6 +15,9 @@ import Guia from './components/Guia.jsx';
 import PestanasArchivos from './components/PestanasArchivos.jsx';
 import Dialogo from './components/Dialogo.jsx';
 import MapaMundo from './components/MapaMundo.jsx';
+import { Bienvenida, MiAvance } from './components/Avance.jsx';
+import PanelProfesor from './components/PanelProfesor.jsx';
+import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion } from './metricas/metricas.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
 
@@ -31,6 +34,8 @@ export default function App() {
   const [verMundo, setVerMundo] = useState(nivel.mundo);
   const [guia, setGuia] = useState(null);
   const [mapa, setMapa] = useState(false);
+  const [avance, setAvance] = useState(false);
+  const [panelProfe, setPanelProfe] = useState(false);
 
   const [cod, setCod] = useState(() => codigoDe(prog, i));
   const [revision, setRevision] = useState(0);
@@ -46,6 +51,24 @@ export default function App() {
   const editor = useRef(null);
   const clicsMarca = useRef(0);
   const temporizadorMarca = useRef(null);
+
+  // Métricas de aprendizaje: se guardan con el progreso y viajan en el archivo de avance
+  const medir = useCallback(f => setProg(p => ({ ...p, metricas: f(p.metricas) })), [setProg]);
+  useEffect(() => { medir(registrarSesion); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (prog.perfil) medir(m => registrarApertura(m, nivel.id)); }, [nivel.id, !!prog.perfil]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tiempo activo: cuenta en bloques de 15 s si la pestaña está visible y hubo actividad en los últimos 2 minutos
+  const actividad = useRef(Date.now());
+  const nivelActual = useRef(nivel.id);
+  nivelActual.current = nivel.id;
+  useEffect(() => {
+    const marcar = () => { actividad.current = Date.now(); };
+    const evs = ['keydown', 'pointerdown', 'pointermove', 'wheel'];
+    evs.forEach(ev => window.addEventListener(ev, marcar, { passive: true }));
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible' && Date.now() - actividad.current < 120000) medir(m => registrarTiempo(m, nivelActual.current, 15000));
+    }, 15000);
+    return () => { clearInterval(t); evs.forEach(ev => window.removeEventListener(ev, marcar)); };
+  }, [medir]);
 
   // Guardar el código del nivel
   useEffect(() => { setProg(p => ({ ...p, codigo: { ...p.codigo, [nivel.id]: cod } })); }, [cod]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -117,6 +140,7 @@ export default function App() {
   const izq = useRef(null);
   const ejecutar = enviar => {
     const r = evaluarNivel(nivel, cod.files, { incluirOcultas: enviar });
+    medir(m => registrarResultado(m, nivel.id, r, enviar));
     if (r.animacion && izq.current && izq.current.scrollTop > 120) izq.current.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     setResultado(r); setEnviado(enviar); setToken(t => t + 1); setExito(null);
     setTab('pruebas');
@@ -215,6 +239,8 @@ export default function App() {
           )}
         </nav>
         <div className="hud">
+          <button type="button" className="btn-sec perfil-btn" onClick={() => setAvance(true)} title="Mi avance: descargar, cargar y ver mis métricas">👤 {prog.perfil?.nombre?.split(' ')[0] || 'Estudiante'}</button>
+          {prog.profe && <button type="button" className="btn-sec profe-btn" onClick={() => setPanelProfe(true)}>Panel del profesor</button>}
           <button type="button" className="btn-sec mapa-btn" onClick={() => setMapa(true)}>Mapa</button>
           <button type="button" className="btn-sec guia-btn" onClick={() => setGuia('relaciones')}>Guía</button>
           {completadas.map(m => <button key={m.id} type="button" className="modulo-badge" title={`${m.recompensa}: obtenido en la misión «${m.titulo}». Ver en el Códice.`} onClick={() => setGuia('patrones')}>✦ {m.recompensa.split(' · ')[0]}</button>)}
@@ -232,9 +258,9 @@ export default function App() {
               <PixelStage nivel={nivel} modelo={diag.modelo} animacion={resultado?.animacion} token={token} onCaption={setCaption} />
               {exito && <div className="sello">{esMision ? '¡Paso superado!' : '¡Capítulo superado!'}</div>}
             </div>
-            <Dialogo caption={caption} reposo={resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : 'Escribe tu código y pulsa Ejecutar para ver la escena.'} />
+            <Dialogo caption={caption} reposo={resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : `${prog.perfil ? `¡Hola, ${prog.perfil.nombre.split(' ')[0]}! ` : ''}Escribe tu código y pulsa Ejecutar para ver la escena.`} />
           </div>
-          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : prog.hechos.includes(nivel.id)} onSolucion={() => { if (prog.profe) reemplazarTodo({ ...nivel.solucion }); }} onGuia={setGuia} profe={!!prog.profe} />
+          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : prog.hechos.includes(nivel.id)} onSolucion={() => { if (prog.profe) { reemplazarTodo({ ...nivel.solucion }); medir(m => registrarSolucion(m, nivel.id)); } }} onGuia={setGuia} profe={!!prog.profe} onPista={() => medir(m => registrarPista(m, nivel.id))} />
         </aside>
 
         <section className="der">
@@ -271,7 +297,7 @@ export default function App() {
               <span className={nErr ? 'on-err' : ''}>● {nErr}</span><span className={nWarn ? 'on-warn' : ''}>▲ {nWarn}</span>
             </button>
             <span className="aviso" role="status">{aviso}</span>
-            {modo === 'ia' && <button type="button" className="btn-mini ia" onMouseDown={e => e.preventDefault()} onClick={() => editor.current?.pedirIA()}>✦ Sugerir <kbd>Alt+\</kbd></button>}
+            {modo === 'ia' && <button type="button" className="btn-mini ia" onMouseDown={e => e.preventDefault()} onClick={() => { editor.current?.pedirIA(); medir(m => registrarIA(m, nivel.id)); }}>✦ Sugerir <kbd>Alt+\</kbd></button>}
           </div>
 
           <PanelInferior nivel={nivel} objetivo={nivel.objetivoUML} resultado={resultado} enviado={enviado} problemas={diag.lista} modelo={diag.modelo} tab={tab} setTab={setTab} onIrA={irA} onCorregir={corregir} />
@@ -289,6 +315,10 @@ export default function App() {
         onIniciarMision={m => (m.id === misionId ? setMapa(false) : iniciarMision(m))} onViajar={viajar} onCerrar={() => setMapa(false)}
         pasosDe={m => ({ hechos: m.pasos.filter(p => pasosHechos.includes(p.id)).length, total: m.pasos.length })}
         misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)} />}
+
+      {!prog.perfil && <Bienvenida prog={prog} onListo={perfil => setProg(p => ({ ...p, perfil }))} />}
+      {avance && prog.perfil && <MiAvance prog={prog} onCerrar={() => setAvance(false)} onPerfil={perfil => setProg(p => ({ ...p, perfil }))} />}
+      {panelProfe && prog.profe && <PanelProfesor onCerrar={() => setPanelProfe(false)} />}
 
       {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={MISIONES} />}
 
