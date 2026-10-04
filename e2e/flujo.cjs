@@ -10,7 +10,7 @@ const path = require('path');
   await p.goto('file://' + path.resolve('dist-single/index.html'));
   await p.waitForTimeout(600);
   await p.screenshot({ path: 'e2e/01-inicio.png' });
-  await p.check('.profe input');
+  for (let k = 0; k < 5; k++) await p.click('.marca h1'); // modo profesor (5 clics en el título)
   await p.click('.mapa li:nth-child(3) .nodo');
   await p.waitForTimeout(300);
   const ghost = () => p.evaluate(() => document.querySelector('.cm-ghost')?.textContent ?? null);

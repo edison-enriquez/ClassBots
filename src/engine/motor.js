@@ -164,6 +164,48 @@ function parsePrograma(files){
       const heredado=c.__metodos.find(x=>x.abstracto&&!c.metodos.includes(x));
       if(heredado)errores.push(E(c.archivo,c.linea,`${c.nombre} hereda ${heredado.nombre}() sin implementarlo. Declara ${c.nombre} abstract o escribe el método.`));
     }
+    // Herencia: super(...) y miembros private del padre
+    if(c.tipo==='clase'){
+      const padreC=c.__padre&&clases[c.__padre];
+      const ctorsPadre=padreC?padreC.ctors:[];
+      const ctorsC=c.ctors.length?c.ctors:[{params:[],cuerpoBlank:'{}',linea:c.linea,implicito:true}];
+      for(const k of ctorsC){
+        const inicio=/^\{\s*super\s*\(/.exec(k.cuerpoBlank);
+        const todos=[...k.cuerpoBlank.matchAll(/(?<![\w$.])super\s*\(/g)];
+        if(todos.length&&(!inicio||todos.length>1))errores.push(E(c.archivo,lineaDe(k,todos[inicio?1:0].index),'super(...) debe ser la primera instrucción del constructor, y solo puede aparecer una vez.'));
+        if(!padreC)continue;
+        if(inicio){
+          const ini=inicio[0].length-1,fin=parentesisFinal(k.cuerpoBlank,ini);
+          const nArgs=k.cuerpoBlank.slice(ini+1,fin).trim()?partirComas(k.cuerpoBlank.slice(ini+1,fin)).length:0;
+          if(ctorsPadre.length?!ctorsPadre.some(x=>x.params.length===nArgs):nArgs>0)
+            errores.push(E(c.archivo,lineaDe(k,ini),`${padreC.nombre} no tiene un constructor que reciba ${nArgs} argumento(s). Revisa los argumentos de super(...).`));
+        }else if(ctorsPadre.length&&!ctorsPadre.some(x=>x.params.length===0)){
+          const f=ctorsPadre[0];
+          errores.push(E(c.archivo,k.linea,`${padreC.nombre} no tiene constructor sin parámetros: ${k.implicito?`escribe un constructor en ${c.nombre} que empiece con`:'empieza este constructor con'} super(${f.params.map(p=>p.nombre).join(', ')});`));
+        }
+      }
+      for(const mt of c.metodos.filter(x=>!x.abstracto)){
+        const r=/(?<![\w$.])super\s*\(/.exec(mt.cuerpoBlank);
+        if(r)errores.push(E(c.archivo,lineaDe(mt,r.index),'super(...) solo se usa en la primera línea de un constructor. Para llamar al método del padre escribe super.metodo(...).'));
+        if(padreC){const re=/(?<![\w$.])super\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;let q;
+          while((q=re.exec(mt.cuerpoBlank))){const nom=q[1],m2=padreC.__metodos.find(x=>x.nombre===nom&&x.vis!=='private');
+            if(!m2)errores.push(E(c.archivo,lineaDe(mt,q.index),`${padreC.nombre} no tiene un método ${nom}() que ${c.nombre} pueda usar con super.`));
+            else if(m2.abstracto)errores.push(E(c.archivo,lineaDe(mt,q.index),`${nom}() es abstracto en ${padreC.nombre}: no tiene cuerpo que llamar con super.`));}}
+      }
+      if(padreC){
+        const propios=new Set(c.campos.map(f=>f.nombre));
+        const privados=padreC.__campos.filter(f=>f.vis==='private'&&!propios.has(f.nombre));
+        for(const b of [...c.ctors,...c.metodos.filter(x=>!x.abstracto)]){
+          for(const f of privados){
+            const re=new RegExp(`(?:(?<![\\w$.])|(?:this|super)\\s*\\.\\s*)${f.nombre}\\b(?!\\s*\\()`,'g');let q;
+            const local=new RegExp(`\\b(?!(?:return|new|throw|else|case|yield)\\b)[A-Za-z_$][\\w$]*(?:\\s*<[^>]*>)?(?:\\s*\\[\\s*\\])*\\s+${f.nombre}\\s*[=;:,)]`);
+            if((b.params||[]).some(x=>x.nombre===f.nombre)||local.test(b.cuerpoBlank))continue;
+            const duenoF=Object.values(clases).find(x=>x.campos.includes(f));
+            if((q=re.exec(b.cuerpoBlank))){errores.push(E(c.archivo,lineaDe(b,q.index),`${f.nombre} es private en ${duenoF.nombre}: ${c.nombre} lo hereda pero no puede usarlo directamente. Decláralo protected en ${duenoF.nombre} o usa su getter.`));break;}
+          }
+        }
+      }
+    }
     // final: un solo valor
     const cuerposMet=c.metodos.filter(x=>!x.abstracto);
     for(const f of c.campos.filter(f=>f.final)){
@@ -245,7 +287,7 @@ function campo(c,texto,crudo,linea,errores){
   for(const d of partirComas(r[3])){
     const m=/^([A-Za-z_$][\w$]*)\s*(?:=\s*([\s\S]+))?$/.exec(d);
     if(!m){errores.push(E(A,linea,`No entiendo el atributo «${d}».`));continue;}
-    c.campos.push({nombre:m[1],tipo,vis:visDe(r[1]),estatico:/\bstatic\b/.test(r[1]),final:/\bfinal\b/.test(r[1]),init:m[2]??null,linea});
+    c.campos.push({nombre:m[1],tipo,vis:visDe(r[1]),estatico:/\bstatic\b/.test(r[1]),final:/\bfinal\b/.test(r[1]),init:m[2]??null,linea,dueno:c.nombre});
   }
 }
 function metodo(c,h,crudo,cuerpo,cuerpoBlank,lineaCuerpo,linea,errores){
@@ -318,22 +360,30 @@ function traducir(code,c,locales,self,retTipo){
   code=code.replace(/\(\s*(?:int|long)\s*\)\s*/g,'~~').replace(/\(\s*(?:double|float)\s*\)\s*/g,'+');
   code=code.replace(/\(\s*[A-Z][\w$]*(?:\s*<[^<>()]*>)?\s*\)\s*(?=[\w$(])/g,'');
   code=code.replace(/\bnew\s+([A-Za-z_$][\w$]*)\s*<[^>]*>/g,'new $1');
+  const padre=c.__padre;
+  code=code.replace(/(?<![\w$.])super\s*\.\s*([A-Za-z_$][\w$]*)\s*\(\s*(\)?)/g,(m,nom,cierra)=>`${padre||'Object'}.prototype.${nom}.call(this${cierra?')':', '}`);
+  code=code.replace(/(?<![\w$.])super\s*\.\s*/g,'this.');
+  code=code.replace(/(?<![\w$.])super\s*\(\s*(\)?)/g,(m,cierra)=>padre?`${padre}.__ctor(this${cierra?')':', '}`:(cierra?'void 0':'(void 0, '));
   code=code.replace(/\bthis\b/g,self);
-  for(const f of c.campos){
+  const camposVis=(c.__campos||c.campos).filter(f=>c.campos.includes(f)||f.vis!=='private');
+  for(const f of camposVis){
     if(loc.has(f.nombre))continue;
-    code=code.replace(new RegExp(`(?<![\\w$.])${f.nombre}\\b(?!\\s*\\()`,'g'),`${f.estatico?c.nombre:self}.${f.nombre}`);
+    const duenoF=f.dueno||c.nombre;
+    code=code.replace(new RegExp(`(?<![\\w$.])${f.nombre}\\b(?!\\s*\\()`,'g'),`${f.estatico?duenoF:self}.${f.nombre}`);
   }
   for(const [f,dueno] of c.__constantes||[]){
     if(loc.has(f))continue;
     code=code.replace(new RegExp(`(?<![\\w$.])${f}\\b(?!\\s*\\()`,'g'),`${dueno}.${f}`);
   }
   code=code.replace(/(?<![\w$.])getClass\s*\(/g,`${self}.getClass(`);
-  for(const mn of new Set(c.metodos.filter(x=>!x.abstracto).map(x=>x.nombre))){
-    const est=c.metodos.find(x=>x.nombre===mn).estatico;
+  const metodosVis=(c.__metodos||c.metodos).filter(x=>c.metodos.includes(x)||x.vis!=='private');
+  for(const mn of new Set(metodosVis.map(x=>x.nombre))){
+    const est=metodosVis.find(x=>x.nombre===mn).estatico;
     code=code.replace(new RegExp(`(?<![\\w$.])${mn}\\s*\\(`,'g'),`${est?c.nombre:self}.${mn}(`);
   }
   return code.replace(/__S(\d+)__/g,(m,k)=>lits[+k]);
 }
+function parentesisFinal(t,i){let d=0;for(let j=i;j<t.length;j++){if(t[j]==='(')d++;else if(t[j]===')'&&--d===0)return j;}return t.length-1;}
 function defVal(t){const b=tipoBase(t);if(INTS.has(b)||b==='double'||b==='float')return '0';if(b==='boolean')return 'false';if(b==='char')return "'\\0'";return 'null';}
 function genClase(c,modelo){
   const campos=c.__campos||c.campos,metodos=c.__metodos||c.metodos;
@@ -348,11 +398,23 @@ function genClase(c,modelo){
   }
   let s=`class ${c.nombre} {\nstatic [Symbol.hasInstance](o){ return __rt.esInstancia(o,${JSON.stringify(c.nombre)}); }\n`;
   for(const f of est)s+=`static ${f.nombre} = ${f.init!=null?traducir(f.init,c,[],c.nombre):defVal(f.tipo)};\n`;
-  s+=`constructor(...__a){\n${inst.map(f=>`this.${f.nombre}=${defVal(f.tipo)};`).join('')}\nconst __self=__rt.track(this,${JSON.stringify(c.nombre)});\n`;
-  for(const f of inst)if(f.init!=null){const d=Object.values(modelo.clases).find(x=>x.campos.includes(f))||c;s+=`__self.${f.nombre}=(${traducir(f.init,d,[],'__self')});\n`;}
-  const ctors=c.ctors.length?c.ctors:[{params:[],cuerpo:'{}'}];
-  s+='switch(__a.length){\n';
-  for(const k of ctors){const ns=k.params.map(p=>p.nombre);s+=`case ${ns.length}: { let [${ns.join(',')}]=__a;\n${traducir(k.cuerpo,c,ns,'__self')}\nreturn __self; }\n`;}
+  // Orden de Java: valores por defecto, constructor del padre (super), inicializadores propios y cuerpo del constructor.
+  s+=`constructor(...__a){\n${inst.map(f=>`this.${f.nombre}=${defVal(f.tipo)};`).join('')}\nconst __self=__rt.track(this,${JSON.stringify(c.nombre)});\n${c.nombre}.__ctor(__self,...__a);\nreturn __self;\n}\n`;
+  const ctors=c.ctors.length?c.ctors:[{params:[],cuerpo:'{}',cuerpoBlank:'{}'}];
+  const inits=c.campos.filter(f=>!f.estatico&&f.init!=null).map(f=>`__self.${f.nombre}=(${traducir(f.init,c,[],'__self')});\n`).join('');
+  s+='static __ctor(__self,...__a){ switch(__a.length){\n';
+  for(const k of ctors){
+    const ns=k.params.map(p=>p.nombre);
+    let llamada=c.__padre?`${c.__padre}.__ctor(__self);\n`:'',cuerpo=k.cuerpo;
+    const sup=/^\{\s*super\s*\(/.exec(k.cuerpoBlank||'');
+    if(sup){
+      const ini=sup[0].length-1,fin=parentesisFinal(k.cuerpoBlank,ini);
+      let corte=fin+1;while(corte<k.cuerpoBlank.length&&/\s/.test(k.cuerpoBlank[corte]))corte++;if(k.cuerpoBlank[corte]===';')corte++;
+      llamada=traducir(k.cuerpo.slice(1,corte),c,ns,'__self')+'\n';
+      cuerpo='{'+k.cuerpo.slice(corte);
+    }
+    s+=`case ${ns.length}: { let [${ns.join(',')}]=__a;\n${llamada}${inits}${traducir(cuerpo,c,ns,'__self')}\nreturn; }\n`;
+  }
   s+=`}\nthrow new __rt.JavaError(${JSON.stringify(`No existe un constructor ${c.nombre}(...) que reciba `)}+__a.length+' argumento(s).');\n}\n`;
   const grupos=new Map();for(const m of metodos.filter(x=>!x.abstracto)){if(!grupos.has(m.nombre))grupos.set(m.nombre,[]);grupos.get(m.nombre).push(m);}
   for(const [nm,g] of grupos){
