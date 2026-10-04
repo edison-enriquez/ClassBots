@@ -121,3 +121,12 @@ test('división entera como en Java', () => {
   assert.equal(r.error, undefined, r.error);
   assert.deepEqual(globalThis.__v, [22, 3, 3.5]);
 });
+
+test('herencia: parsea extends y conserva la clase base', () => {
+  const m = parsePrograma({
+    'Maquina.java': 'public class Maquina { public int energia; }',
+    'Robot.java': 'public class Robot extends Maquina { public int avanzar() { return energia + 1; } }',
+  });
+  assert.deepEqual(m.errores, []);
+  assert.equal(m.clases.Robot.hereda, 'Maquina');
+});

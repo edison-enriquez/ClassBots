@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { NIVELES } from '../levels/niveles.js';
+import { MISIONES } from '../levels/misiones.js';
 
 const CLAVE = 'taller-objetos-react-v2';
-const VACIO = { nivelId: NIVELES[0].id, hechos: [], codigo: {}, profe: false, asistente: 'basico' };
+const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], codigo: {}, profe: false, asistente: 'basico' };
 
 function leer() {
   try {
     const g = JSON.parse(localStorage.getItem(CLAVE) || 'null');
-    if (g && typeof g === 'object') return { ...VACIO, ...g, hechos: (g.hechos || []).filter(id => NIVELES.some(n => n.id === id)) };
+    if (g && typeof g === 'object') return {
+      ...VACIO,
+      ...g,
+      hechos: Array.isArray(g.hechos) ? g.hechos.filter(id => NIVELES.some(n => n.id === id)) : [],
+      misionesHechas: Array.isArray(g.misionesHechas) ? g.misionesHechas.filter(id => MISIONES.some(m => m.id === id)) : [],
+    };
   } catch { /* sin almacenamiento */ }
   return VACIO;
 }
 
-/* Progreso del estudiante en este navegador: capítulo actual, capítulos superados (por id) y código */
+/* Progreso local: ruta principal y misiones especiales se registran por separado. */
 export function useProgreso() {
   const [p, setP] = useState(leer);
   const t = useRef(null);

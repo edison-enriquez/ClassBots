@@ -71,13 +71,13 @@ function parsePrograma(files){
       fuera(blank.slice(cursor,m.index),cursor);
       cursor=close+1;reC.lastIndex=close+1;
       const nombre=m[3],mods=m[1]||'',esInterfaz=m[2]==='interface',cab=(m[4]||'').replace(/\s+/g,' ');
-      const c={nombre,archivo,linea:L(m.index),tipo:esInterfaz?'interface':'clase',abstracta:/\babstract\b/.test(mods),publica:/public/.test(mods),
+      const c={nombre,archivo,linea:L(m.index),tipo:esInterfaz?'interface':'clase',abstracta:/\babstract\b/.test(mods),final:/\bfinal\b/.test(mods),publica:/public/.test(mods),
         implementa:[],hereda:null,campos:[],ctors:[],metodos:[],cuerpoClean:clean.slice(open,close+1),cuerpoBlank:blank.slice(open,close+1)};
       const ext=/\bextends\s+([\w$<>,\s]+?)(?=\s+implements\b|$)/.exec(cab),imp=/\bimplements\s+([\w$<>,\s]+)$/.exec(cab);
       if(imp)c.implementa=partirComas(imp[1]).map(x=>x.replace(/\s+/g,''));
       if(ext){
         if(esInterfaz)c.implementa.push(...partirComas(ext[1]).map(x=>x.replace(/\s+/g,'')));
-        else{c.hereda=ext[1].trim();errores.push(E(archivo,c.linea,'La herencia entre clases (extends) llega en el Mundo 5. Por ahora, si quieres cumplir un contrato usa implements con una interfaz.'));}
+        else c.hereda=ext[1].trim();
       }
       if(clases[nombre])errores.push(E(archivo,c.linea,`${esInterfaz?'La interfaz':'La clase'} ${nombre} está declarada dos veces.`));
       if(c.publica&&archivo!==nombre+'.java')errores.push(E(archivo,c.linea,`${esInterfaz?'La interfaz pública':'La clase pública'} ${nombre} debe estar en un archivo llamado ${nombre}.java.`));
@@ -87,6 +87,36 @@ function parsePrograma(files){
     }
     fuera(blank.slice(cursor),cursor);
   }
+  // Resolver la jerarquía antes de validar tipos y contratos.
+  const firmaMetodo=m=>`${m.nombre}(${m.params.map(p=>p.tipo).join(',')})`;
+  for(const c of Object.values(clases))if(c.hereda&&c.tipo==='clase'){
+    const base=tipoBase(c.hereda),p=clases[base];
+    if(c.hereda.includes(','))errores.push(E(c.archivo,c.linea,'Una clase solo puede extender una clase base.'));
+    else if(base==='Object')c.__padre=null;
+    else if(!p)errores.push(E(c.archivo,c.linea,`No encuentro la clase base ${base}. Revisa su nombre o crea ${base}.java.`));
+    else if(p.tipo==='interface')errores.push(E(c.archivo,c.linea,`${base} es una interfaz: una clase la implementa con implements, no con extends.`));
+    else if(p.final)errores.push(E(c.archivo,c.linea,`${base} es final: no se puede extender.`));
+    else c.__padre=base;
+  }
+  const ciclos=new Set();
+  const resolverJerarquia=(c,ruta=[])=>{
+    if(c.__resuelta)return;
+    if(ruta.includes(c.nombre)){
+      const ciclo=[...ruta.slice(ruta.indexOf(c.nombre)),c.nombre].join(' → ');
+      if(!ciclos.has(ciclo)){ciclos.add(ciclo);errores.push(E(c.archivo,c.linea,`La herencia forma un ciclo: ${ciclo}.`));}
+      return;
+    }
+    const p=c.__padre&&clases[c.__padre];
+    if(p)resolverJerarquia(p,[...ruta,c.nombre]);
+    const heredados=p?.__metodos||[],metodos=[...heredados];
+    for(const mt of c.metodos){const i=metodos.findIndex(x=>firmaMetodo(x)===firmaMetodo(mt));if(i<0)metodos.push(mt);else metodos[i]=mt;}
+    c.__campos=[...(p?.__campos||p?.campos||[]),...c.campos];
+    c.__metodos=metodos;
+    c.__interfaces=[...new Set([...(p?.__interfaces||[]),...c.implementa.map(tipoBase)])];
+    c.__resuelta=true;
+  };
+  for(const c of Object.values(clases))resolverJerarquia(c);
+
   // Revisión global: tipos, contratos, final y acceso privado
   const conocido=t=>{const b=tipoBase(t);return PRIM.has(b)||CONOCIDOS.has(b)||!!clases[b];};
   const revisaTipo=(t,c,linea)=>{if(conocido(t))return;const b=tipoBase(t);
@@ -96,8 +126,23 @@ function parsePrograma(files){
     c.campos.forEach(f=>revisaTipo(f.tipo,c,f.linea));
     c.ctors.forEach(k=>k.params.forEach(p=>revisaTipo(p.tipo,c,k.linea)));
     c.metodos.forEach(mt=>{if(mt.ret!=='void')revisaTipo(mt.ret,c,mt.linea);mt.params.forEach(p=>revisaTipo(p.tipo,c,mt.linea));});
-    // Contratos: implements
-    for(const nomI of c.implementa){
+    if(c.final&&c.abstracta)errores.push(E(c.archivo,c.linea,'Una clase no puede ser abstract y final a la vez.'));
+    const padre=c.__padre&&clases[c.__padre];
+    for(const mt of c.metodos){
+      const sup=padre?.__metodos?.find(x=>firmaMetodo(x)===firmaMetodo(mt)&&x.vis!=='private');
+      const contratos=c.__interfaces.flatMap(n=>clases[n]?.metodos||[]);
+      const contrato=contratos.find(x=>firmaMetodo(x)===firmaMetodo(mt));
+      if(mt.override&&!sup&&!contrato)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() tiene @Override, pero no redefine un método heredado ni implementa uno de una interfaz.`));
+      if(sup){
+        if(sup.final)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() es final en ${padre.nombre}: no se puede redefinir.`));
+        if(sup.estatico!==mt.estatico)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() debe conservar si es static al redefinirlo.`));
+        if(sup.ret!==mt.ret)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() debe devolver ${sup.ret}, como en ${padre.nombre}.`));
+        const nivel={private:0,package:1,protected:2,public:3};
+        if(nivel[mt.vis]<nivel[sup.vis])errores.push(E(c.archivo,mt.linea,`${mt.nombre}() no puede reducir la visibilidad heredada de ${sup.vis} a ${mt.vis}.`));
+      }
+    }
+    // Contratos: implements, incluidos los que hereda de una clase base.
+    for(const nomI of c.__interfaces){
       const base=tipoBase(nomI),I=clases[base];
       if(base==='Comparable'){
         if(!c.metodos.some(x=>x.nombre==='compareTo'&&x.params.length===1))errores.push(E(c.archivo,c.linea,`${c.nombre} implementa Comparable pero le falta el método public int compareTo(${(/<(.+)>/.exec(nomI)||[])[1]||'Object'} otro).`));
@@ -107,13 +152,18 @@ function parsePrograma(files){
       if(I.tipo!=='interface'){errores.push(E(c.archivo,c.linea,`${base} es una clase: con implements solo van interfaces. Para heredar de una clase se usa extends (Mundo 5).`));continue;}
       if(c.tipo==='interface')continue;
       for(const am of I.metodos.filter(x=>x.abstracto)){
-        const impl=c.metodos.find(x=>x.nombre===am.nombre&&x.params.length===am.params.length);
+        const impl=c.__metodos.find(x=>x.nombre===am.nombre&&x.params.length===am.params.length&&!x.abstracto);
         if(!impl){if(!c.abstracta)errores.push(E(c.archivo,c.linea,`${c.nombre} dice implements ${base} pero le falta el método public ${am.ret} ${am.nombre}(${am.params.map(p=>p.tipo+' '+p.nombre).join(', ')}).`));}
         else if(impl.vis!=='public')errores.push(E(c.archivo,impl.linea,`${am.nombre}() viene de la interfaz ${base}: debe ser public.`));
         else if(impl.ret!==am.ret)errores.push(E(c.archivo,impl.linea,`${am.nombre}() debe devolver ${am.ret}, como dice la interfaz ${base}.`));
       }
     }
-    if(c.tipo==='clase'&&!c.abstracta){const ab=c.metodos.find(x=>x.abstracto);if(ab)errores.push(E(c.archivo,ab.linea,`El método ${ab.nombre}() no tiene cuerpo. Agrega { ... } con lo que hace.`));}
+    if(c.tipo==='clase'&&!c.abstracta){
+      const ab=c.metodos.find(x=>x.abstracto);
+      if(ab)errores.push(E(c.archivo,ab.linea,`El método ${ab.nombre}() no tiene cuerpo. Agrega { ... } con lo que hace.`));
+      const heredado=c.__metodos.find(x=>x.abstracto&&!c.metodos.includes(x));
+      if(heredado)errores.push(E(c.archivo,c.linea,`${c.nombre} hereda ${heredado.nombre}() sin implementarlo. Declara ${c.nombre} abstract o escribe el método.`));
+    }
     // final: un solo valor
     const cuerposMet=c.metodos.filter(x=>!x.abstracto);
     for(const f of c.campos.filter(f=>f.final)){
@@ -286,7 +336,9 @@ function traducir(code,c,locales,self,retTipo){
 }
 function defVal(t){const b=tipoBase(t);if(INTS.has(b)||b==='double'||b==='float')return '0';if(b==='boolean')return 'false';if(b==='char')return "'\\0'";return 'null';}
 function genClase(c,modelo){
-  const inst=c.campos.filter(f=>!f.estatico),est=c.campos.filter(f=>f.estatico);
+  const campos=c.__campos||c.campos,metodos=c.__metodos||c.metodos;
+  const inst=campos.filter(f=>!f.estatico),est=c.campos.filter(f=>f.estatico);
+  const declaracion=m=>Object.values(modelo.clases).find(x=>x.metodos.includes(m))||c;
   c.__constantes=[];
   for(const i of c.implementa){const I=modelo.clases[tipoBase(i)];if(I)for(const f of I.campos)c.__constantes.push([f.nombre,I.nombre]);}
   if(c.tipo==='interface'){
@@ -294,19 +346,19 @@ function genClase(c,modelo){
     for(const f of est)s+=`static ${f.nombre} = ${f.init!=null?traducir(f.init,c,[],c.nombre):defVal(f.tipo)};\n`;
     return s+'}\n';
   }
-  let s=`class ${c.nombre} {\n`;
+  let s=`class ${c.nombre} {\nstatic [Symbol.hasInstance](o){ return __rt.esInstancia(o,${JSON.stringify(c.nombre)}); }\n`;
   for(const f of est)s+=`static ${f.nombre} = ${f.init!=null?traducir(f.init,c,[],c.nombre):defVal(f.tipo)};\n`;
   s+=`constructor(...__a){\n${inst.map(f=>`this.${f.nombre}=${defVal(f.tipo)};`).join('')}\nconst __self=__rt.track(this,${JSON.stringify(c.nombre)});\n`;
-  for(const f of inst)if(f.init!=null)s+=`__self.${f.nombre}=(${traducir(f.init,c,[],'__self')});\n`;
+  for(const f of inst)if(f.init!=null){const d=Object.values(modelo.clases).find(x=>x.campos.includes(f))||c;s+=`__self.${f.nombre}=(${traducir(f.init,d,[],'__self')});\n`;}
   const ctors=c.ctors.length?c.ctors:[{params:[],cuerpo:'{}'}];
   s+='switch(__a.length){\n';
   for(const k of ctors){const ns=k.params.map(p=>p.nombre);s+=`case ${ns.length}: { let [${ns.join(',')}]=__a;\n${traducir(k.cuerpo,c,ns,'__self')}\nreturn __self; }\n`;}
   s+=`}\nthrow new __rt.JavaError(${JSON.stringify(`No existe un constructor ${c.nombre}(...) que reciba `)}+__a.length+' argumento(s).');\n}\n`;
-  const grupos=new Map();for(const m of c.metodos.filter(x=>!x.abstracto)){if(!grupos.has(m.nombre))grupos.set(m.nombre,[]);grupos.get(m.nombre).push(m);}
+  const grupos=new Map();for(const m of metodos.filter(x=>!x.abstracto)){if(!grupos.has(m.nombre))grupos.set(m.nombre,[]);grupos.get(m.nombre).push(m);}
   for(const [nm,g] of grupos){
     const st=g[0].estatico;
     s+=`${st?'static ':''}${nm}(...__a){ switch(__a.length){\n`;
-    for(const m of g){const ns=m.params.map(p=>p.nombre);s+=`case ${ns.length}: { let [${ns.join(',')}]=__a;\n${traducir(m.cuerpo,c,ns,st?c.nombre:'this',m.ret)}\nreturn; }\n`;}
+    for(const m of g){const ns=m.params.map(p=>p.nombre),d=declaracion(m);s+=`case ${ns.length}: { let [${ns.join(',')}]=__a;\n${traducir(m.cuerpo,d,ns,st?d.nombre:'this',m.ret)}\nreturn; }\n`;}
     s+=`}\nthrow new __rt.JavaError(${JSON.stringify(`El método ${nm} no recibe `)}+__a.length+' argumento(s).'); }\n`;
   }
   if(!grupos.has('toString'))s+='toString(){ return __rt.ref(this); }\n';
@@ -332,7 +384,8 @@ function crearRuntime(modelo){
   const foto=()=>registro.map(r=>{const f={};for(const k of Object.keys(r.raw))f[k]=ser(r.raw[k]);return {id:r.id,cls:r.cls,f};});
   const rt={JavaError,log,salida,registro,idDe:o=>ids.get(o),foto,
     entero(v){return typeof v==='number'?Math.trunc(v):v;},
-    implementa(o,nom){const id=ids.get(o);const r=registro[(id||0)-1];if(!r)return false;const c=modelo.clases[r.cls];return !!c&&c.implementa.some(x=>tipoBase(x)===nom);},
+    implementa(o,nom){const id=ids.get(o);const r=registro[(id||0)-1];if(!r)return false;const c=modelo.clases[r.cls];return !!c&&(c.__interfaces||c.implementa).some(x=>tipoBase(x)===nom);},
+    esInstancia(o,nom){const id=ids.get(o);const r=registro[(id||0)-1];if(!r)return false;let c=modelo.clases[r.cls];while(c){if(c.nombre===nom)return true;c=c.__padre&&modelo.clases[c.__padre];}return false;},
     agregado(lista,x){const dueno=registro.find(r=>Object.values(r.raw).includes(lista));const campo=dueno?Object.keys(dueno.raw).find(k=>dueno.raw[k]===lista):null;
       log.push({t:'add',dueno:dueno?dueno.id:null,campo,elem:x==null?null:(ids.get(x)||null),texto:x==null?'':rt.fmtCorto(x),foto:foto()});},
     fmtCorto(v){const id=ids.get(v);if(id){const r=registro[id-1];return `${r.cls}#${id}`;}return typeof v==='string'?JSON.stringify(v):String(v);},
@@ -342,8 +395,8 @@ function crearRuntime(modelo){
     print(...a){rt.tick();const t=a.map(rt.fmt).join('');salida.push(t);log.push({t:'print',texto:t,foto:foto()});},
     track(raw,cls){
       const c=modelo.clases[cls];const id=registro.length+1;
-      const tipos=Object.fromEntries(c.campos.filter(f=>!f.estatico).map(f=>[f.nombre,f.tipo]));
-      const mets=new Set(c.metodos.map(m=>m.nombre));
+      const tipos=Object.fromEntries((c.__campos||c.campos).filter(f=>!f.estatico).map(f=>[f.nombre,f.tipo]));
+      const mets=new Set((c.__metodos||c.metodos).map(m=>m.nombre));
       registro.push({id,cls,raw});
       log.push({t:'crear',id,cls,estado:{...raw},foto:foto()});
       const coercer=(t,v,k)=>{const b=tipoBase(t);const mal=()=>{throw new JavaError(`Tipos incompatibles: ${cls}.${k} es ${t} y le estás asignando un ${tipoJava(v,rt)}.`);};
@@ -429,6 +482,7 @@ function relaciones(modelo){
   for(const a of cs){
     const cuerpos=[...a.ctors,...a.metodos.filter(x=>!x.abstracto)];
     const todo=a.cuerpoBlank;
+    if(a.__padre)rel.push({de:a.nombre,a:a.__padre,tipo:'herencia',razon:`${a.nombre} extiende ${a.__padre}: hereda sus atributos y métodos.`});
     for(const i of a.implementa){const b=tipoBase(i);if(modelo.clases[b])rel.push({de:a.nombre,a:b,tipo:'realizacion',razon:`${a.nombre} implementa la interfaz ${b}: se compromete a tener todos sus métodos.`});}
     const conCampo=new Set();
     for(const f of a.campos){

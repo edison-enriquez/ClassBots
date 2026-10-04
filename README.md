@@ -2,7 +2,7 @@
 
 Juego web para aprender programación orientada a objetos en Java. El estudiante escribe clases reales y un robot en pixel art se construye y se mueve según lo que hace su código.
 
-Mundos jugables (23 capítulos):
+Mundos jugables (26 capítulos):
 
 | Mundo | Tema | Capítulos | Escena |
 |---|---|---|---|
@@ -10,8 +10,9 @@ Mundos jugables (23 capítulos):
 | 2 · La Bóveda | Encapsulamiento: `private`, getters, setters con validación, invariantes, `static`/`final`, `toString`/`equals` | 7 | Bóveda con Óxido, el saboteador |
 | 3 · Las Conexiones | Relaciones: dependencia, asociación, agregación, composición y multiplicidad | 5 | Diagrama de objetos en pixel art |
 | 4 · Contratos | Interfaces, programar contra la interfaz, varias interfaces, `Comparable`, abierto/cerrado | 5 | Estación de carga universal |
+| 5 · El Árbol | Herencia con `extends`, redefinición y clases abstractas | 3 | Diagrama de herencia UML |
 
-Los mundos 5 a 9 (herencia, polimorfismo y patrones de diseño) están diseñados y aparecen bloqueados en el mapa. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
+Los mundos 6 a 9 (polimorfismo y patrones de diseño) aparecen bloqueados en el mapa. Al completar el Mundo 4 se abre una rama opcional con la misión **Módulos de movimiento**, que presenta Strategy y desbloquea el módulo táctico del robot. Las misiones no alteran el avance ni la experiencia de la ruta principal. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
 
 - **Columna izquierda (estilo CryptoZombies):** escenario pixel art, diálogo con Chispa (la jefa del taller), teoría, ejemplo, tarea, pista y respuesta.
 - **Columna derecha (estilo HackerRank):** editor Java, casos de prueba visibles y ocultos, consola, problemas, diagrama UML con fuente PlantUML y registro de eventos.
@@ -58,7 +59,8 @@ Basado en CodeMirror 6, con un asistente propio que entiende las clases del proy
 ```
 src/
   engine/motor.js       analizador del subconjunto de Java, traductor a JS, runtime con eventos, PlantUML
-  levels/mundo1..4.js   capítulos: lección, código inicial, solución y casos de prueba
+  levels/mundo1..5.js   capítulos: lección, código inicial, solución y casos de prueba
+  levels/misiones.js    misiones opcionales y sus recompensas, separadas de la ruta principal
   levels/niveles.js     catálogo de mundos
   levels/util.js        ayudas para pruebas: caso, exigir, casoRelacion, sinTexto
   levels/evaluar.js     juez: compila, valida estructura, corre cada caso en limpio y prepara la animación
@@ -100,6 +102,6 @@ Entre asociación y agregación la frontera es de intención; el taller usa esta
 
 ## Límites actuales
 
-- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 4 (clases, interfaces, constructores, métodos, `static`, `final`, casting, `if`, `for`, `while`, `ArrayList`, `Comparable`, `Collections.sort`, `System.out.println`). `extends` entre clases se rechaza con un mensaje hasta el Mundo 5.
+- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 5 y la misión Strategy (clases, interfaces, herencia, métodos abstractos, constructores, métodos, `static`, `final`, casting, `if`, `for`, `while`, `ArrayList`, `Comparable`, `Collections.sort`, `System.out.println`).
 - El formato del registro de eventos (`crear`, `set`, `llamada`, `print`) es el contrato con el escenario: un backend con Java o Kotlin real (Piston, Judge0) puede devolver ese mismo registro y el juego no cambia.
 - El progreso se guarda en el navegador (`localStorage`).

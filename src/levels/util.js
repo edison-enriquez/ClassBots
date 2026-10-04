@@ -50,7 +50,7 @@ export function exigir(m, reqs) {
 }
 
 /* Caso de prueba sobre la relación UML detectada entre dos clases */
-const NOMBRE_REL = { composicion: 'composición', agregacion: 'agregación', asociacion: 'asociación', dependencia: 'dependencia', realizacion: 'realización' };
+const NOMBRE_REL = { composicion: 'composición', agregacion: 'agregación', asociacion: 'asociación', dependencia: 'dependencia', realizacion: 'realización', herencia: 'herencia' };
 export function casoRelacion(de, a, tipo, opts = {}) {
   return {
     nombre: opts.nombre || `${de} → ${a} es una ${NOMBRE_REL[tipo]}`, oculto: opts.oculto,

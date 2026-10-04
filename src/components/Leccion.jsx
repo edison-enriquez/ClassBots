@@ -24,7 +24,9 @@ export default function Leccion({ nivel, mundo, superado, onSolucion, onGuia }) 
     <article className="leccion" key={nivel.id} onClick={e => { const g = e.target.closest?.('[data-guia]'); if (g) onGuia(g.dataset.guia); }}>
       <header className="lec-head">
         <span className="chip">{nivel.concepto}</span>
-        <span className="rotulo">Mundo {mundo.id} · {mundo.nombre} · capítulo {nivel.enMundo + 1} de {nivel.totalMundo}{superado ? ' · superado' : ''}</span>
+        <span className="rotulo">{nivel.mision
+          ? `Misión especial · ${nivel.corto}`
+          : `Mundo ${mundo.id} · ${mundo.nombre} · capítulo ${nivel.enMundo + 1} de ${nivel.totalMundo}`}{superado ? ' · superado' : ''}</span>
       </header>
       <h2 className="lec-titulo">{nivel.titulo}</h2>
       <Mentor texto={nivel.mentor} />
