@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { escenaBoveda, escenaConexiones, escenaEstacion, alEntrarEscena } from './escenas2.js';
+import { escenaArena, alEntrarArena } from './escenas3.js';
 import { W, H, P, ETIQUETA, BALDE, BATERIA, sprite, texto, colorDe } from './sprites.js';
 import { suelo, muro, ventana, placa, mesa, cristal, escaleras, plataforma, antorcha, monitorPared, maceta, paletaRPG, R_ABAJO } from './rpg.js';
 import { dibujarRobot, linea } from './dibujo.js';
@@ -58,6 +59,7 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
       s.viejo = s.i;
       alEntrar(s.frames[s.i], s.frames[s.i - 1]);
       alEntrarEscena(props.current.nivel.escena, s.frames, s.i, s, now, props.current.modelo);
+      if (props.current.nivel.escena === 'arena') alEntrarArena(s.frames, s.i, s, now);
       onCaption?.(s.frames[s.i].cap);
     }
   }
@@ -96,6 +98,7 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
     else if (nivel.escena === 'boveda') escenaBoveda(ctx, datos);
     else if (nivel.escena === 'conexiones') escenaConexiones(ctx, datos);
     else if (nivel.escena === 'estacion') escenaEstacion(ctx, datos);
+    else if (nivel.escena === 'arena') escenaArena(ctx, datos);
     else escenaPasillo(ctx, nivel, fr, prev, s, now);
     s.part = s.part.filter(q => q.vida > 0);
     for (const q of s.part) {

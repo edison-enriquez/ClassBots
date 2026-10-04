@@ -223,6 +223,40 @@ function parsePrograma(files){
         if(o&&o.tipo==='interface')errores.push(E(c.archivo,lineaDe(b,r.index),`No se pueden crear objetos de una interfaz: ${o.nombre} es un contrato, no un plano. Crea un objeto de una clase que lo implemente.`));
         else if(o&&o.abstracta)errores.push(E(c.archivo,lineaDe(b,r.index),`${o.nombre} es abstracta: no se pueden crear objetos de ella directamente.`));}
     }
+    // Firmas repetidas: la sobrecarga exige parámetros distintos
+    {
+      const vistos=new Map();
+      for(const mt of c.metodos){const f=firmaMetodo(mt);if(vistos.has(f)){errores.push(E(c.archivo,mt.linea,`${c.nombre} ya tiene un método ${f}. Para sobrecargar, cambia la cantidad o el tipo de los parámetros (el nombre de los parámetros no cuenta).`));}else vistos.set(f,mt);}
+      const ks=new Set();
+      for(const k of c.ctors){const f=k.params.map(p=>p.tipo).join(',');if(ks.has(f))errores.push(E(c.archivo,k.linea,`${c.nombre} ya tiene un constructor con parámetros (${f}).`));ks.add(f);}
+    }
+    // Polimorfismo: el tipo de la variable decide qué métodos se pueden llamar
+    {
+      const UNIVERSALES=new Set(['toString','equals','hashCode','getClass']);
+      const metodosDeTipo=t=>{
+        const C=clases[t];if(!C)return null;
+        const nombres=new Set(),visitar=x=>{if(!x)return;for(const m of (x.__metodos||x.metodos))nombres.add(m.nombre);for(const i of (x.__interfaces||x.implementa||[]))visitar(clases[tipoBase(i)]);};
+        visitar(C);return nombres;
+      };
+      for(const b of [...c.ctors,...c.metodos.filter(x=>!x.abstracto)]){
+        const tipos=new Map(),choque=new Set();
+        const anotar=(n,t)=>{t=tipoBase(t);if(tipos.has(n)&&tipos.get(n)!==t)choque.add(n);tipos.set(n,t);};
+        for(const p of b.params||[])anotar(p.nombre,p.tipo);
+        const reD=/(?<![\w$.])([A-Z][\w$]*)(?:\s*<[^<>]*>)?(?:\s*\[\s*\])*\s+([a-z_$][\w$]*)\s*(?=[=;:,)])/g;let q;
+        while((q=reD.exec(b.cuerpoBlank)))anotar(q[2],q[1]);
+        const tipoVar=n=>{if(n==='this')return c.nombre;if(choque.has(n))return null;if(tipos.has(n))return tipos.get(n);const f=(c.__campos||c.campos).find(x=>x.nombre===n);return f?tipoBase(f.tipo):null;};
+        const reL=/(?<![\w$.)\]])([a-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
+        while((q=reL.exec(b.cuerpoBlank))){
+          const t=tipoVar(q[1]);if(!t||!clases[t]||UNIVERSALES.has(q[2]))continue;
+          const ms=metodosDeTipo(t);if(ms.has(q[2]))continue;
+          const conElMetodo=Object.values(clases).filter(x=>x!==clases[t]&&metodosDeTipo(x.nombre).has(q[2])&&(x.tipo==='interface'?false:(()=>{let y=x;while(y){if(y.nombre===t||(y.__interfaces||[]).includes(t))return true;y=y.__padre&&clases[y.__padre];}return false;})()));
+          const sug=conElMetodo[0];
+          errores.push(E(c.archivo,lineaDe(b,q.index),sug
+            ?`${q[1]} es de tipo ${t}, y ${t} no tiene ${q[2]}(). El objeto puede ser un ${sug.nombre}, pero Java solo deja llamar lo que declara el tipo de la variable. Comprueba con instanceof y usa un cast: ((${sug.nombre}) ${q[1]}).${q[2]}(...)`
+            :`${q[1]} es de tipo ${t}, y ${t} no tiene un método ${q[2]}().`));
+        }
+      }
+    }
     // Acceso a miembros private de otra clase (resolviendo el tipo del receptor cuando se puede)
     const tipoDeVar=(b,nom)=>{
       if(nom==='this')return c.nombre;
@@ -358,6 +392,7 @@ function traducir(code,c,locales,self,retTipo){
   code=code.replace(/\bSystem\s*\.\s*out\s*\.\s*print(?:ln|f)?\s*\(/g,'__rt.print(');
   code=code.replace(/\.length\s*\(\s*\)/g,'.length');
   code=code.replace(/\(\s*(?:int|long)\s*\)\s*/g,'~~').replace(/\(\s*(?:double|float)\s*\)\s*/g,'+');
+  code=code.replace(/\(\s*([A-Z][\w$]*)\s*\)\s*([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*(?:\s*\([^()]*\))?)*(?:\s*\([^()]*\))?)/g,(m,tipo,expr)=>/^(?:String|Object|Integer|Double|Boolean|Character|Long)$/.test(tipo)?expr:`__rt.cast(${JSON.stringify(tipo)},${expr})`);
   code=code.replace(/\(\s*[A-Z][\w$]*(?:\s*<[^<>()]*>)?\s*\)\s*(?=[\w$(])/g,'');
   code=code.replace(/\bnew\s+([A-Za-z_$][\w$]*)\s*<[^>]*>/g,'new $1');
   const padre=c.__padre;
@@ -384,6 +419,23 @@ function traducir(code,c,locales,self,retTipo){
   return code.replace(/__S(\d+)__/g,(m,k)=>lits[+k]);
 }
 function parentesisFinal(t,i){let d=0;for(let j=i;j<t.length;j++){if(t[j]==='(')d++;else if(t[j]===')'&&--d===0)return j;}return t.length-1;}
+/* Agrupa versiones sobrecargadas por cantidad de parámetros; si hay varias con la misma cantidad,
+   elige la más específica cuyos tipos coinciden con los argumentos. */
+function porAridad(lista,gen,que,modelo){
+  const grupos=new Map();
+  for(const x of lista){const n=x.params.length;if(!grupos.has(n))grupos.set(n,[]);grupos.get(n).push(x);}
+  const prof=t=>{let c=modelo.clases[tipoBase(t)],d=0;while(c&&c.__padre){d++;c=modelo.clases[c.__padre];}return d;};
+  const peso=t=>{const b=tipoBase(t);if(INTS.has(b)||b==='char')return 0;if(b==='double'||b==='float')return 2;if(b==='Object')return 9;if(modelo.clases[b])return 5-prof(t);return 1;};
+  let s='';
+  for(const [n,xs] of grupos){
+    if(xs.length===1){s+=`case ${n}: { ${gen(xs[0])} }\n`;continue;}
+    const ord=[...xs].sort((a,b)=>a.params.reduce((t,p)=>t+peso(p.tipo),0)-b.params.reduce((t,p)=>t+peso(p.tipo),0));
+    s+=`case ${n}: {\n`;
+    for(const x of ord)s+=`if(__rt.coincide(__a,${JSON.stringify(x.params.map(p=>p.tipo))})){ ${gen(x)} }\n`;
+    s+=`throw new __rt.JavaError(${JSON.stringify(`No hay una versión de ${que} para argumentos de esos tipos.`)});\n}\n`;
+  }
+  return s;
+}
 function defVal(t){const b=tipoBase(t);if(INTS.has(b)||b==='double'||b==='float')return '0';if(b==='boolean')return 'false';if(b==='char')return "'\\0'";return 'null';}
 function genClase(c,modelo){
   const campos=c.__campos||c.campos,metodos=c.__metodos||c.metodos;
@@ -403,7 +455,7 @@ function genClase(c,modelo){
   const ctors=c.ctors.length?c.ctors:[{params:[],cuerpo:'{}',cuerpoBlank:'{}'}];
   const inits=c.campos.filter(f=>!f.estatico&&f.init!=null).map(f=>`__self.${f.nombre}=(${traducir(f.init,c,[],'__self')});\n`).join('');
   s+='static __ctor(__self,...__a){ switch(__a.length){\n';
-  for(const k of ctors){
+  const genCtor=k=>{
     const ns=k.params.map(p=>p.nombre);
     let llamada=c.__padre?`${c.__padre}.__ctor(__self);\n`:'',cuerpo=k.cuerpo;
     const sup=/^\{\s*super\s*\(/.exec(k.cuerpoBlank||'');
@@ -413,18 +465,19 @@ function genClase(c,modelo){
       llamada=traducir(k.cuerpo.slice(1,corte),c,ns,'__self')+'\n';
       cuerpo='{'+k.cuerpo.slice(corte);
     }
-    s+=`case ${ns.length}: { let [${ns.join(',')}]=__a;\n${llamada}${inits}${traducir(cuerpo,c,ns,'__self')}\nreturn; }\n`;
-  }
+    return `let [${ns.join(',')}]=__a;\n${llamada}${inits}${traducir(cuerpo,c,ns,'__self')}\nreturn;`;
+  };
+  s+=porAridad(ctors,genCtor,`el constructor ${c.nombre}`,modelo);
   s+=`}\nthrow new __rt.JavaError(${JSON.stringify(`No existe un constructor ${c.nombre}(...) que reciba `)}+__a.length+' argumento(s).');\n}\n`;
   const grupos=new Map();for(const m of metodos.filter(x=>!x.abstracto)){if(!grupos.has(m.nombre))grupos.set(m.nombre,[]);grupos.get(m.nombre).push(m);}
   for(const [nm,g] of grupos){
     const st=g[0].estatico;
     s+=`${st?'static ':''}${nm}(...__a){ switch(__a.length){\n`;
-    for(const m of g){const ns=m.params.map(p=>p.nombre),d=declaracion(m);s+=`case ${ns.length}: { let [${ns.join(',')}]=__a;\n${traducir(m.cuerpo,d,ns,st?d.nombre:'this',m.ret)}\nreturn; }\n`;}
+    s+=porAridad(g,m=>{const ns=m.params.map(p=>p.nombre),d=declaracion(m);return `let [${ns.join(',')}]=__a;\n${traducir(m.cuerpo,d,ns,st?d.nombre:'this',m.ret)}\nreturn;`;},`el método ${nm}`,modelo);
     s+=`}\nthrow new __rt.JavaError(${JSON.stringify(`El método ${nm} no recibe `)}+__a.length+' argumento(s).'); }\n`;
   }
   if(!grupos.has('toString'))s+='toString(){ return __rt.ref(this); }\n';
-  s+=`getClass(){ return ${c.nombre}; }\n`;
+  s+=`getClass(){ return ${c.nombre}; }\nstatic getSimpleName(){ return ${JSON.stringify(c.nombre)}; }\nstatic getName(){ return ${JSON.stringify(c.nombre)}; }\n`;
   return s+'}\n';
 }
 const PRELUDIO=`class ArrayList extends Array{constructor(){super();} add(x){__rt.tick();this.push(x);__rt.agregado(this,x);return true;} get(i){if(i<0||i>=this.length)throw new __rt.JavaError('IndexOutOfBoundsException: la posición '+i+' no existe; la lista tiene '+this.length+' elemento(s).');return this[i];} size(){return this.length;} isEmpty(){return this.length===0;} remove(i){const x=this.splice(typeof i==='number'?i:this.indexOf(i),1)[0];__rt.agregado(this,null);return x;} contains(x){return this.includes(x);} clear(){this.length=0;}}
@@ -447,6 +500,21 @@ function crearRuntime(modelo){
   const rt={JavaError,log,salida,registro,idDe:o=>ids.get(o),foto,
     entero(v){return typeof v==='number'?Math.trunc(v):v;},
     implementa(o,nom){const id=ids.get(o);const r=registro[(id||0)-1];if(!r)return false;const c=modelo.clases[r.cls];return !!c&&(c.__interfaces||c.implementa).some(x=>tipoBase(x)===nom);},
+    coincide(args,tipos){return tipos.every((t,i)=>{const v=args[i],b=tipoBase(t);
+      if(INTS.has(b))return typeof v==='number'&&Number.isInteger(v);
+      if(b==='double'||b==='float')return typeof v==='number';
+      if(b==='boolean')return typeof v==='boolean';
+      if(b==='char')return typeof v==='string'&&v.length===1;
+      if(b==='String')return typeof v==='string'||v==null;
+      if(b==='Object')return true;
+      if(/^(ArrayList|List)$/.test(b)||/\[\]$/.test(t))return Array.isArray(v)||v==null;
+      const C=modelo.clases[b];if(!C)return true;if(v==null)return true;
+      return C.tipo==='interface'?rt.implementa(v,b):rt.esInstancia(v,b);});},
+    cast(nom,v){if(v==null)return v;const C=modelo.clases[nom];if(!C)return v;
+      const ok=C.tipo==='interface'?rt.implementa(v,nom):rt.esInstancia(v,nom);
+      if(!ok){const id=ids.get(v),real=id?registro[id-1].cls:typeof v==='string'?'String':typeof v;
+        throw new JavaError(`ClassCastException: el objeto es un ${real} y no se puede convertir a ${nom}. Comprueba antes con instanceof.`);}
+      return v;},
     esInstancia(o,nom){const id=ids.get(o);const r=registro[(id||0)-1];if(!r)return false;let c=modelo.clases[r.cls];while(c){if(c.nombre===nom)return true;c=c.__padre&&modelo.clases[c.__padre];}return false;},
     agregado(lista,x){const dueno=registro.find(r=>Object.values(r.raw).includes(lista));const campo=dueno?Object.keys(dueno.raw).find(k=>dueno.raw[k]===lista):null;
       log.push({t:'add',dueno:dueno?dueno.id:null,campo,elem:x==null?null:(ids.get(x)||null),texto:x==null?'':rt.fmtCorto(x),foto:foto()});},
