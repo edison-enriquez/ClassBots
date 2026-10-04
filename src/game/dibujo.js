@@ -2,6 +2,10 @@
 import { P, texto } from './sprites.js';
 import { robotRPG, paletaRPG } from './rpg.js';
 
+/* Equipo ganado en las misiones: se ve en todos los robots de las escenas */
+let EQUIPO = new Set();
+export const ponerEquipo = lista => { EQUIPO = new Set(lista.filter(Boolean)); };
+
 export function dibujarRobot(ctx, cx, piso, r, now, { caminando = false, fantasma = false, paleta = null, sub = null, sinBarra = false, dir = 'abajo', salto = 0 } = {}) {
   if (fantasma) return robotRPG(ctx, cx, piso, { dir, fantasma: true });
   const id = r.id || 1;
@@ -9,6 +13,12 @@ export function dibujarRobot(ctx, cx, piso, r, now, { caminando = false, fantasm
   const pal = paleta || paletaRPG(r.color, { energia: r.energia, apagado: r.__off, antena: Math.floor(now / 500 + id) % 2 === 0 });
   const paso = caminando ? 1 + (Math.floor(now / 140) % 2) : 0;
   const { x, y } = robotRPG(ctx, cx, piso, { dir, paso, pal, parpadeo, salto });
+  if (!r.__off && !fantasma) {
+    // Manual de ensamblaje: remache dorado en el pecho
+    if (EQUIPO.has('manual') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x + 7, y + 10, 3, 3); ctx.fillStyle = P.gold; ctx.fillRect(x + 8, y + 11, 1, 1); }
+    // Módulo táctico: gema que cambia de color en la antena
+    if (EQUIPO.has('tactico')) { ctx.fillStyle = P.ink; ctx.fillRect(x + 11, y - 1, 4, 4); ctx.fillStyle = Math.floor(now / 400) % 2 ? '#3fe0e0' : '#ff8fc7'; ctx.fillRect(x + 12, y, 2, 2); }
+  }
   if (!sinBarra && typeof r.energia === 'number') barra(ctx, x + 2, y - 5, 12, r.energia);
   if (r.nombre != null) texto(ctx, String(r.nombre).slice(0, 10), cx, y - 12, r.__off ? P.smoke : P.white, { centrar: true, sombra: P.ink });
   if (sub) texto(ctx, sub, cx, piso + 3, P.gold, { centrar: true, sombra: P.ink });

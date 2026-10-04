@@ -5,7 +5,7 @@ import { dibujarRobot, barra, rayo } from './dibujo.js';
 import { muro, sombra, antorcha, operaria, bocadillo, paletaRPG, robotRPG } from './rpg.js';
 
 const REFEREES = new Set(['Arbitro', 'Torneo', 'Arena']);
-const COLOR_CLASE = { Robot: 'azul', Dron: 'verde', Tanque: 'gris', Sanador: 'rosado', Ninja: 'morado', Torreta: 'naranja' };
+const COLOR_CLASE = { Robot: 'azul', Dron: 'verde', Tanque: 'gris', Sanador: 'rosado', Ninja: 'morado', Torreta: 'naranja', Gladiador: 'naranja', RobotLigero: 'azul', RobotPesado: 'gris', RobotExplorador: 'naranja', RobotAnfibio: 'verde' };
 const OTROS = ['amarillo', 'cian', 'rojo', 'cafe', 'blanco'];
 const colorClase = cls => COLOR_CLASE[cls] || OTROS[[...cls].reduce((a, c) => a + c.charCodeAt(0), 0) % OTROS.length];
 const numero = (o, k) => (typeof o?.f?.[k] === 'number' ? o.f[k] : null);
@@ -109,7 +109,9 @@ export function escenaArena(ctx, { modelo, fr, s, now }) {
   fondo(ctx, now);
   const objs = (fr?.objetos || []).filter(o => o.cls !== 'Main');
   const arbitros = objs.filter(o => REFEREES.has(o.cls));
-  const luchadores = objs.filter(o => !REFEREES.has(o.cls)).slice(0, 6);
+  const modulos = idsModulos(s.frames || []);
+  const luchadores = objs.filter(o => !REFEREES.has(o.cls) && !modulos.has(o.id)).slice(0, 6);
+  const porId = new Map(objs.map(o => [o.id, o]));
   if (arbitros.length || fr) {
     // La árbitra mira desde el borde izquierdo del ring
     operaria(ctx, 12, 62, now);
@@ -139,6 +141,19 @@ export function escenaArena(ctx, { modelo, fr, s, now }) {
     const p = pos.get(o.id);
     dibujarLuchador(ctx, o, p.x, p.piso, p.dir, now, { actua: fx && fx.id === o.id ? fx : null, modelo });
   });
+  // Módulo de estilo (Strategy) sobre cada luchador que lo lleva
+  for (const o of luchadores) {
+    const p = pos.get(o.id);
+    for (const v of Object.values(o.f)) {
+      const mod = v && v.ref ? porId.get(v.ref) : null;
+      if (!mod) continue;
+      const c = colorDe(colorClase(mod.cls)), recien = fx && fx.id === o.id && /^cambiar/.test(fx.metodo);
+      const mx = p.x + 9, my = p.piso - 22;
+      ctx.fillStyle = P.ink; ctx.fillRect(mx - 1, my - 1, 15, 9);
+      ctx.fillStyle = recien && Math.floor(now / 80) % 2 ? P.white : c; ctx.fillRect(mx, my, 13, 7);
+      texto(ctx, mod.cls.slice(0, 3).toUpperCase(), mx + 7, my + 1, P.ink, { centrar: true });
+    }
+  }
   // Números de daño o curación que suben
   s.numeros = (s.numeros || []).filter(q => now - q.t0 < 900);
   for (const q of s.numeros) {
@@ -146,4 +161,104 @@ export function escenaArena(ctx, { modelo, fr, s, now }) {
     const t = (now - q.t0) / 900;
     texto(ctx, (q.d > 0 ? '+' : '') + q.d, p.x + 10, Math.round(p.piso - 26 - t * 10), q.d > 0 ? P.green : P.red, { centrar: true, sombra: P.ink });
   }
+}
+
+/* ---------- Línea de ensamble (misión Template Method) ----------
+   Cada paso del método plantilla se ilumina en su estación; el color dice si la versión
+   que se ejecutó viene de la clase base (azul) o de la hija (dorado). */
+function estadoLinea(frames, hasta, modelo) {
+  // Métodos plantilla: los final de una clase abstracta (por defecto, ensamblar)
+  const plantillas = new Set(['ensamblar']);
+  for (const c of Object.values(modelo?.clases || {})) if (c.abstracta) for (const m of c.metodos) if (m.final) plantillas.add(m.nombre);
+  const productos = [];
+  let actual = null, ultimo = null;
+  for (let k = 0; k <= hasta && k < frames.length; k++) {
+    const f = frames[k];
+    if (f.tipo === 'llamada' && f.quien) {
+      const cls = f.objetos?.find(o => o.id === f.quien)?.cls;
+      if (plantillas.has(f.metodo)) {
+        // Un producto entra a la línea cuando se llama a su método plantilla
+        if (actual) productos.push(actual);
+        actual = { id: f.quien, cls, pasos: [] };
+        ultimo = null;
+        continue;
+      }
+      if (!actual || actual.id !== f.quien) { ultimo = null; continue; }
+      if (!actual.pasos.some(p => p.metodo === f.metodo)) {
+        ultimo = { metodo: f.metodo, imprimio: null };
+        actual.pasos.push(ultimo);
+      } else ultimo = actual.pasos.find(p => p.metodo === f.metodo) || ultimo;
+    } else if (f.tipo === 'print' && ultimo && actual) {
+      const txt = f.cap.replace(/^System\.out\.println → /, '');
+      if (ultimo.imprimio == null) ultimo.imprimio = txt; else actual.pasos.push(ultimo = { metodo: '', imprimio: txt, extra: true });
+    }
+  }
+  return { productos, actual };
+}
+
+export function escenaLinea(ctx, { modelo, s, now }) {
+  muro(ctx, 30, 'metal');
+  ctx.fillStyle = '#3a405a'; ctx.fillRect(0, 30, W, H - 30);
+  for (let y = 30; y < H; y += 16) for (let x = 0; x < W; x += 16) { ctx.fillStyle = (x + y) % 32 ? '#41486a' : '#3a405a'; ctx.fillRect(x, y, 16, 16); ctx.fillStyle = '#2b2f46'; ctx.fillRect(x, y + 15, 16, 1); }
+  // Placa del manual
+  ctx.fillStyle = P.ink; ctx.fillRect(56, 3, 80, 12); ctx.fillStyle = '#6b4423'; ctx.fillRect(57, 4, 78, 10);
+  texto(ctx, 'MANUAL DE ENSAMBLE', 96, 6, P.gold, { centrar: true });
+  // Cinta transportadora
+  const yc = 70;
+  ctx.fillStyle = P.ink; ctx.fillRect(0, yc - 1, W, 12);
+  ctx.fillStyle = '#596080'; ctx.fillRect(0, yc, W, 10);
+  for (let x = -16 + Math.floor(now / 60) % 16; x < W; x += 16) { ctx.fillStyle = '#7a83a8'; ctx.fillRect(x, yc + 1, 8, 2); ctx.fillStyle = '#454b68'; ctx.fillRect(x + 8, yc + 6, 8, 2); }
+
+  const { productos, actual } = estadoLinea(s.frames || [], s.i ?? -1, modelo);
+  if (!actual) {
+    for (let k = 0; k < 4; k++) estacion(ctx, 30 + k * 40, null, now);
+    bocadillo(ctx, 96, 88, (s.frames || []).length ? 'PREPARANDO LOS PEDIDOS…' : 'EJECUTA PARA ARRANCAR LA LÍNEA', P.white);
+    return;
+  }
+  const pasos = actual.pasos.filter(p => p.metodo).slice(0, 5);
+  const paso = Math.min(40, 160 / Math.max(1, pasos.length));
+  pasos.forEach((p, k) => {
+    const de = claseDeVersion(modelo, actual.cls, p.metodo);
+    estacion(ctx, Math.round(24 + k * paso + paso / 2 - 8), { ...p, hija: de === actual.cls, de }, now, k === pasos.length - 1);
+  });
+  // El producto avanza hasta la estación del último paso
+  const k = Math.max(0, pasos.length - 1), x = Math.round(24 + k * paso + paso / 2 - 8);
+  const color = colorClase(actual.cls);
+  robotRPG(ctx, x, yc + 4, { pal: paletaRPG(color, { energia: 100 }), dir: 'der', paso: Math.floor(now / 160) % 2 + 1 });
+  const etiqueta = actual.cls.toUpperCase().slice(0, 14);
+  texto(ctx, etiqueta, Math.max(etiqueta.length * 2 + 2, Math.min(W - etiqueta.length * 2 - 2, x)), yc + 13, mezclar(colorDe(color), 0.4), { centrar: true, sombra: P.ink });
+  // Productos terminados en la salida
+  productos.slice(-3).forEach((pr, j) => {
+    const px = 180 - j * 12;
+    robotRPG(ctx, px, 104, { pal: paletaRPG(colorClase(pr.cls), { energia: 100 }), dir: 'abajo' });
+  });
+  if (productos.length) texto(ctx, 'LISTOS', 140 - Math.min(2, productos.length - 1) * 12, 99, P.green, { centrar: true, sombra: P.ink });
+  // Leyenda de colores
+  ctx.fillStyle = '#7fc8ff'; ctx.fillRect(4, 104, 4, 4); texto(ctx, 'BASE', 11, 104, '#7fc8ff');
+  ctx.fillStyle = P.gold; ctx.fillRect(34, 104, 4, 4); texto(ctx, 'HIJA', 41, 104, P.gold);
+}
+function estacion(ctx, x, p, now, activa = false) {
+  const c = !p ? '#5b6178' : p.hija ? P.gold : '#7fc8ff';
+  ctx.fillStyle = P.ink; ctx.fillRect(x - 2, 36, 20, 30);
+  ctx.fillStyle = '#4c5378'; ctx.fillRect(x - 1, 37, 18, 28);
+  ctx.fillStyle = c; ctx.fillRect(x + 1, 39, 14, 3);
+  ctx.fillStyle = activa && Math.floor(now / 200) % 2 ? '#fff6b0' : mezclar(c, -0.45); ctx.fillRect(x + 3, 45, 10, 8);
+  ctx.fillStyle = P.ink; ctx.fillRect(x + 7, 58, 2, 8);
+  if (!p) return;
+  const nombre = p.metodo.replace(/^(preparar|instalar|lleva)/, m => ({ preparar: '', instalar: '', lleva: '¿' })[m]).toUpperCase().slice(0, 8);
+  texto(ctx, nombre, x + 8, 30, c, { centrar: true, sombra: P.ink });
+  // Lo que imprimió el paso, sobre la estación
+  if (p.imprimio && activa) bocadillo(ctx, x + 8, 17, p.imprimio.toUpperCase().slice(0, 14), c);
+  else if (p.imprimio) { ctx.fillStyle = P.green; ctx.fillRect(x + 6, 47, 4, 4); }
+  else if (!activa && /^lleva|^es|^tiene/.test(p.metodo)) texto(ctx, 'NO', x + 8, 47, P.smoke, { centrar: true, sombra: P.ink });
+}
+
+/* Ids de objetos que en algún cuadro son atributo de otro objeto (módulos como las estrategias) */
+function idsModulos(frames) {
+  const ids = new Set();
+  const ultimo = frames[frames.length - 1];
+  for (const f of ultimo ? [ultimo, ...frames.filter((_, k) => k % 5 === 0)] : []) {
+    for (const o of f.objetos || []) for (const v of Object.values(o.f)) if (v && v.ref && !REFEREES.has(o.cls)) ids.add(v.ref);
+  }
+  return ids;
 }

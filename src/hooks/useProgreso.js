@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { NIVELES } from '../levels/niveles.js';
-import { MISIONES } from '../levels/misiones.js';
+import { MISIONES, PASOS } from '../levels/misiones.js';
 
 const CLAVE = 'taller-objetos-react-v2';
-const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], codigo: {}, profe: false, asistente: 'basico' };
+const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico' };
 
 function leer() {
   try {
@@ -13,6 +13,7 @@ function leer() {
       ...g,
       hechos: Array.isArray(g.hechos) ? g.hechos.filter(id => NIVELES.some(n => n.id === id)) : [],
       misionesHechas: Array.isArray(g.misionesHechas) ? g.misionesHechas.filter(id => MISIONES.some(m => m.id === id)) : [],
+      pasosHechos: Array.isArray(g.pasosHechos) ? g.pasosHechos.filter(id => PASOS.some(x => x.id === id)) : [],
     };
   } catch { /* sin almacenamiento */ }
   return VACIO;
@@ -39,10 +40,23 @@ export function codigoInicial(p, i) {
   return n.inicial(prev);
 }
 
+/* Código inicial de un paso de misión: parte de lo que el estudiante dejó en el paso anterior */
+export function codigoInicialPaso(p, paso) {
+  const m = MISIONES.find(x => x.id === paso.misionId), k = m.pasos.findIndex(x => x.id === paso.id);
+  if (k <= 0) return paso.inicial();
+  const prevP = m.pasos[k - 1];
+  const prev = (p.pasosHechos || []).includes(prevP.id) && p.codigo[prevP.id] ? { ...prevP.solucion, ...p.codigo[prevP.id].files } : prevP.solucion;
+  return paso.inicial(prev);
+}
+export function codigoPaso(p, paso) {
+  return codigoGuardado(p, paso, () => codigoInicialPaso(p, paso));
+}
+
 export function codigoDe(p, i) {
-  const n = NIVELES[i];
+  return codigoGuardado(p, NIVELES[i], () => codigoInicial(p, i));
+}
+function codigoGuardado(p, n, base) {
   const c = p.codigo[n.id];
-  const base = () => codigoInicial(p, i);
   if (c && c.files) {
     const files = {};
     let ini = null;
