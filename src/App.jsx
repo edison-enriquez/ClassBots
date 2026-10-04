@@ -17,7 +17,8 @@ import Dialogo from './components/Dialogo.jsx';
 import MapaMundo from './components/MapaMundo.jsx';
 import { Bienvenida, MiAvance } from './components/Avance.jsx';
 import PanelProfesor from './components/PanelProfesor.jsx';
-import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion } from './metricas/metricas.js';
+import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo } from './metricas/metricas.js';
+import { useSellado } from './metricas/sellado.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
 
@@ -69,6 +70,36 @@ export default function App() {
     }, 15000);
     return () => { clearInterval(t); evs.forEach(ev => window.removeEventListener(ev, marcar)); };
   }, [medir]);
+
+  // Las métricas se sellan cifradas con la llave pública del profesor: el estudiante no las puede leer
+  const sellar = useSellado(prog);
+
+  // Escritura: lo tecleado se acumula y se registra por lotes; pegados e IA, al instante
+  const pendiente = useRef({ id: null, teclas: 0, tecleados: 0, borrados: 0 });
+  const volvio = useRef(0), salio = useRef(null);
+  const volcarEscritura = useCallback(() => {
+    const p = pendiente.current;
+    if (!p.id || (!p.teclas && !p.borrados)) return;
+    const { id, teclas, tecleados, borrados } = p;
+    pendiente.current = { id, teclas: 0, tecleados: 0, borrados: 0 };
+    medir(m => registrarEscritura(registrarEscritura(m, id, { tipo: 'teclado', teclas, n: tecleados }), id, { tipo: 'borrar', n: borrados }));
+  }, [medir]);
+  const alEscribir = ev => {
+    const id = nivelActual.current;
+    if (pendiente.current.id !== id) { volcarEscritura(); pendiente.current = { id, teclas: 0, tecleados: 0, borrados: 0 }; }
+    if (ev.tipo === 'teclado') { pendiente.current.teclas += 1; pendiente.current.tecleados += ev.n; return; }
+    if (ev.tipo === 'borrar') { pendiente.current.borrados += ev.n; return; }
+    medir(m => registrarEscritura(m, id, { ...ev, trasSalir: ev.tipo === 'pegado' && ev.externo && Date.now() - volvio.current < 20000 }));
+  };
+  useEffect(() => {
+    const t = setInterval(volcarEscritura, 5000);
+    // Salidas de la ventana: a otra pestaña o aplicación (por ejemplo, un chat de IA)
+    const fuera = () => { if (salio.current == null) { salio.current = Date.now(); medir(registrarSalida); } };
+    const dentro = () => { if (salio.current != null) { const ms = Date.now() - salio.current; salio.current = null; volvio.current = Date.now(); medir(m => registrarRegreso(m, ms)); } };
+    const vis = () => (document.visibilityState === 'hidden' ? fuera() : dentro());
+    window.addEventListener('blur', fuera); window.addEventListener('focus', dentro); document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(t); window.removeEventListener('blur', fuera); window.removeEventListener('focus', dentro); document.removeEventListener('visibilitychange', vis); };
+  }, [volcarEscritura, medir]);
 
   // Guardar el código del nivel
   useEffect(() => { setProg(p => ({ ...p, codigo: { ...p.codigo, [nivel.id]: cod } })); }, [cod]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -140,7 +171,12 @@ export default function App() {
   const izq = useRef(null);
   const ejecutar = enviar => {
     const r = evaluarNivel(nivel, cod.files, { incluirOcultas: enviar });
+    volcarEscritura();
     medir(m => registrarResultado(m, nivel.id, r, enviar));
+    if (enviar) {
+      const senales = analizarEstilo(cod.files, esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i));
+      if (senales.length) medir(m => registrarSenales(m, nivel.id, senales));
+    }
     if (r.animacion && izq.current && izq.current.scrollTop > 120) izq.current.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     setResultado(r); setEnviado(enviar); setToken(t => t + 1); setExito(null);
     setTab('pruebas');
@@ -286,7 +322,7 @@ export default function App() {
             <CodeEditor
               ref={editor} nivel={nivel} archivos={cod.files} activo={cod.activo} revision={revision} modo={modo}
               onCambio={(a, txt) => setCod(c => (c.files[a] === txt ? c : { ...c, files: { ...c.files, [a]: txt } }))}
-              onCursor={(l, c) => setCursor([l, c])} onAviso={avisar} onEjecutar={() => ejecutarRef.current(false)}
+              onCursor={(l, c) => setCursor([l, c])} onEscritura={alEscribir} onAviso={avisar} onEjecutar={() => ejecutarRef.current(false)}
               onIaNoDisponible={() => { setIaDisp(false); setProg(p => ({ ...p, asistente: 'basico' })); }}
             />
           </div>
@@ -317,7 +353,7 @@ export default function App() {
         misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)} />}
 
       {!prog.perfil && <Bienvenida prog={prog} onListo={perfil => setProg(p => ({ ...p, perfil }))} />}
-      {avance && prog.perfil && <MiAvance prog={prog} onCerrar={() => setAvance(false)} onPerfil={perfil => setProg(p => ({ ...p, perfil }))} />}
+      {avance && prog.perfil && <MiAvance prog={prog} sellar={sellar} onCerrar={() => setAvance(false)} onPerfil={perfil => setProg(p => ({ ...p, perfil }))} />}
       {panelProfe && prog.profe && <PanelProfesor onCerrar={() => setPanelProfe(false)} />}
 
       {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={MISIONES} />}

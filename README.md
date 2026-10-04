@@ -41,23 +41,25 @@ El workflow `.github/workflows/pages.yml` prueba, compila y publica en GitHub Pa
 
 ## Uso en clase sin servidor: avance, entregable y panel del profesor
 
-- **Identificación:** al abrir ClassBots por primera vez, Chispa pide el nombre y, si se quiere, el grupo. Todo se guarda solo en ese navegador.
+- **Identificación:** al abrir ClassBots por primera vez, Chispa pide el nombre y, si se quiere, el grupo.
 - **Métricas que se registran** por capítulo y por paso de misión:
-  - tiempo activo: bloques de 15 s con la pestaña visible y actividad reciente;
-  - ejecuciones, envíos y envíos fallidos;
-  - intentos y tiempo hasta superarlo, y si lo superó al primer envío;
-  - errores de compilación, de estructura y de ejecución, con su categoría (sintaxis, tipos, encapsulamiento, herencia, polimorfismo, null…);
-  - pruebas que fallaron, pistas abiertas, sugerencias de IA y si se usó la solución (solo es posible en modo profesor).
-- **Mi avance** (botón con el nombre del estudiante en la barra superior) muestra:
-  - un resumen: capítulos, tiempo, intentos por capítulo, porcentaje al primer envío, avance por mundo y temas donde más tropezó;
-  - **⬇ Descargar mi avance**: un `.json` con su código, progreso y métricas. Es el **entregable** y también sirve para seguir en otro equipo.
-  - **⬆ Cargar un avance**: disponible también desde la bienvenida.
-  - **Cambiar de estudiante**, para computadores compartidos.
-- **Panel del profesor** (aparece en modo profesor, que se activa con cinco clics en el título):
-  - arrastra los `.json` de la clase y verás los indicadores del grupo, los capítulos con más dificultad, los errores más frecuentes y una tabla ordenable por estudiante;
-  - al abrir un estudiante, ves su detalle por capítulo con el código que escribió;
-  - exporta **CSV resumen** y **CSV por capítulo**, separados por `;`, que Excel en español abre directamente.
-- **Integridad:** cada archivo lleva una firma. Si alguien lo edita a mano, el panel lo marca con ⚠ y el CSV dice «NO» en «Archivo íntegro». Es una protección contra cambios casuales, no seguridad fuerte: sin servidor, las soluciones y la firma viajan en el código del navegador.
+  - **Aprendizaje:** tiempo activo (pestaña visible con actividad reciente), ejecuciones, envíos, intentos y tiempo hasta superarlo, si lo superó al primer envío, errores de compilación, estructura y ejecución por tema, pruebas que fallaron, pistas y solución vista.
+  - **Escritura:** caracteres tecleados, borrados, autocompletados y aceptados de la IA del taller; pegados (cantidad, caracteres, el mayor) y si vienen **de fuera** de ClassBots (lo copiado dentro del editor o de la lección no cuenta).
+  - **Ventana:** salidas de la pestaña o de la ventana, tiempo fuera, y pegados externos en los 20 s siguientes a volver (el patrón de copiar de un chat de IA).
+  - **Estilo de los envíos:** rasgos poco habituales en el curso en las líneas que escribió el estudiante (Javadoc, comentarios o nombres en inglés, lambdas, streams, `var`, `String.format`, `try/catch`, APIs no vistas).
+  - **Indicio de copia o IA** (bajo, medio o alto) con sus razones. Es una heurística para conversar con el estudiante, **no una prueba**.
+- **Cifrado:** las métricas nunca se guardan legibles. Cada sesión del navegador las sella con **RSA-OAEP 3072 + AES-GCM 256** usando la llave **pública** del profesor, y el archivo descargado lleva esos segmentos cifrados. El juego no contiene la llave privada: ni el estudiante, ni quien lea el código, puede descifrarlas.
+- **Mi avance** (botón con el nombre): el estudiante ve solo su progreso (capítulos, mundos, misiones). Desde ahí puede **⬇ Descargar mi avance** (el `.json` entregable, que también sirve para seguir en otro equipo), **⬆ Cargar un avance** o **Cambiar de estudiante**.
+- **Panel del profesor** (modo profesor, cinco clics en el título):
+  - carga tu **llave privada** (queda solo en esa pestaña) y arrastra los `.json` de la clase;
+  - verás los indicadores del grupo, los capítulos más difíciles, los errores frecuentes, la tabla con indicio de copia o IA y el detalle por capítulo con el código del estudiante;
+  - exporta **CSV resumen** y **CSV por capítulo** (separados por `;`).
+- **Revisión de los archivos:** el panel avisa si un archivo fue editado a mano, si falta un segmento de métricas, si hay capítulos superados sin registro o si las métricas son de otro estudiante.
+- **Llaves:** el repositorio trae una llave pública por defecto (`src/metricas/llaveProfesor.js`). Para usar una propia, pulsa «Generar un par de llaves nuevo» en el panel: descarga la privada (guárdala y **nunca** la subas) y pon la pública en la variable del repositorio `VITE_LLAVE_PROFESOR` (Settings → Secrets and variables → Actions → Variables). Luego vuelve a publicar.
+- **Límites sin servidor:**
+  - si el estudiante borra los datos del navegador sin descargar, pierde su avance;
+  - alguien con conocimientos podría fabricar un archivo nuevo cifrado con la llave pública; el panel no lo detecta todo;
+  - el código de los capítulos viaja en claro, porque el estudiante lo necesita para continuar.
 
 ## Editor
 

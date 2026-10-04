@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
-import { exportar, leerArchivo, aProgreso, resumen, nombreArchivo, descargar, minutos, CATEGORIAS } from '../metricas/metricas.js';
+import { exportar, leerArchivo, aProgreso, resumen, nombreArchivo, descargar } from '../metricas/metricas.js';
 import { guardarYRecargar } from '../hooks/useProgreso.js';
 
 /* Lee un archivo de avance elegido por el usuario y pide confirmación antes de reemplazar */
@@ -67,17 +67,26 @@ export function Bienvenida({ prog, onListo }) {
 }
 
 /* ---------- Mi avance: resumen, descarga del entregable y carga en otro equipo ---------- */
-export function MiAvance({ prog, onCerrar, onPerfil }) {
-  const r = resumen({ progreso: prog, metricas: prog.metricas });
+export function MiAvance({ prog, sellar, onCerrar, onPerfil }) {
+  // El estudiante ve su avance, no las métricas: esas viajan cifradas para el profesor
+  const r = resumen({ progreso: prog });
   const carga = useCargarAvance(prog);
   const [cambiar, setCambiar] = useState(false);
   const [editar, setEditar] = useState(false);
   const [nombre, setNombre] = useState(prog.perfil?.nombre || '');
   const [grupo, setGrupo] = useState(prog.perfil?.grupo || '');
   const [descargado, setDescargado] = useState(false);
-  const bajar = () => { descargar(nombreArchivo(prog.perfil), JSON.stringify(exportar(prog), null, 2)); setDescargado(true); };
-  const dificultades = Object.entries(r.categorias).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const maxCat = dificultades[0]?.[1] || 1;
+  const [ocupado, setOcupado] = useState(false);
+  const [fallo, setFallo] = useState('');
+  const bajar = async () => {
+    setOcupado(true); setFallo('');
+    try {
+      const sobre = await sellar();
+      descargar(nombreArchivo(prog.perfil), JSON.stringify(exportar(prog, [...(prog.segmentos || []), sobre]), null, 2));
+      setDescargado(true);
+    } catch (e) { setFallo('No se pudo preparar el archivo: ' + e.message); }
+    setOcupado(false);
+  };
   return (
     <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="avance-t" onClick={e => { if (e.target === e.currentTarget) onCerrar(); }}>
       <div className="modal rpg-ventana avance">
@@ -97,10 +106,9 @@ export function MiAvance({ prog, onCerrar, onPerfil }) {
 
         <div className="avance-tarjetas">
           <div><strong>{r.capitulos}<small>/{r.totalCapitulos}</small></strong><span>capítulos superados</span></div>
-          <div><strong>{minutos(r.tiempoTotal)}</strong><span>tiempo activo</span></div>
-          <div><strong>{r.intentosPromedio ?? '—'}</strong><span>intentos por capítulo</span></div>
-          <div><strong>{r.primerEnvio != null ? r.primerEnvio + '%' : '—'}</strong><span>superados al primer envío</span></div>
+          <div><strong>{r.pct}%</strong><span>de la ruta principal</span></div>
           <div><strong>{r.misiones.length}</strong><span>misiones especiales</span></div>
+          <div><strong className="avance-actual">{r.actual}</strong><span>vas en</span></div>
         </div>
 
         <section className="avance-mundos" aria-label="Avance por mundo">
@@ -108,18 +116,12 @@ export function MiAvance({ prog, onCerrar, onPerfil }) {
             <div key={w.id} className="avance-mundo">
               <span>{w.id} · {w.nombre}</span>
               <span className="exp-barra" role="progressbar" aria-valuemin={0} aria-valuemax={w.total} aria-valuenow={w.superados} aria-label={`Mundo ${w.id}`}><i style={{ width: `${(100 * w.superados) / w.total}%` }} /></span>
-              <small>{w.superados}/{w.total} · {minutos(w.tiempo)}</small>
+              <small>{w.superados}/{w.total}</small>
             </div>
           ))}
         </section>
 
-        {dificultades.length > 0 && (
-          <section className="avance-dif">
-            <h3>Donde más tropezaste</h3>
-            {dificultades.map(([k, v]) => <div key={k} className="avance-cat"><span>{CATEGORIAS[k] || k}</span><i style={{ width: `${(100 * v) / maxCat}%` }} /><small>{v}</small></div>)}
-            <p className="bienv-nota">Cuenta los errores del compilador, de estructura y las pruebas que fallaron, por tema.</p>
-          </section>
-        )}
+        <p className="avance-cifrado">🔒 Mientras trabajas, ClassBots registra cómo avanzas (tiempo, intentos, errores, forma de escribir). Esos datos viajan <strong>cifrados</strong> dentro de tu archivo: solo tu profesor puede leerlos con su llave.</p>
 
         <section className="avance-acciones">
           <div>
@@ -127,7 +129,7 @@ export function MiAvance({ prog, onCerrar, onPerfil }) {
             <p>Descarga tu avance: incluye tu código, tus capítulos y tus métricas. Ese archivo es tu <strong>entregable</strong> para el profesor, y también sirve para continuar en otro equipo.</p>
           </div>
           <div className="modal-acc">
-            <button type="button" className="btn-pri" onClick={bajar}>⬇ Descargar mi avance</button>
+            <button type="button" className="btn-pri" onClick={bajar} disabled={ocupado}>{ocupado ? 'Preparando…' : '⬇ Descargar mi avance'}</button>
             <button type="button" className="btn-sec" onClick={carga.elegir}>⬆ Cargar un avance</button>
             {!cambiar
               ? <button type="button" className="btn-sec" onClick={() => setCambiar(true)}>Cambiar de estudiante</button>
@@ -136,6 +138,7 @@ export function MiAvance({ prog, onCerrar, onPerfil }) {
                   <button type="button" className="btn-mini" onClick={() => setCambiar(false)}>Cancelar</button>
                 </span>}
           </div>
+          {fallo && <p className="avance-alerta">{fallo}</p>}
           {descargado && <p className="avance-ok">✔ Archivo descargado: {nombreArchivo(prog.perfil)}</p>}
           {carga.campo}
           {carga.error && <p className="avance-alerta">{carga.error}</p>}

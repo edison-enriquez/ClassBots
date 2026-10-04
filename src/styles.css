@@ -518,3 +518,20 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
 .profe-codigo { margin-top: 10px; }
 .profe-codigo .ejemplo { margin-top: 6px; max-height: 360px; overflow: auto; }
 @media (max-width: 520px) { .avance-mundo { grid-template-columns: 1fr; gap: 3px; } .avance-cat { grid-template-columns: 1fr 1fr 28px; } }
+.avance-cifrado { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--dim); background: rgba(124,212,255,.06); border-left: 3px solid var(--info); }
+.avance-tarjetas strong.avance-actual { font: 13px var(--f-body, inherit); color: var(--ink); }
+.profe-llave { padding: 12px 14px; border: 2px solid var(--warn); background: rgba(255,209,102,.07); display: flex; flex-direction: column; gap: 8px; }
+.profe-llave.lista { border-color: var(--go); background: rgba(61,220,132,.07); }
+.profe-llave p { margin: 0; }
+.profe-llave .modal-acc { justify-content: flex-start; margin: 0; }
+.profe-nueva { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.profe-nueva textarea { width: 100%; font: 11px var(--f-code); color: var(--info); background: var(--negro); border: 1px solid var(--line); padding: 8px; resize: vertical; }
+.profe-cifrado { color: var(--dim); text-align: center; }
+.indicio { display: inline-block; padding: 2px 8px; font: 8px/1.6 var(--f-pixel); text-transform: uppercase; border: 1px solid currentColor; }
+.indicio.bajo { color: var(--go); } .indicio.medio { color: var(--warn); } .indicio.alto { color: var(--err); }
+.profe-escritura { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
+.profe-escritura > div { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: rgba(7,5,15,.4); border: 1px solid rgba(244,241,255,.15); }
+.profe-escritura strong { color: var(--gold); font: 13px var(--f-pixel); text-transform: uppercase; }
+.profe-escritura span { color: var(--dim); font-size: 12px; }
+.indicio-caja.medio strong { color: var(--warn); } .indicio-caja.alto strong { color: var(--err); } .indicio-caja.bajo strong { color: var(--go); }
+.profe-problemas { margin: 6px 0; padding-left: 18px; color: var(--err); font-size: 13px; }

@@ -4,7 +4,17 @@ import { MISIONES, PASOS } from '../levels/misiones.js';
 import { metricasVacias } from '../metricas/metricas.js';
 
 export const CLAVE = 'taller-objetos-react-v2';
-const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico', perfil: null, metricas: metricasVacias() };
+export const CLAVE_SEGMENTO = 'classbots-segmento-actual';
+const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico', perfil: null, metricas: metricasVacias(), segmentos: [] };
+
+/* El segmento cifrado de la sesión anterior pasa a la lista de segmentos cerrados */
+function conSegmentoAnterior(segmentos) {
+  try {
+    const actual = JSON.parse(localStorage.getItem(CLAVE_SEGMENTO) || 'null');
+    if (actual && actual.k && !segmentos.some(x => x.k === actual.k)) return [...segmentos, actual];
+  } catch { /* sin almacenamiento */ }
+  return segmentos;
+}
 
 function leer() {
   try {
@@ -15,7 +25,9 @@ function leer() {
       hechos: Array.isArray(g.hechos) ? g.hechos.filter(id => NIVELES.some(n => n.id === id)) : [],
       misionesHechas: Array.isArray(g.misionesHechas) ? g.misionesHechas.filter(id => MISIONES.some(m => m.id === id)) : [],
       pasosHechos: Array.isArray(g.pasosHechos) ? g.pasosHechos.filter(id => PASOS.some(x => x.id === id)) : [],
-      metricas: g.metricas && typeof g.metricas === 'object' ? { ...metricasVacias(), ...g.metricas } : metricasVacias(),
+      // Las métricas nunca se guardan legibles: cada sesión empieza en memoria y se sella cifrada.
+      metricas: metricasVacias(),
+      segmentos: conSegmentoAnterior(Array.isArray(g.segmentos) ? g.segmentos : []),
     };
   } catch { /* sin almacenamiento */ }
   return VACIO;
@@ -27,7 +39,7 @@ export function useProgreso() {
   const t = useRef(null);
   useEffect(() => {
     clearTimeout(t.current);
-    t.current = setTimeout(() => { try { localStorage.setItem(CLAVE, JSON.stringify(p)); } catch { /* sin almacenamiento */ } }, 300);
+    t.current = setTimeout(() => { try { localStorage.setItem(CLAVE, JSON.stringify({ ...p, metricas: undefined })); } catch { /* sin almacenamiento */ } }, 300);
   }, [p]);
   return [p, setP];
 }
@@ -70,6 +82,9 @@ function codigoGuardado(p, n, base) {
 
 /* Reemplaza el progreso guardado (cargar un avance, cambiar de estudiante) y recarga la página */
 export function guardarYRecargar(p) {
-  try { if (p) localStorage.setItem(CLAVE, JSON.stringify(p)); else localStorage.removeItem(CLAVE); } catch { /* sin almacenamiento */ }
+  try {
+    localStorage.removeItem(CLAVE_SEGMENTO);
+    if (p) localStorage.setItem(CLAVE, JSON.stringify({ ...p, metricas: undefined })); else localStorage.removeItem(CLAVE);
+  } catch { /* sin almacenamiento */ }
   location.reload();
 }

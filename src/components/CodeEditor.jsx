@@ -27,6 +27,7 @@ const CodeEditor = forwardRef(function CodeEditor(props, ref) {
       onCambio: txt => latest.current.onCambio?.(latest.current.activo, txt),
       onCursor: (l, c) => latest.current.onCursor?.(l, c),
       onEjecutar: () => latest.current.onEjecutar?.(),
+      onEscritura: ev => latest.current.onEscritura?.(ev),
     };
     herramientas.current = crearExtensiones(cfg);
     estados.current = new Map();
