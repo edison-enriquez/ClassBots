@@ -36,6 +36,8 @@ export default function App() {
   const [iaDisp, setIaDisp] = useState(null);
   const [exito, setExito] = useState(null);
   const editor = useRef(null);
+  const clicsMarca = useRef(0);
+  const temporizadorMarca = useRef(null);
 
   // Guardar el código del nivel
   useEffect(() => { setProg(p => ({ ...p, codigo: { ...p.codigo, [nivel.id]: cod } })); }, [cod]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -48,6 +50,17 @@ export default function App() {
   // Aviso temporal en la barra de estado
   const tAviso = useRef(null);
   const avisar = useCallback(m => { setAviso(m); clearTimeout(tAviso.current); if (m) tAviso.current = setTimeout(() => setAviso(''), 5000); }, []);
+  const contarClicsMarca = () => {
+    clicsMarca.current += 1;
+    clearTimeout(temporizadorMarca.current);
+    if (clicsMarca.current === 5) {
+      clicsMarca.current = 0;
+      setProg(p => ({ ...p, profe: !p.profe }));
+      avisar(`Modo profesor ${prog.profe ? 'desactivado' : 'activado'}.`);
+    } else {
+      temporizadorMarca.current = setTimeout(() => { clicsMarca.current = 0; }, 1800);
+    }
+  };
 
   useEffect(() => {
     obtenerProveedorIA().then(p => {
@@ -117,7 +130,7 @@ export default function App() {
         <div className="marca">
           <Avatar tamano={2} color="naranja" titulo="Logo de ClassBots" />
           <div>
-            <h1>ClassBots</h1>
+            <h1 onClick={contarClicsMarca}>ClassBots</h1>
             <p>POO en Java · Mundo {mundo.id}: {mundo.nombre}</p>
           </div>
         </div>
@@ -153,7 +166,6 @@ export default function App() {
             <span className="nv">NV {nv}</span>
             <span className="exp"><small>EXP</small><span className="exp-barra" role="progressbar" aria-label={`Progreso del mundo ${mundo.id}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pctMundo}><i style={{ width: pctMundo + '%' }} /></span><span className="xp">{xp}</span></span>
           </div>
-          <label className="profe"><input type="checkbox" checked={!!prog.profe} onChange={e => setProg(p => ({ ...p, profe: e.target.checked }))} /> Modo profesor</label>
         </div>
       </header>
 
