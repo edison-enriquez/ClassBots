@@ -17,7 +17,8 @@ import Dialogo from './components/Dialogo.jsx';
 import MapaMundo from './components/MapaMundo.jsx';
 import { Bienvenida, MiAvance } from './components/Avance.jsx';
 import PanelProfesor from './components/PanelProfesor.jsx';
-import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo } from './metricas/metricas.js';
+import MenuUsuario from './components/MenuUsuario.jsx';
+import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo, exportar, descargar, nombreArchivo } from './metricas/metricas.js';
 import { useSellado } from './metricas/sellado.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
@@ -275,15 +276,12 @@ export default function App() {
           )}
         </nav>
         <div className="hud">
-          <button type="button" className="btn-sec perfil-btn" onClick={() => setAvance(true)} title="Mi avance: descargar, cargar y ver mis métricas">👤 {prog.perfil?.nombre?.split(' ')[0] || 'Estudiante'}</button>
-          {prog.profe && <button type="button" className="btn-sec profe-btn" onClick={() => setPanelProfe(true)}>Panel del profesor</button>}
-          <button type="button" className="btn-sec mapa-btn" onClick={() => setMapa(true)}>Mapa</button>
-          <button type="button" className="btn-sec guia-btn" onClick={() => setGuia('relaciones')}>Guía</button>
-          {completadas.map(m => <button key={m.id} type="button" className="modulo-badge" title={`${m.recompensa}: obtenido en la misión «${m.titulo}». Ver en el Códice.`} onClick={() => setGuia('patrones')}>✦ {m.recompensa.split(' · ')[0]}</button>)}
-          <div className="stats rpg-ventana" title={`${xp} EXP en total · ${pctMundo}% del mundo ${mundo.id}`}>
-            <span className="nv">NV {nv}</span>
-            <span className="exp"><small>EXP</small><span className="exp-barra" role="progressbar" aria-label={`Progreso del mundo ${mundo.id}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pctMundo}><i style={{ width: pctMundo + '%' }} /></span><span className="xp">{xp}</span></span>
-          </div>
+          <button type="button" className="btn-sec herramienta mapa-btn" onClick={() => setMapa(true)} title="Mapa del mundo y misiones">Mapa</button>
+          <button type="button" className="btn-sec herramienta guia-btn" onClick={() => setGuia('relaciones')} title="Guía: relaciones, interfaces y Códice de patrones">Guía</button>
+          <MenuUsuario perfil={prog.perfil} nv={nv} xp={xp} pct={pctMundo} mundo={mundo.id} profe={!!prog.profe} recompensas={completadas}
+            onAvance={() => setAvance(true)} onCodice={() => setGuia('patrones')} onPanel={() => setPanelProfe(true)}
+            onDescargar={async () => { const sobre = await sellar(); descargar(nombreArchivo(prog.perfil), JSON.stringify(exportar(prog, [...(prog.segmentos || []), sobre]), null, 2)); }}
+            onSalirProfe={() => { setProg(p => ({ ...p, profe: false })); avisar('Modo profesor desactivado.'); }} />
         </div>
       </header>
 
