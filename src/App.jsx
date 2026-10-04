@@ -11,6 +11,7 @@ import Leccion from './components/Leccion.jsx';
 import PanelInferior from './components/PanelInferior.jsx';
 import Avatar from './components/Avatar.jsx';
 import Guia from './components/Guia.jsx';
+import PestanasArchivos from './components/PestanasArchivos.jsx';
 import Dialogo from './components/Dialogo.jsx';
 import MapaMundo from './components/MapaMundo.jsx';
 
@@ -144,7 +145,7 @@ export default function App() {
     const ks = NIVELES.map((n, k) => k).filter(k => NIVELES[k].mundo === m.id);
     const k = ks.find(k => !hecho(k) && abierto(k)) ?? ks[0];
     setMapa(false);
-    if (k !== i) irNivel(k); else setVerMundo(m.id);
+    if (misionId || k !== i) irNivel(k); else setVerMundo(m.id);
   };
   const nErr = diag.lista.filter(p => p.sev === 'err').length, nWarn = diag.lista.length - nErr;
   const modo = prog.asistente || 'basico';
@@ -210,12 +211,8 @@ export default function App() {
 
         <section className="der">
           <div className="ed-bar">
-            <div className="archivos" role="tablist" aria-label="Archivos">
-              {nivel.archivos.map(a => {
-                const m = diag.porArchivo[a], marca = m && [...m.values()].some(x => x.sev === 'err') ? 'err' : m?.size ? 'warn' : '';
-                return <button key={a} type="button" role="tab" className="archivo" aria-selected={a === cod.activo} onClick={() => setCod(c => ({ ...c, activo: a }))}>{a}{marca && <span className={'punto ' + marca}>●</span>}</button>;
-              })}
-            </div>
+            <PestanasArchivos archivos={nivel.archivos} activo={cod.activo} onElegir={a => setCod(c => ({ ...c, activo: a }))}
+              marcas={a => { const m = diag.porArchivo[a]; return m && [...m.values()].some(x => x.sev === 'err') ? 'err' : m?.size ? 'warn' : ''; }} />
             <div className="seg" role="radiogroup" aria-label="Asistente de código">
               <span className="seg-lbl">Asistente</span>
               {MODOS.map(([id, txt]) => (
@@ -261,7 +258,8 @@ export default function App() {
 
       {mapa && <MapaMundo mundos={MUNDOS} actual={mundo.id} abierto={mundoAbierto} completo={mundoCompleto}
         misiones={MISIONES} misionAbierta={misionAbierta} misionCompleta={misionCompleta}
-        onIniciarMision={iniciarMision} onViajar={viajar} onCerrar={() => setMapa(false)} />}
+        onIniciarMision={m => (m.id === misionId ? setMapa(false) : iniciarMision(m))} onViajar={viajar} onCerrar={() => setMapa(false)}
+        misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)} />}
 
       {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} />}
 

@@ -10,7 +10,7 @@ const path = require('path');
   await p.goto('file://' + path.resolve('dist-single/index.html'));
   await p.waitForTimeout(1500);
   await p.screenshot({ path: 'e2e/rpg-inicio.png' });
-  await p.check('.profe input');
+  for (let k = 0; k < 5; k++) await p.click('.marca h1'); // modo profesor (5 clics en el título)
   const ir = async (mundo, cap) => { await p.click(`.mundo-chip >> nth=${mundo - 1}`); await p.click(`.mapa-mundo li:nth-child(${cap}) .nodo`); await p.waitForTimeout(250); };
   const solucion = async () => { await p.click('text=Mostrar la respuesta'); await p.click('text=Reemplazar'); await p.waitForTimeout(200); };
   const monitor = async (n, t) => { await p.waitForTimeout(t); const el = await p.$('.monitor'); await el.screenshot({ path: `e2e/${n}.png` }); };
