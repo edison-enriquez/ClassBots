@@ -20,6 +20,7 @@ jobs:
       - run: npm run build
         env:
           VITE_AI_URL: ${{ vars.VITE_AI_URL }}
+          VITE_LLAVE_PROFESOR: ${{ vars.VITE_LLAVE_PROFESOR }}
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
   deploy:

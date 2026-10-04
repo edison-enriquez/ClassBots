@@ -13,6 +13,7 @@ import { tags as t } from '@lezer/highlight';
 import { contexto, sugerencias, sugerenciaLocal, firmaEn, dinamica, PLANTILLAS, SNIP_CLAVE } from './analisis.js';
 import { diagnosticar, clasesPorArchivo } from './diagnostico.js';
 import { obtenerProveedorIA, promptIA, limpiarIA, MENSAJES_IA, IA_PERMANENTE } from './ia.js';
+import { recordarCopia, esInterno } from '../metricas/portapapeles.js';
 
 /* ---------- Tema ---------- */
 const estilo = HighlightStyle.define([
@@ -180,7 +181,7 @@ export function crearExtensiones(cfg) {
       changes: { from: g.pos, insert: txt },
       selection: { anchor: !resto && g.atras ? fin - g.atras : fin },
       effects: setGhost.of(resto ? { ...g, texto: resto, pos: fin } : null),
-      userEvent: 'input.complete', scrollIntoView: true,
+      userEvent: g.ia ? 'input.complete.ia' : 'input.complete', scrollIntoView: true,
     });
     if (g.ia && !resto) cfg.aviso('');
     return true;
@@ -293,6 +294,33 @@ export function crearExtensiones(cfg) {
     { key: 'Mod-Space', run: startCompletion },
   ]));
 
+  /* Métricas de escritura: cómo llega el código al editor (tecleado, autocompletado, IA o pegado) */
+  const sinEspacios = t => t.replace(/\s+/g, '').length;
+  const escritura = [
+    EditorView.updateListener.of(u => {
+      if (!u.docChanged || !cfg.onEscritura) return;
+      for (const tr of u.transactions) {
+        if (!tr.docChanged) continue;
+        let ins = '', del = 0;
+        tr.changes.iterChanges((fA, tA, fB, tB, texto) => { del += tA - fA; ins += texto.toString(); });
+        let tipo = null;
+        if (tr.isUserEvent('input.paste') || tr.isUserEvent('input.drop')) tipo = 'pegado';
+        else if (tr.isUserEvent('input.complete.ia')) tipo = 'ia';
+        else if (tr.isUserEvent('input.complete')) tipo = 'completar';
+        else if (tr.isUserEvent('input')) tipo = 'teclado';
+        else if (tr.isUserEvent('delete')) tipo = 'borrar';
+        if (!tipo) continue; // deshacer, rehacer o cambios del propio taller
+        if (tipo === 'borrar') cfg.onEscritura({ tipo, n: del });
+        else if (tipo === 'pegado') cfg.onEscritura({ tipo, n: sinEspacios(ins), externo: !esInterno(ins) });
+        else if (ins) cfg.onEscritura({ tipo, n: sinEspacios(ins) });
+      }
+    }),
+    EditorView.domEventHandlers({
+      copy: (e, v) => { const r = v.state.selection.main; recordarCopia(v.state.sliceDoc(r.from, r.to)); },
+      cut: (e, v) => { const r = v.state.selection.main; recordarCopia(v.state.sliceDoc(r.from, r.to)); },
+    }),
+  ];
+
   const extensiones = [
     lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(), history(), drawSelection(), dropCursor(),
     EditorState.allowMultipleSelections.of(false), indentUnit.of('    '), EditorState.tabSize.of(4),
@@ -303,7 +331,7 @@ export function crearExtensiones(cfg) {
     ghostField, ghostPlugin, firmaField, miKeymap,
     keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, ...lintKeymap]),
     EditorView.contentAttributes.of({ 'aria-label': 'Editor de código Java', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off' }),
-    tema,
+    tema, escritura,
   ];
   return { extensiones, pedirIA, aceptarGhost };
 }
