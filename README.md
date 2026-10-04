@@ -22,7 +22,7 @@ Los mundos 7 a 9 (patrones de diseño) aparecen bloqueados en el mapa. Las **mis
 
 Cada misión empieza con código que huele mal, cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente) y su recompensa tiene efecto: registra el patrón en el **Códice de patrones** de la Guía y queda visible en los robots de todas las escenas. Las misiones no alteran el avance ni la experiencia de la ruta principal, y los mundos 7 a 9 no dan por hecho que se jugaron. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
 
-- **Columna izquierda (estilo CryptoZombies):** escenario pixel art, diálogo con Chispa (la jefa del taller), teoría, ejemplo, tarea, pista y respuesta.
+- **Columna izquierda (estilo CryptoZombies):** escenario pixel art, diálogo con Chispa (la jefa del taller), teoría, ejemplo, tarea y pista. La respuesta solo aparece en modo profesor (cinco clics en el título «ClassBots»).
 - **Columna derecha (estilo HackerRank):** editor Java, casos de prueba visibles y ocultos, consola, problemas, diagrama UML con fuente PlantUML y registro de eventos.
   - **Ejecutar código** corre los casos de ejemplo y anima el escenario.
   - **Enviar** corre además los casos ocultos; si todos pasan, el capítulo queda superado (+100 XP).

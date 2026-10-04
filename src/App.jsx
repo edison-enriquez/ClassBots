@@ -234,7 +234,7 @@ export default function App() {
             </div>
             <Dialogo caption={caption} reposo={resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : 'Escribe tu código y pulsa Ejecutar para ver la escena.'} />
           </div>
-          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : prog.hechos.includes(nivel.id)} onSolucion={() => reemplazarTodo({ ...nivel.solucion })} onGuia={setGuia} />
+          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : prog.hechos.includes(nivel.id)} onSolucion={() => { if (prog.profe) reemplazarTodo({ ...nivel.solucion }); }} onGuia={setGuia} profe={!!prog.profe} />
         </aside>
 
         <section className="der">
