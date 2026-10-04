@@ -17,7 +17,7 @@ function Mentor({ texto }) {
 }
 
 /* Columna izquierda: diálogo de Chispa, teoría, ejemplo, tarea y ayudas */
-export default function Leccion({ nivel, mundo, superado, onSolucion, onGuia }) {
+export default function Leccion({ nivel, mundo, superado, onSolucion, onGuia, profe = false }) {
   const [pista, setPista] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
   return (
@@ -39,12 +39,13 @@ export default function Leccion({ nivel, mundo, superado, onSolucion, onGuia }) 
       {nivel.nota && <p className="nota" dangerouslySetInnerHTML={{ __html: nivel.nota }} />}
       <div className="acciones">
         <button type="button" className="btn-sec" aria-expanded={pista} onClick={() => setPista(v => !v)}>{pista ? 'Ocultar pista' : 'Ver pista'}</button>
-        {!confirmar
+        {/* La respuesta solo está disponible en modo profesor */}
+        {profe && (!confirmar
           ? <button type="button" className="btn-sec" onClick={() => setConfirmar(true)}>Mostrar la respuesta</button>
           : <span className="confirmar">Reemplaza tu código por la solución.
               <button type="button" className="btn-sec peligro" onClick={() => { setConfirmar(false); onSolucion(); }}>Reemplazar</button>
               <button type="button" className="btn-sec" onClick={() => setConfirmar(false)}>Cancelar</button>
-            </span>}
+            </span>)}
       </div>
       {pista && <p className="pista" dangerouslySetInnerHTML={{ __html: nivel.pista }} />}
     </article>
