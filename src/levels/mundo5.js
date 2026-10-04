@@ -104,6 +104,56 @@ const DRON_ABSTRACTO = `public class Dron extends Maquina {
     }
 }
 `;
+const MAIN_CADENA = `public class Main {
+    public static void main(String[] args) {
+        RobotExplorador explorador = new RobotExplorador();
+        System.out.println(explorador.moverse());
+        System.out.println(explorador instanceof Robot);
+        System.out.println(explorador instanceof Maquina);
+    }
+}
+`;
+const MAQUINA_CADENA = `public class Maquina {
+    public String moverse() {
+        return "se mueve";
+    }
+}
+`;
+const ROBOT_CADENA = `public class Robot extends Maquina {
+    @Override
+    public String moverse() {
+        return "rueda";
+    }
+}
+`;
+const EXPLORADOR_INI = `// RobotExplorador.java
+// Declara RobotExplorador como una clase que hereda de Robot.
+`;
+const EXPLORADOR_CADENA = `public class RobotExplorador extends Robot {
+    @Override
+    public String moverse() {
+        return "explora";
+    }
+}
+`;
+const MAIN_NUEVA_MAQUINA = `public class Main {
+    public static void main(String[] args) {
+        Grua grua = new Grua();
+        System.out.println(grua.sonido());
+        System.out.println(grua instanceof Maquina);
+    }
+}
+`;
+const GRUA_INI = `// Grua.java
+// Crea una nueva clase concreta que extienda Maquina e implemente sonido().
+`;
+const GRUA = `public class Grua extends Maquina {
+    @Override
+    public String sonido() {
+        return "clank";
+    }
+}
+`;
 
 export const MUNDO5 = [
   {
@@ -213,5 +263,76 @@ export const MUNDO5 = [
       } },
     ],
     exito: 'Maquina define lo común y deja sonido() a las hijas: el molde abstracto está completo.',
+  },
+  {
+    id: 'cadena', titulo: 'Una herencia en cadena', concepto: 'Herencia multinivel', escena: 'conexiones',
+    archivos: ['Maquina.java', 'Robot.java', 'RobotExplorador.java', 'Main.java'],
+    mentor: 'El robot explorador es un robot y también una máquina. Vamos a especializar una clase hija sin perder lo que ya recibió de sus antecesoras.',
+    teoria: `<p>La herencia puede formar una <strong>cadena</strong>: <code>RobotExplorador</code> extiende <code>Robot</code>, y <code>Robot</code> extiende <code>Maquina</code>. La clase más especializada recibe los miembros de toda la cadena.</p>
+<p>Al redefinir un método heredado, la versión más cercana al objeto concreto es la que se ejecuta. Cada clase, aun así, solo puede extender una clase.</p>`,
+    ejemplo: 'public class RobotExplorador extends Robot {\n    @Override\n    public String moverse() {\n        return "explora";\n    }\n}',
+    tareas: ['Haz que <code>Robot</code> extienda <code>Maquina</code> y redefina <code>moverse()</code> como <code>"rueda"</code>.', 'Haz que <code>RobotExplorador</code> extienda <code>Robot</code> y redefina <code>moverse()</code> como <code>"explora"</code>.', 'Comprueba en <code>Main</code> que el explorador también es instancia de <code>Robot</code> y de <code>Maquina</code>.'],
+    nota: 'La jerarquía UML debe mostrar dos flechas: <code>Robot</code> hacia <code>Maquina</code> y <code>RobotExplorador</code> hacia <code>Robot</code>.',
+    pista: 'Cada <code>extends</code> nombra una sola clase base. Usa <code>@Override</code> porque <code>moverse()</code> ya existe en la cadena.',
+    objetivoUML: [['Robot', 'Maquina', 'herencia'], ['RobotExplorador', 'Robot', 'herencia']],
+    inicial: p => ({ 'Maquina.java': MAQUINA_CADENA, 'Robot.java': ROBOT_INI, 'RobotExplorador.java': EXPLORADOR_INI, 'Main.java': MAIN_CADENA }),
+    archivoInicial: 'Robot.java',
+    solucion: { 'Maquina.java': MAQUINA_CADENA, 'Robot.java': ROBOT_CADENA, 'RobotExplorador.java': EXPLORADOR_CADENA, 'Main.java': MAIN_CADENA },
+    previo: m => exigir(m, [{ clase: 'Maquina', metodos: [['moverse', 0]] }, { clase: 'Robot', metodos: [['moverse', 0]] }, { clase: 'RobotExplorador', metodos: [['moverse', 0]] }]) || previoMain(m),
+    animacion: corrMain,
+    pruebas: [
+      casoRelacion('Robot', 'Maquina', 'herencia'),
+      casoRelacion('RobotExplorador', 'Robot', 'herencia'),
+      { nombre: 'La cadena llega hasta Maquina', prueba: ({ modelo }) => {
+        const robot = modelo.clases.Robot;
+        const explorador = modelo.clases.RobotExplorador;
+        const ok = robot?.__padre === 'Maquina' && explorador?.__padre === 'Robot';
+        return caso(ok, 'RobotExplorador → Robot → Maquina', `${explorador?.__padre || 'sin base'} → ${robot?.__padre || 'sin base'}`);
+      } },
+      { nombre: 'Se ejecuta la redefinición más especializada', prueba: ({ run }) => {
+        const { rt } = run(corrMain);
+        return caso(rt.salida[0] === 'explora', 'explora', rt.salida[0] || '(sin salida)');
+      } },
+      { nombre: 'El explorador también es Robot y Maquina', prueba: ({ run }) => {
+        const { rt } = run(corrMain);
+        return caso(rt.salida.slice(1).join('\n') === 'true\ntrue', 'true y true', rt.salida.slice(1).join(' y ') || '(sin salida)');
+      } },
+    ],
+    exito: 'La cadena conserva el árbol completo: RobotExplorador es Robot y también es Maquina.',
+  },
+  {
+    id: 'nueva-maquina', titulo: 'Una máquina nueva', concepto: 'Aplicar la herencia abstracta', escena: 'conexiones',
+    archivos: ['Maquina.java', 'Grua.java', 'Main.java'],
+    mentor: 'Llegó una grúa al taller. Añadámosla como una máquina más: debe completar el comportamiento abstracto, sin cambiar el molde compartido.',
+    teoria: `<p>Una clase concreta puede extender una clase abstracta existente e implementar el método que falta. Así agregamos nuevos tipos especializados aprovechando el contrato y el código común de la clase base.</p>
+<p>La clase abstracta no se instancia; se crean objetos de sus subclases concretas.</p>`,
+    ejemplo: 'public class Grua extends Maquina {\n    @Override\n    public String sonido() {\n        return "clank";\n    }\n}',
+    tareas: ['Conserva <code>Maquina</code> abstracta con el método abstracto <code>sonido()</code>.', 'Implementa <code>Grua extends Maquina</code> y haz que <code>sonido()</code> devuelva <code>"clank"</code>.', 'En <code>Main</code>, crea la grúa, imprime su sonido y comprueba que también es una <code>Maquina</code>.'],
+    nota: 'No declares otra clase <code>Maquina</code> ni copies su método abstracto en <code>Grua</code>: la grúa debe heredar del molde.',
+    pista: 'La declaración empieza con <code>public class Grua extends Maquina</code>; el método concreto lleva <code>@Override</code> y cuerpo.',
+    objetivoUML: [['Grua', 'Maquina', 'herencia']],
+    inicial: p => ({ 'Maquina.java': p['Maquina.java'], 'Grua.java': GRUA_INI, 'Main.java': MAIN_NUEVA_MAQUINA }),
+    archivoInicial: 'Grua.java',
+    solucion: { 'Maquina.java': MAQUINA_ABSTRACTA, 'Grua.java': GRUA, 'Main.java': MAIN_NUEVA_MAQUINA },
+    previo: m => exigir(m, [{ clase: 'Maquina', metodos: [['sonido', 0]] }, { clase: 'Grua', metodos: [['sonido', 0]] }]) || previoMain(m),
+    animacion: corrMain,
+    pruebas: [
+      casoRelacion('Grua', 'Maquina', 'herencia'),
+      { nombre: 'La base sigue siendo abstracta', prueba: ({ modelo }) => {
+        const base = modelo.clases.Maquina;
+        const metodo = base?.metodos.find(m => m.nombre === 'sonido');
+        return caso(base?.abstracta && metodo?.abstracto, 'Maquina abstracta con sonido() abstracto', base?.abstracta && metodo?.abstracto ? 'correcto' : 'la clase base perdió su contrato');
+      } },
+      { nombre: 'Grua implementa sonido() como clase concreta', prueba: ({ modelo }) => {
+        const grua = modelo.clases.Grua;
+        const metodo = grua?.metodos.find(m => m.nombre === 'sonido');
+        return caso(grua && !grua.abstracta && metodo && !metodo.abstracto, 'Grua concreta con sonido()', metodo ? `${grua.abstracta ? 'abstracta' : 'concreta'}; ${metodo.abstracto ? 'método abstracto' : 'método implementado'}` : 'falta sonido()');
+      } },
+      { nombre: 'La grúa emite su sonido y pertenece a Maquina', prueba: ({ run }) => {
+        const { rt } = run(corrMain);
+        return caso(rt.salida.join('\n').trim() === 'clank\ntrue', 'clank y true', rt.salida.join(' y ') || '(sin salida)');
+      } },
+    ],
+    exito: 'La grúa amplía la familia usando el molde abstracto: implementó su sonido y heredó su tipo.',
   },
 ];

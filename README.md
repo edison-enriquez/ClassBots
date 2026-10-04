@@ -2,7 +2,7 @@
 
 Juego web para aprender programación orientada a objetos en Java. El estudiante escribe clases reales y un robot en pixel art se construye y se mueve según lo que hace su código.
 
-Mundos jugables (26 capítulos):
+Mundos jugables (28 capítulos):
 
 | Mundo | Tema | Capítulos | Escena |
 |---|---|---|---|
@@ -10,7 +10,7 @@ Mundos jugables (26 capítulos):
 | 2 · La Bóveda | Encapsulamiento: `private`, getters, setters con validación, invariantes, `static`/`final`, `toString`/`equals` | 7 | Bóveda con Óxido, el saboteador |
 | 3 · Las Conexiones | Relaciones: dependencia, asociación, agregación, composición y multiplicidad | 5 | Diagrama de objetos en pixel art |
 | 4 · Contratos | Interfaces, programar contra la interfaz, varias interfaces, `Comparable`, abierto/cerrado | 5 | Estación de carga universal |
-| 5 · El Árbol | Herencia con `extends`, redefinición y clases abstractas | 3 | Diagrama de herencia UML |
+| 5 · El Árbol | Herencia con `extends`, redefinición, clases abstractas y jerarquías multinivel | 5 | Diagrama de herencia UML |
 
 Los mundos 6 a 9 (polimorfismo y patrones de diseño) aparecen bloqueados en el mapa. Al completar el Mundo 4 se abre una rama opcional con la misión **Módulos de movimiento**, que presenta Strategy y desbloquea el módulo táctico del robot. Las misiones no alteran el avance ni la experiencia de la ruta principal. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
 
