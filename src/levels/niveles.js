@@ -4,6 +4,7 @@ import { MUNDO2 } from './mundo2.js';
 import { MUNDO3 } from './mundo3.js';
 import { MUNDO4 } from './mundo4.js';
 import { MUNDO5 } from './mundo5.js';
+import { MUNDO6 } from './mundo6.js';
 
 export const MUNDOS = [
   { id: 1, nombre: 'El Taller', tema: 'clases y objetos', niveles: MUNDO1 },
@@ -11,7 +12,7 @@ export const MUNDOS = [
   { id: 3, nombre: 'Las Conexiones', tema: 'relaciones entre clases', niveles: MUNDO3 },
   { id: 4, nombre: 'Contratos', tema: 'interfaces', niveles: MUNDO4 },
   { id: 5, nombre: 'El Árbol', tema: 'herencia y clases abstractas', niveles: MUNDO5 },
-  { id: 6, nombre: 'La Arena', tema: 'polimorfismo' },
+  { id: 6, nombre: 'La Arena', tema: 'polimorfismo', niveles: MUNDO6 },
   { id: 7, nombre: 'La Fábrica', tema: 'patrones creacionales' },
   { id: 8, nombre: 'La Ciudad', tema: 'patrones estructurales' },
   { id: 9, nombre: 'La Torre de Control', tema: 'patrones de comportamiento' },
