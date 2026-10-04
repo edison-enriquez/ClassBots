@@ -48,14 +48,23 @@ El workflow `.github/workflows/pages.yml` prueba, compila y publica en GitHub Pa
   - **Ventana:** salidas de la pestaña o de la ventana, tiempo fuera, y pegados externos en los 20 s siguientes a volver (el patrón de copiar de un chat de IA).
   - **Estilo de los envíos:** rasgos poco habituales en el curso en las líneas que escribió el estudiante (Javadoc, comentarios o nombres en inglés, lambdas, streams, `var`, `String.format`, `try/catch`, APIs no vistas).
   - **Indicio de copia o IA** (bajo, medio o alto) con sus razones. Es una heurística para conversar con el estudiante, **no una prueba**.
-- **Cifrado:** las métricas nunca se guardan legibles. Cada sesión del navegador las sella con **RSA-OAEP 3072 + AES-GCM 256** usando la llave **pública** del profesor, y el archivo descargado lleva esos segmentos cifrados. El juego no contiene la llave privada: ni el estudiante, ni quien lea el código, puede descifrarlas.
+- **Clases (sin tocar el repositorio):** en el Panel del profesor, «Crear una clase» pide nombre y contraseña. ClassBots genera un par de llaves **ECDH P-256** solo para esa clase y guarda la privada cifrada con la contraseña (PBKDF2-SHA256, 600 000 iteraciones, y AES-GCM).
+  - **Copiar enlace** da un enlace `…/?clase=…` para compartir con los estudiantes. Al abrirlo, su avance queda asociado a la clase. También pueden pegar el enlace en la bienvenida o en «Mi avance».
+  - Cada archivo de estudiante lleva su clase. En cualquier computador, el profesor arrastra los archivos, escribe la contraseña y el panel **reconstruye la llave correcta**: no hay archivos de llave que guardar.
+  - La contraseña no se puede recuperar. Al ir en los archivos, una contraseña débil podría adivinarse por fuerza bruta, así que conviene usar una frase larga.
+- **Cifrado de las métricas:** las métricas nunca se guardan ni se descargan legibles. Cada sesión las sella para la clase del estudiante (ECDH P-256 + HKDF + AES-GCM 256). Si el estudiante no tiene clase, se sellan con la llave pública del despliegue (RSA-OAEP 3072, opción avanzada del panel).
+- **Identidad:** el historial cifrado registra el alta, los cambios de nombre o de grupo, los avances cargados de otro perfil y los cambios de clase. El panel además cruza los archivos de la clase:
+  - **mismo perfil con otro nombre**, es decir, una sesión entregada como dos estudiantes;
+  - **sesiones de trabajo compartidas** entre estudiantes distintos;
+  - **código idéntico** en capítulos no triviales y **comentarios propios idénticos**;
+  - **mismo computador**, solo como dato (en un laboratorio es normal).
 - **Mi avance** (botón con el nombre): el estudiante ve solo su progreso (capítulos, mundos, misiones). Desde ahí puede **⬇ Descargar mi avance** (el `.json` entregable, que también sirve para seguir en otro equipo), **⬆ Cargar un avance** o **Cambiar de estudiante**.
 - **Panel del profesor** (modo profesor, cinco clics en el título):
   - carga tu **llave privada** (queda solo en esa pestaña) y arrastra los `.json` de la clase;
   - verás los indicadores del grupo, los capítulos más difíciles, los errores frecuentes, la tabla con indicio de copia o IA y el detalle por capítulo con el código del estudiante;
   - exporta **CSV resumen** y **CSV por capítulo** (separados por `;`).
 - **Revisión de los archivos:** el panel avisa si un archivo fue editado a mano, si falta un segmento de métricas, si hay capítulos superados sin registro o si las métricas son de otro estudiante.
-- **Llaves:** el repositorio trae una llave pública por defecto (`src/metricas/llaveProfesor.js`). Para usar una propia, pulsa «Generar un par de llaves nuevo» en el panel: descarga la privada (guárdala y **nunca** la subas) y pon la pública en la variable del repositorio `VITE_LLAVE_PROFESOR` (Settings → Secrets and variables → Actions → Variables). Luego vuelve a publicar.
+- **Llave del despliegue (avanzado):** para estudiantes sin clase, el repositorio trae una llave pública (`src/metricas/llaveProfesor.js`), que se puede reemplazar con la variable `VITE_LLAVE_PROFESOR`. Su llave privada se carga en «Avanzado» del panel.
 - **Límites sin servidor:**
   - si el estudiante borra los datos del navegador sin descargar, pierde su avance;
   - alguien con conocimientos podría fabricar un archivo nuevo cifrado con la llave pública; el panel no lo detecta todo;

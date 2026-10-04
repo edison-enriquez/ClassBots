@@ -4,9 +4,9 @@ import { NIVELES } from '../src/levels/niveles.js';
 import { evaluarNivel } from '../src/levels/evaluar.js';
 import {
   metricasVacias, registrarResultado, registrarTiempo, registrarPista, registrarEscritura, registrarSenales, resumen, exportar, leerArchivo,
-  aProgreso, abrirConLlave, fusionar, nuevoSegmento, contenidoSegmento, csvClase, csvDetalle, categoria, nombreArchivo, analizarEstilo, indiciosNivel,
+  aProgreso, abrirConLlave, fusionar, registrarEvento, cruzarArchivos, nuevoSegmento, contenidoSegmento, csvClase, csvDetalle, categoria, nombreArchivo, analizarEstilo, indiciosNivel,
 } from '../src/metricas/metricas.js';
-import { generarLlaves, cifrar, descifrar } from '../src/metricas/cifrado.js';
+import { generarLlaves, cifrar, descifrar, crearClase, abrirClase, sellarPara, decodificarClase, codificarClase } from '../src/metricas/cifrado.js';
 
 globalThis.performance ??= { now: () => Date.now() };
 const n0 = NIVELES[0];
@@ -85,7 +85,7 @@ test('exportar: el archivo no deja leer las métricas, pero el profesor sí', as
   const p = aProgreso(d, { profe: false });
   assert.deepEqual(p.hechos, [n0.id]); assert.equal(p.segmentos.length, 1); assert.deepEqual(p.metricas.niveles, {});
   // Profesor
-  const abierto = await abrirConLlave(d, llaves.privada);
+  const abierto = await abrirConLlave(d, { rsa: llaves.privada });
   assert.deepEqual(abierto.problemas, []);
   assert.equal(abierto.metricas.niveles[n0.id].tiempo, 600000);
   const r = resumen({ progreso: d.progreso, metricas: abierto.metricas });
@@ -95,11 +95,50 @@ test('exportar: el archivo no deja leer las métricas, pero el profesor sí', as
   assert.match(csvDetalle([{ ...d, r }]), /1\.1;/);
   // Llave equivocada y archivo editado a mano
   const otra = await generarLlaves();
-  assert.match((await abrirConLlave(d, otra.privada)).problemas.join(), /no se pudo descifrar/);
+  assert.match((await abrirConLlave(d, { rsa: otra.privada })).problemas.join(), /no se pudo descifrar/);
   const editado = leerArchivo(JSON.stringify({ ...archivo, progreso: { ...archivo.progreso, hechos: [n0.id, NIVELES[1].id] } }));
   assert.equal(editado.integro, false);
-  const pe = (await abrirConLlave(editado, llaves.privada)).problemas.join(' | ');
+  const pe = (await abrirConLlave(editado, { rsa: llaves.privada })).problemas.join(' | ');
   assert.match(pe, /editado fuera/); assert.match(pe, /superados sin registro/);
   assert.throws(() => leerArchivo('{"hola":1}'), /no es un avance/);
   assert.equal(nombreArchivo({ nombre: 'Ana María Pérez', grupo: 'G1' }).replace(/_\d{4}-\d\d-\d\d/, ''), 'ClassBots_Ana_Maria_Perez_G1.json');
+});
+
+test('clases: el profesor lee las métricas solo con su contraseña y el historial registra cambios de nombre', async () => {
+  const clase = await crearClase({ nombre: 'POO G1', docente: 'Edison', contrasena: 'una frase larga' });
+  const enLink = decodificarClase('https://x.test/?clase=' + codificarClase(clase));
+  assert.equal(enLink.id, clase.id);
+  let met = registrarEvento(metricasVacias(), { tipo: 'alta', nombre: 'Ana', perfilId: 'p1' });
+  met = registrarEvento(met, { tipo: 'perfil', de: 'Ana', a: 'Luis' });
+  met = registrarResultado(met, n0.id, evaluarNivel(n0, n0.solucion, { incluirOcultas: true }), true);
+  const prog = { ...progresoBase(), perfil: { nombre: 'Luis', id: 'p1' }, clase: enLink, metricas: met, segmentos: [] };
+  const sobre = await sellarPara(contenidoSegmento(prog, nuevoSegmento([])), prog.clase);
+  const d = leerArchivo(JSON.stringify(exportar(prog, [sobre])));
+  assert.equal(d.integro, true); assert.equal(d.clase.id, clase.id);
+  const sin = await abrirConLlave(d, {});
+  assert.equal(sin.leidos, 0); assert.deepEqual(sin.faltan, [clase.id]);
+  await assert.rejects(() => abrirClase(d.clase, 'otra cosa'), /Contraseña incorrecta/);
+  const priv = await abrirClase(d.clase, 'una frase larga');
+  const x = await abrirConLlave(d, { clases: { [clase.id]: priv } });
+  assert.equal(x.metricas.niveles[n0.id].envios, 1);
+  assert.match(x.problemas.join(' | '), /cambió su nombre 1 vez/);
+  assert.deepEqual(x.metricas.eventos.map(e => e.tipo), ['alta', 'perfil']);
+  // Al cargarlo en otro equipo queda anotado
+  const p2 = aProgreso(d, { perfil: { nombre: 'Otro' } });
+  assert.equal(p2.clase.id, clase.id); assert.equal(p2.pendientes[0].tipo, 'carga');
+});
+
+test('cruces: mismo perfil con dos nombres, sesiones compartidas y código idéntico', () => {
+  const codigo = { files: { 'Robot.java': 'public class Robot {\n  // escrito por el estudiante\n' + '  private int x = 1;\n'.repeat(12) + '}' } };
+  const base = (nombre, id, sesiones, iv) => ({ perfil: { nombre, id }, segmentos: [{ iv }], sesiones, dispositivos: ['pc1'], progreso: { codigo: { [n0.id]: codigo } } });
+  const a = base('Ana', 'p1', ['s1'], 'iv1'), b = base('Luis', 'p1', ['s1'], 'iv1'), c = base('Carla', 'p2', ['s1'], 'iv9'), dd = base('Dani', 'p3', ['s7'], 'iv7');
+  const cr = cruzarArchivos([a, b, c, dd]);
+  const txt = e => cr.get(e).map(x => x.txt).join(' | ');
+  assert.match(txt(a), /mismo perfil que «Luis»/);
+  assert.match(txt(c), /comparte 1 sesión\(es\) de trabajo con «Ana»/);
+  assert.match(txt(dd), /código idéntico a «Ana» en 1\.1/);
+  assert.match(txt(dd), /mismo computador/);
+  const e1 = { perfil: { nombre: 'Eva', id: 'p8' }, segmentos: [], progreso: { codigo: { [n0.id]: { files: { 'Robot.java': 'public class Robot {\n  // este robot lo programé yo solita en la noche\n}' } } } } };
+  const e2 = { perfil: { nombre: 'Flor', id: 'p9' }, segmentos: [], progreso: { codigo: { [n0.id]: { files: { 'Robot.java': 'public class Robot{\n// Este robot lo programé yo solita en la noche\n}' } } } } };
+  assert.match(cruzarArchivos([e1, e2]).get(e1).map(x => x.txt).join(), /comentarios idénticos/);
 });

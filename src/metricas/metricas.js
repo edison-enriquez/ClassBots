@@ -3,13 +3,13 @@
    sirve para continuar en otro computador y como entregable para el profesor. */
 import { NIVELES, MUNDOS } from '../levels/niveles.js';
 import { MISIONES, PASOS } from '../levels/misiones.js';
-import { descifrar } from './cifrado.js';
+import { abrirSobre, clasePublica } from './cifrado.js';
 
 export const FORMATO = 2;
 const SAL = 'classbots·taller-de-objetos·v1';
 
 /* ---------- Estructura ---------- */
-export const metricasVacias = () => ({ tiempoTotal: 0, sesiones: 0, salidas: 0, tiempoFuera: 0, primeraActividad: null, ultimaActividad: null, niveles: {} });
+export const metricasVacias = () => ({ tiempoTotal: 0, sesiones: 0, salidas: 0, tiempoFuera: 0, primeraActividad: null, ultimaActividad: null, niveles: {}, eventos: [] });
 const nivelVacio = () => ({
   abierto: null, tiempo: 0, ejecuciones: 0, envios: 0, enviosFallidos: 0,
   primerExito: null, intentosHastaExito: null, tiempoHastaExito: null,
@@ -72,6 +72,11 @@ export const registrarEscritura = (met, id, ev) => conNivel(met, id, n => {
     if (ev.trasSalir) n.pegadosTrasSalir += 1;
   }
 });
+/* Historial de identidad: alta, cambios de nombre o grupo, cargas de archivos, cambios de clase */
+export const registrarEvento = (met, ev) => {
+  const m = met || metricasVacias();
+  return { ...m, eventos: [...(m.eventos || []), { t: ahora(), ...ev }].slice(-200) };
+};
 /* Salidas de la pestaña (a otra ventana o aplicación) y tiempo fuera */
 export const registrarSalida = met => ({ ...(met || metricasVacias()), salidas: ((met && met.salidas) || 0) + 1 });
 export const registrarRegreso = (met, ms) => ({ ...(met || metricasVacias()), tiempoFuera: ((met && met.tiempoFuera) || 0) + Math.max(0, ms) });
@@ -215,6 +220,7 @@ export function fusionar(lista) {
   for (const m of lista) {
     if (!m) continue;
     for (const k of ['tiempoTotal', 'sesiones', 'salidas', 'tiempoFuera']) total[k] += m[k] || 0;
+    total.eventos = [...total.eventos, ...(m.eventos || [])];
     if (m.primeraActividad && (!total.primeraActividad || m.primeraActividad < total.primeraActividad)) total.primeraActividad = m.primeraActividad;
     if (m.ultimaActividad && (!total.ultimaActividad || m.ultimaActividad > total.ultimaActividad)) total.ultimaActividad = m.ultimaActividad;
     for (const [id, x0] of Object.entries(m.niveles || {})) {
@@ -237,6 +243,7 @@ export function fusionar(lista) {
       total.niveles[id] = a;
     }
   }
+  total.eventos.sort((a, b) => (a.t < b.t ? -1 : 1));
   return total;
 }
 
@@ -255,6 +262,7 @@ export const firmar = cuerpo => fnv(SAL + canon(cuerpo));
 export const nuevoSegmento = (segmentos = []) => ({ id: Math.random().toString(36).slice(2, 10), seq: segmentos.length + 1, inicio: new Date().toISOString() });
 export const contenidoSegmento = (prog, seg) => ({
   ...seg, guardado: new Date().toISOString(), perfilId: prog.perfil?.id || null,
+  nombre: prog.perfil?.nombre || null, grupo: prog.perfil?.grupo || '', dispositivo: prog.dispositivo || null, clase: prog.clase?.id || null,
   hechos: [...(prog.hechos || []), ...(prog.pasosHechos || [])], metricas: prog.metricas || metricasVacias(),
 });
 /* segmentos: los sobres ya cerrados más el de esta sesión (ya cifrado por quien llama) */
@@ -263,6 +271,7 @@ export function exportar(prog, segmentos) {
     perfil: prog.perfil || null,
     progreso: { nivelId: prog.nivelId, hechos: prog.hechos, pasosHechos: prog.pasosHechos || [], misionesHechas: prog.misionesHechas || [], codigo: prog.codigo },
     segmentos,
+    clase: clasePublica(prog.clase) || null,
   };
   const r = resumen({ progreso: cuerpo.progreso });
   return {
@@ -277,7 +286,8 @@ export function leerArchivo(texto) {
   if (!d || d.app !== 'ClassBots' || !d.progreso || !d.perfil) throw new Error('El archivo no es un avance de ClassBots.');
   if (d.formato > FORMATO) throw new Error('Este avance se creó con una versión más nueva de ClassBots.');
   if (!Array.isArray(d.segmentos)) throw new Error('Este avance es de una versión anterior de ClassBots y no trae métricas cifradas.');
-  const integro = d.firma === firmar({ perfil: d.perfil, progreso: d.progreso, segmentos: d.segmentos });
+  // Los archivos anteriores a las clases no incluían «clase» en la firma
+  const integro = d.firma === firmar('clase' in d ? { perfil: d.perfil, progreso: d.progreso, segmentos: d.segmentos, clase: d.clase } : { perfil: d.perfil, progreso: d.progreso, segmentos: d.segmentos });
   return { ...d, integro };
 }
 /* Convierte un archivo leído en el estado de progreso de la app (las métricas siguen cifradas) */
@@ -292,26 +302,82 @@ export function aProgreso(d, base) {
     misionesHechas: (d.progreso.misionesHechas || []).filter(id => MISIONES.some(m => m.id === id)),
     codigo: d.progreso.codigo || {},
     segmentos: d.segmentos || [],
+    clase: d.clase || base.clase || null,
     metricas: metricasVacias(),
+    // Se anota en el historial cifrado al recargar
+    pendientes: [...(base.pendientes || []), { tipo: 'carga', nombre: d.perfil.nombre, grupo: d.perfil.grupo || '', perfilId: d.perfil.id, exportado: d.exportado, desde: base.perfil?.nombre || null }],
   };
 }
-/* Solo el profesor: descifra los segmentos, los fusiona y revisa la coherencia */
-export async function abrirConLlave(d, privada) {
-  const problemas = [], partes = [];
+/* Solo el profesor: descifra los segmentos, los fusiona y revisa la coherencia.
+   llaves = { clases: { [id]: privada }, rsa: privada } */
+export async function abrirConLlave(d, llaves) {
+  const problemas = [], partes = [], faltan = new Set();
   for (const sobre of d.segmentos) {
-    try { partes.push(await descifrar(sobre, privada)); } catch { problemas.push('un segmento no se pudo descifrar con esta llave'); }
+    try { partes.push(await abrirSobre(sobre, llaves)); }
+    catch (e) { if (e.clase) faltan.add(e.clase); else problemas.push('un segmento no se pudo descifrar con las llaves cargadas'); }
   }
+  if (faltan.size) problemas.push('faltan contraseñas de clase para leer parte de las métricas');
   partes.sort((a, b) => a.seq - b.seq);
   const seqs = partes.map(p => p.seq);
-  for (let k = 1; k <= Math.max(0, ...seqs); k++) if (!seqs.includes(k)) { problemas.push(`falta el segmento ${k} de las métricas (¿se borró?)`); break; }
-  if (partes.some(p => p.perfilId && d.perfil.id && p.perfilId !== d.perfil.id)) problemas.push('hay métricas de otro estudiante mezcladas');
+  if (!faltan.size) for (let k = 1; k <= Math.max(0, ...seqs); k++) if (!seqs.includes(k)) { problemas.push(`falta el segmento ${k} de las métricas (¿se borró?)`); break; }
+  if (partes.some(p => p.perfilId && d.perfil.id && p.perfilId !== d.perfil.id)) problemas.push('hay métricas de otro perfil mezcladas');
   const metricas = fusionar(partes.map(p => p.metricas));
-  const registrados = new Set(partes.flatMap(p => p.hechos || []));
-  const sinRegistro = [...(d.progreso.hechos || []), ...(d.progreso.pasosHechos || [])].filter(id => !registrados.has(id) && !metricas.niveles[id]?.primerExito);
-  if (sinRegistro.length) problemas.push(`${sinRegistro.length} capítulo(s) aparecen superados sin registro en las métricas`);
+  // Identidad: nombres con que se trabajó en cada sesión y cambios registrados
+  const nombres = [...new Set(partes.map(p => p.nombre).filter(Boolean))];
+  if (nombres.length > 1 || (nombres[0] && nombres[0] !== d.perfil.nombre)) problemas.push(`trabajó con más de un nombre: ${[...new Set([...nombres, d.perfil.nombre])].join(' → ')}`);
+  const cambios = metricas.eventos.filter(e => e.tipo === 'perfil' && e.de && e.de !== e.a);
+  if (cambios.length) problemas.push(`cambió su nombre ${cambios.length} vez(es)`);
+  const cargas = metricas.eventos.filter(e => e.tipo === 'carga' && e.perfilId && e.perfilId !== d.perfil.id);
+  if (cargas.length) problemas.push(`cargó avances de otro perfil: ${[...new Set(cargas.map(e => e.nombre))].join(', ')}`);
+  if (!faltan.size) {
+    const registrados = new Set(partes.flatMap(p => p.hechos || []));
+    const sinRegistro = [...(d.progreso.hechos || []), ...(d.progreso.pasosHechos || [])].filter(id => !registrados.has(id) && !metricas.niveles[id]?.primerExito);
+    if (sinRegistro.length) problemas.push(`${sinRegistro.length} capítulo(s) aparecen superados sin registro en las métricas`);
+  }
   if (!d.integro) problemas.push('el archivo fue editado fuera de ClassBots');
   if (d.perfil.alterado) problemas.push('se cargó antes un archivo editado');
-  return { metricas, problemas, segmentos: partes.length };
+  return {
+    metricas, problemas, faltan: [...faltan], leidos: partes.length,
+    sesiones: partes.map(p => p.id).filter(Boolean), dispositivos: [...new Set(partes.map(p => p.dispositivo).filter(Boolean))], nombres,
+  };
+}
+
+/* Cruces entre archivos de la clase: perfiles con dos nombres, sesiones compartidas y código idéntico */
+const comentarios = t => (String(t || '').match(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g) || []).map(c => c.replace(/^\/\/|^\/\*+|\*+\/$/g, '').replace(/\s+/g, ' ').trim().toLowerCase()).filter(c => c.length >= 25);
+const comentariosBase = n => { try { return new Set(comentarios(Object.values(n.inicial({}) || {}).join('\n'))); } catch { return new Set(); } };
+const normalizarCodigo = t => String(t || '').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, '');
+export function cruzarArchivos(estudiantes, niveles = [...NIVELES, ...PASOS]) {
+  const alertas = new Map(estudiantes.map(e => [e, []]));
+  const quien = e => `${e.perfil.nombre}${e.perfil.grupo ? ' (' + e.perfil.grupo + ')' : ''}`;
+  for (let i = 0; i < estudiantes.length; i++) for (let j = i + 1; j < estudiantes.length; j++) {
+    const a = estudiantes[i], b = estudiantes[j];
+    const avisar = (txt, fuerte = true) => { alertas.get(a).push({ txt: txt(b), fuerte }); alertas.get(b).push({ txt: txt(a), fuerte }); };
+    if (a.perfil.id && a.perfil.id === b.perfil.id) avisar(o => `mismo perfil que «${quien(o)}»: la misma sesión entregada con otro nombre`);
+    const sa = new Set([...(a.sesiones || []), ...a.segmentos.map(x => x.iv)]);
+    const comunes = [...new Set([...(b.sesiones || []), ...b.segmentos.map(x => x.iv)])].filter(x => sa.has(x));
+    if (comunes.length && a.perfil.id !== b.perfil.id) avisar(o => `comparte ${comunes.length} sesión(es) de trabajo con «${quien(o)}»`);
+    const iguales = [];
+    for (const n of niveles) {
+      const ca = a.progreso.codigo?.[n.id]?.files, cb = b.progreso.codigo?.[n.id]?.files;
+      if (!ca || !cb) continue;
+      const x = normalizarCodigo(Object.values(ca).join('\n')), y = normalizarCodigo(Object.values(cb).join('\n'));
+      const ref = normalizarCodigo(Object.values(n.solucion || {}).join('\n'));
+      if (x.length >= 150 && x === y && x !== ref) iguales.push(n.mision ? `✦${n.misionCorto} ${n.enMundo + 1}` : `${n.mundo}.${n.enMundo + 1}`);
+    }
+    if (iguales.length) avisar(o => `código idéntico a «${quien(o)}» en ${iguales.join(', ')}`);
+    // Comentarios propios idénticos: casi nunca coinciden por azar
+    const mismos = new Set();
+    for (const n of niveles) {
+      const ca = a.progreso.codigo?.[n.id]?.files, cb = b.progreso.codigo?.[n.id]?.files;
+      if (!ca || !cb) continue;
+      const base = comentariosBase(n), cmB = new Set(comentarios(Object.values(cb).join('\n')));
+      for (const c of comentarios(Object.values(ca).join('\n'))) if (!base.has(c) && cmB.has(c)) mismos.add(c);
+    }
+    if (mismos.size) avisar(o => `comparte con «${quien(o)}» comentarios idénticos: «${[...mismos][0].slice(0, 60)}»${mismos.size > 1 ? ` y ${mismos.size - 1} más` : ''}`);
+    const dev = (a.dispositivos || []).filter(x => (b.dispositivos || []).includes(x));
+    if (dev.length) avisar(o => `usó el mismo computador que «${quien(o)}»`, false);
+  }
+  return alertas;
 }
 export const nombreArchivo = (perfil, ext = 'json') => {
   const limpio = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '');
@@ -336,7 +402,7 @@ export function csvClase(estudiantes) {
   const cab = ['Estudiante', 'Grupo', 'Capítulos superados', 'Total capítulos', '% avance', 'Capítulo actual', 'Misiones', 'Tiempo activo (min)', 'Sesiones', 'Ejecuciones', 'Envíos', 'Intentos promedio hasta superar', '% superados al primer envío', 'Pistas', 'Soluciones vistas', 'Dificultad principal', 'Caracteres tecleados', 'Caracteres pegados desde fuera', 'Pegados al volver de otra ventana', 'Salidas de la pestaña', 'Caracteres de la IA del taller', 'Indicio de copia/IA', 'Razones', 'Última actividad', 'Revisión del archivo'];
   const filas = estudiantes.map(e => {
     const r = e.r, top = Object.entries(r.categorias).sort((a, b) => b[1] - a[1])[0];
-    return [e.perfil.nombre, e.perfil.grupo || '', r.capitulos, r.totalCapitulos, r.pct, r.actual, r.misiones.join(' / '), Math.round(r.tiempoTotal / 60000), r.sesiones, r.ejecuciones, r.envios, r.intentosPromedio ?? '', r.primerEnvio ?? '', r.pistas, r.soluciones, top ? `${CATEGORIAS[top[0]] || top[0]} (${top[1]})` : '', r.escritura.tecleados, r.escritura.externosChars, r.escritura.pegadosTrasSalir, r.escritura.salidas, r.escritura.iaChars, r.indicios.nivel, r.indicios.razones.join(' | '), r.ultimaActividad || '', (e.problemas || []).length ? e.problemas.join(' | ') : 'sin problemas'];
+    return [e.perfil.nombre, e.perfil.grupo || '', r.capitulos, r.totalCapitulos, r.pct, r.actual, r.misiones.join(' / '), Math.round(r.tiempoTotal / 60000), r.sesiones, r.ejecuciones, r.envios, r.intentosPromedio ?? '', r.primerEnvio ?? '', r.pistas, r.soluciones, top ? `${CATEGORIAS[top[0]] || top[0]} (${top[1]})` : '', r.escritura.tecleados, r.escritura.externosChars, r.escritura.pegadosTrasSalir, r.escritura.salidas, r.escritura.iaChars, r.indicios.nivel, r.indicios.razones.join(' | '), r.ultimaActividad || '', [...(e.problemas || []), ...(e.cruces || []).map(c => c.txt)].join(' | ') || 'sin problemas'];
   });
   return '﻿' + [cab, ...filas].map(f => f.map(celda).join(';')).join('\r\n');
 }

@@ -18,7 +18,8 @@ import MapaMundo from './components/MapaMundo.jsx';
 import { Bienvenida, MiAvance } from './components/Avance.jsx';
 import PanelProfesor from './components/PanelProfesor.jsx';
 import MenuUsuario from './components/MenuUsuario.jsx';
-import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo, exportar, descargar, nombreArchivo } from './metricas/metricas.js';
+import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo, exportar, descargar, nombreArchivo, registrarEvento } from './metricas/metricas.js';
+import { decodificarClase, clasePublica } from './metricas/cifrado.js';
 import { useSellado } from './metricas/sellado.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
@@ -38,6 +39,7 @@ export default function App() {
   const [mapa, setMapa] = useState(false);
   const [avance, setAvance] = useState(false);
   const [panelProfe, setPanelProfe] = useState(false);
+  const [claseNueva, setClaseNueva] = useState(null);
 
   const [cod, setCod] = useState(() => codigoDe(prog, i));
   const [revision, setRevision] = useState(0);
@@ -71,6 +73,26 @@ export default function App() {
     }, 15000);
     return () => { clearInterval(t); evs.forEach(ev => window.removeEventListener(ev, marcar)); };
   }, [medir]);
+
+  // Eventos de identidad pendientes (por ejemplo, la carga de un archivo antes de recargar la página)
+  useEffect(() => {
+    if (prog.pendientes?.length) { const evs = prog.pendientes; setProg(p => ({ ...p, pendientes: [] })); evs.forEach(ev => medir(m => registrarEvento(m, ev))); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Enlace de clase (?clase=…): el profesor lo comparte para que las métricas se cifren para su clase
+  useEffect(() => {
+    const c = decodificarClase(location.href);
+    if (!c) return;
+    try { history.replaceState(null, '', location.pathname + location.hash.replace(/clase=[\w-]+&?/, '')); } catch { /* nada */ }
+    if (prog.clase?.id === c.id) return;
+    if (!prog.perfil) setProg(p => ({ ...p, clase: clasePublica(c) }));
+    else setClaseNueva(c);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const unirseAClase = c => {
+    medir(m => registrarEvento(m, { tipo: 'clase', de: prog.clase?.nombre || null, a: c.nombre, claseId: c.id }));
+    setProg(p => ({ ...p, clase: clasePublica(c) }));
+    setClaseNueva(null);
+    avisar(`Ahora estás en la clase «${c.nombre}».`);
+  };
 
   // Las métricas se sellan cifradas con la llave pública del profesor: el estudiante no las puede leer
   const sellar = useSellado(prog);
@@ -350,8 +372,22 @@ export default function App() {
         pasosDe={m => ({ hechos: m.pasos.filter(p => pasosHechos.includes(p.id)).length, total: m.pasos.length })}
         misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)} />}
 
-      {!prog.perfil && <Bienvenida prog={prog} onListo={perfil => setProg(p => ({ ...p, perfil }))} />}
-      {avance && prog.perfil && <MiAvance prog={prog} sellar={sellar} onCerrar={() => setAvance(false)} onPerfil={perfil => setProg(p => ({ ...p, perfil }))} />}
+      {!prog.perfil && <Bienvenida prog={prog} onClase={c => setProg(p => ({ ...p, clase: clasePublica(c) }))}
+        onListo={perfil => { setProg(p => ({ ...p, perfil })); medir(m => registrarEvento(m, { tipo: 'alta', nombre: perfil.nombre, grupo: perfil.grupo, perfilId: perfil.id, claseId: prog.clase?.id || null })); }} />}
+      {avance && prog.perfil && <MiAvance prog={prog} sellar={sellar} onCerrar={() => setAvance(false)} onClase={unirseAClase}
+        onPerfil={perfil => { medir(m => registrarEvento(m, { tipo: 'perfil', de: prog.perfil.nombre, a: perfil.nombre, grupoDe: prog.perfil.grupo || '', grupoA: perfil.grupo || '' })); setProg(p => ({ ...p, perfil })); }} />}
+      {claseNueva && prog.perfil && (
+        <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="clase-t">
+          <div className="modal rpg-ventana">
+            <h2 id="clase-t">¿Unirte a la clase «{claseNueva.nombre}»?</h2>
+            <p>{claseNueva.docente ? `Docente: ${claseNueva.docente}. ` : ''}{prog.clase ? `Ahora estás en «${prog.clase.nombre}». ` : ''}Desde ahora tus métricas se cifrarán para esta clase. Tu avance se conserva.</p>
+            <div className="modal-acc">
+              <button type="button" className="btn-sec" onClick={() => setClaseNueva(null)}>No, seguir como estoy</button>
+              <button type="button" className="btn-pri" autoFocus onClick={() => unirseAClase(claseNueva)}>Unirme</button>
+            </div>
+          </div>
+        </div>
+      )}
       {panelProfe && prog.profe && <PanelProfesor onCerrar={() => setPanelProfe(false)} />}
 
       {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={MISIONES} />}

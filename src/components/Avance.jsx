@@ -2,6 +2,28 @@ import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import { exportar, leerArchivo, aProgreso, resumen, nombreArchivo, descargar } from '../metricas/metricas.js';
 import { guardarYRecargar } from '../hooks/useProgreso.js';
+import { decodificarClase } from '../metricas/cifrado.js';
+
+/* Campo para pegar el enlace o código de clase que comparte el profesor */
+function CampoClase({ onClase, texto = 'Unirme' }) {
+  const [valor, setValor] = useState('');
+  const [error, setError] = useState('');
+  const unir = () => {
+    const c = decodificarClase(valor);
+    if (!c) { setError('Ese enlace o código no es de una clase de ClassBots.'); return; }
+    setError(''); setValor(''); onClase(c);
+  };
+  return (
+    <div className="campo-clase">
+      <input value={valor} onChange={e => setValor(e.target.value)} placeholder="Pega aquí el enlace o código de tu clase" aria-label="Enlace o código de clase" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); unir(); } }} />
+      <button type="button" className="btn-sec" onClick={unir} disabled={!valor.trim()}>{texto}</button>
+      {error && <p className="avance-alerta">{error}</p>}
+    </div>
+  );
+}
+const Clase = ({ clase }) => (clase
+  ? <p className="clase-chip">🏫 Clase <strong>{clase.nombre}</strong>{clase.docente ? ` · ${clase.docente}` : ''}</p>
+  : null);
 
 /* Lee un archivo de avance elegido por el usuario y pide confirmación antes de reemplazar */
 function useCargarAvance(prog) {
@@ -32,7 +54,7 @@ function useCargarAvance(prog) {
 }
 
 /* ---------- Bienvenida: identifica al estudiante en este navegador ---------- */
-export function Bienvenida({ prog, onListo }) {
+export function Bienvenida({ prog, onListo, onClase }) {
   const [nombre, setNombre] = useState('');
   const [grupo, setGrupo] = useState('');
   const carga = useCargarAvance(prog);
@@ -48,12 +70,19 @@ export function Bienvenida({ prog, onListo }) {
         <Avatar tamano={4} />
         <h2 id="bienv-t">¡Bienvenido a ClassBots!</h2>
         <p>Soy Chispa, la jefa del taller. ¿Cómo te llamas? Así registro tu avance para que se lo puedas entregar a tu profesor.</p>
+        {prog.clase && <Clase clase={prog.clase} />}
         <label className="campo">Nombre completo
-          <input autoFocus value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej.: Ana María Pérez" maxLength={60} autoComplete="name" />
+          <input name="nombre" autoFocus value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej.: Ana María Pérez" maxLength={60} autoComplete="name" />
         </label>
         <label className="campo">Grupo o curso <small>(opcional)</small>
-          <input value={grupo} onChange={e => setGrupo(e.target.value)} placeholder="Ej.: POO 2026-2 · G1" maxLength={40} />
+          <input name="grupo" value={grupo} onChange={e => setGrupo(e.target.value)} placeholder="Ej.: POO 2026-2 · G1" maxLength={40} />
         </label>
+        {!prog.clase && (
+          <details className="bienv-clase">
+            <summary>¿Tu profesor te dio un enlace o código de clase?</summary>
+            <CampoClase onClase={onClase} texto="Usar" />
+          </details>
+        )}
         <button type="submit" className="btn-pri" disabled={!valido}>Entrar al taller →</button>
         <p className="bienv-sep">¿Ya empezaste en otro computador?</p>
         <button type="button" className="btn-sec" onClick={carga.elegir}>Cargar mi avance (.json)</button>
@@ -67,7 +96,7 @@ export function Bienvenida({ prog, onListo }) {
 }
 
 /* ---------- Mi avance: resumen, descarga del entregable y carga en otro equipo ---------- */
-export function MiAvance({ prog, sellar, onCerrar, onPerfil }) {
+export function MiAvance({ prog, sellar, onCerrar, onPerfil, onClase }) {
   // El estudiante ve su avance, no las métricas: esas viajan cifradas para el profesor
   const r = resumen({ progreso: prog });
   const carga = useCargarAvance(prog);
@@ -121,7 +150,14 @@ export function MiAvance({ prog, sellar, onCerrar, onPerfil }) {
           ))}
         </section>
 
-        <p className="avance-cifrado">🔒 Mientras trabajas, ClassBots registra cómo avanzas (tiempo, intentos, errores, forma de escribir). Esos datos viajan <strong>cifrados</strong> dentro de tu archivo: solo tu profesor puede leerlos con su llave.</p>
+        <section className="avance-clase">
+          {prog.clase ? <Clase clase={prog.clase} /> : <p className="bienv-nota">Todavía no estás en una clase. Si tu profesor te dio un enlace o código, pégalo aquí.</p>}
+          <details>
+            <summary>{prog.clase ? 'Cambiar de clase' : 'Unirme a una clase'}</summary>
+            <CampoClase onClase={onClase} />
+          </details>
+        </section>
+        <p className="avance-cifrado">🔒 Mientras trabajas, ClassBots registra cómo avanzas (tiempo, intentos, errores, forma de escribir, cambios de nombre). Esos datos viajan <strong>cifrados</strong> dentro de tu archivo: solo tu profesor puede leerlos.</p>
 
         <section className="avance-acciones">
           <div>

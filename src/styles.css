@@ -569,3 +569,26 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
   .usuario-nombre { max-width: 70px; }
   .usuario-nivel .exp-barra { display: none; }
 }
+.clase-chip { margin: 0; padding: 8px 10px; font-size: 13px; background: rgba(61,220,132,.08); border: 1px solid rgba(61,220,132,.5); }
+.bienv-clase summary, .avance-clase summary { cursor: pointer; color: var(--info); font-size: 13px; }
+.campo-clase { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.campo-clase input { flex: 1 1 200px; min-width: 0; font: 13px var(--f-code); padding: 8px; color: var(--ink); background: var(--negro); border: 2px solid var(--line); }
+.campo-clase .avance-alerta { flex-basis: 100%; }
+.avance-clase { display: flex; flex-direction: column; gap: 6px; }
+.profe-clases { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 2px solid rgba(124,212,255,.45); background: rgba(124,212,255,.05); }
+.profe-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.profe-form .bienv-nota, .profe-form .avance-alerta, .profe-form .modal-acc { grid-column: 1 / -1; }
+.profe-form .modal-acc { justify-content: flex-start; margin: 0; }
+.profe-clase { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: rgba(7,5,15,.35); border: 1px solid var(--line); }
+.profe-clase.abierta { border-color: var(--go); }
+.profe-clase small { color: var(--dim); }
+.profe-clase-acc, .profe-abrir { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.profe-abrir input { font: 13px var(--f-code); padding: 7px 8px; color: var(--ink); background: var(--negro); border: 2px solid var(--line); }
+.profe-avanzado summary { cursor: pointer; color: var(--dim); font-size: 13px; }
+.profe-avanzado[open] summary { margin-bottom: 8px; }
+.profe-historial { margin: 8px 0; }
+.profe-historial summary { cursor: pointer; color: var(--info); font-size: 13px; }
+.profe-historial ol { margin: 6px 0 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.profe-historial li.cambio { color: var(--warn); }
+.profe-historial time { color: var(--dim); font: 11px var(--f-code); margin-right: 6px; }
+.profe-problemas li.info { color: var(--dim); }
