@@ -7,6 +7,7 @@ const path = require('path');
   p.on('pageerror', e => errs.push('PE ' + e.message));
   await p.route('**/*', r => (r.request().url().startsWith('file:') ? r.continue() : r.abort()));
   await p.goto('file://' + path.resolve('dist-single/index.html'));
+  if (await p.$('.bienvenida')) { await p.fill('.bienvenida input >> nth=0', 'Prueba E2E'); await p.click('text=Entrar al taller'); }
   await p.waitForTimeout(400);
   for (let k = 0; k < 5; k++) await p.click('.marca h1'); // modo profesor (5 clics en el título)
   const ir = async (mundo, cap) => { await p.click(`.mundo-chip >> nth=${mundo - 1}`); await p.click(`.mapa-mundo li:nth-child(${cap}) .nodo`); await p.waitForTimeout(250); };

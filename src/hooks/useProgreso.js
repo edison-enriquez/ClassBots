@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { NIVELES } from '../levels/niveles.js';
 import { MISIONES, PASOS } from '../levels/misiones.js';
+import { metricasVacias } from '../metricas/metricas.js';
 
-const CLAVE = 'taller-objetos-react-v2';
-const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico' };
+export const CLAVE = 'taller-objetos-react-v2';
+const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico', perfil: null, metricas: metricasVacias() };
 
 function leer() {
   try {
@@ -14,6 +15,7 @@ function leer() {
       hechos: Array.isArray(g.hechos) ? g.hechos.filter(id => NIVELES.some(n => n.id === id)) : [],
       misionesHechas: Array.isArray(g.misionesHechas) ? g.misionesHechas.filter(id => MISIONES.some(m => m.id === id)) : [],
       pasosHechos: Array.isArray(g.pasosHechos) ? g.pasosHechos.filter(id => PASOS.some(x => x.id === id)) : [],
+      metricas: g.metricas && typeof g.metricas === 'object' ? { ...metricasVacias(), ...g.metricas } : metricasVacias(),
     };
   } catch { /* sin almacenamiento */ }
   return VACIO;
@@ -64,4 +66,10 @@ function codigoGuardado(p, n, base) {
     return { files, activo: n.archivos.includes(c.activo) ? c.activo : n.archivoInicial || n.archivos[0] };
   }
   return { files: base(), activo: n.archivoInicial || n.archivos[0] };
+}
+
+/* Reemplaza el progreso guardado (cargar un avance, cambiar de estudiante) y recarga la página */
+export function guardarYRecargar(p) {
+  try { if (p) localStorage.setItem(CLAVE, JSON.stringify(p)); else localStorage.removeItem(CLAVE); } catch { /* sin almacenamiento */ }
+  location.reload();
 }

@@ -8,6 +8,7 @@ const path = require('path');
   p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(m.text()); });
   await p.route('**/*', r => (r.request().url().startsWith('file:') ? r.continue() : r.abort()));
   await p.goto('file://' + path.resolve('dist-single/index.html'));
+  if (await p.$('.bienvenida')) { await p.fill('.bienvenida input >> nth=0', 'Prueba E2E'); await p.click('text=Entrar al taller'); }
   await p.waitForTimeout(600);
   await p.screenshot({ path: 'e2e/01-inicio.png' });
   for (let k = 0; k < 5; k++) await p.click('.marca h1'); // modo profesor (5 clics en el título)
