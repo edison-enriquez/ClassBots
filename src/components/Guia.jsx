@@ -13,7 +13,51 @@ const RELACIONES = [
 ];
 const MULT = [['1', 'exactamente uno', 'cada robot tiene una batería'], ['0..1', 'ninguno o uno', 'un robot tiene como máximo un responsable'], ['0..*', 'cero o muchos (también se escribe *)', 'una cuadrilla tiene muchos robots, o ninguno'], ['1..*', 'al menos uno', 'una planta con al menos una cuadrilla'], ['2..4', 'entre 2 y 4', 'un dron con 2 a 4 hélices']];
 
-export default function Guia({ tema, onTema, onCerrar }) {
+/* Códice de patrones: cada misión completada registra su patrón */
+const CODICE = {
+  plantilla: {
+    nombre: 'Template Method', familia: 'Comportamiento', mision: 'mision-plantilla',
+    intencion: 'Fijar el esqueleto de un algoritmo en una clase base y dejar que las hijas completen algunos pasos, sin cambiar el orden.',
+    problema: 'Varias clases repiten el mismo procedimiento y solo cambian algunos pasos: la lógica común se copia y se desincroniza.',
+    estructura: ['Clase base abstracta con un método plantilla final que llama a los pasos', 'Pasos comunes implementados en la base', 'Pasos variables abstract (obligatorios) o ganchos con un valor por defecto (opcionales)', 'Subclases concretas que solo completan los pasos'],
+    uml: `Ensamblaje {abstract}
+  + ensamblar() {final}
+  # instalarMotor() {abstract}
+  # llevaBlindaje() : boolean
+        △
+  RobotLigero   RobotPesado`,
+    codigo: `public final void ensamblar() {
+    prepararChasis();
+    instalarMotor();
+    if (llevaBlindaje()) { blindar(); }
+    probar();
+}`,
+    cuando: 'Cuando el orden de los pasos es una regla que no debe romperse y las variantes difieren en detalles.',
+    cuidado: 'Si las variantes difieren en casi todo, o deben cambiar en ejecución, Strategy encaja mejor.',
+  },
+  strategy: {
+    nombre: 'Strategy', familia: 'Comportamiento', mision: 'mision-strategy',
+    intencion: 'Encapsular una familia de comportamientos intercambiables detrás de una interfaz, para elegirlos o cambiarlos en ejecución.',
+    problema: 'Una clase decide su comportamiento con cadenas de if sobre un tipo o un texto, repetidas en varios métodos, o hay una explosión de subclases.',
+    estructura: ['Interfaz Estrategia con las operaciones', 'Estrategias concretas que la implementan', 'Contexto que guarda una estrategia (atributo de tipo interfaz) y le delega el trabajo', 'Un método para cambiar la estrategia en ejecución'],
+    uml: `Gladiador ──> Estilo «interface»
+                  △ (realización)
+     Agresivo  Defensivo  Berserker`,
+    codigo: `private Estilo estilo;
+
+public int golpe() {
+    return estilo.golpe();
+}
+
+public void cambiarEstilo(Estilo nuevo) {
+    this.estilo = nuevo;
+}`,
+    cuando: 'Cuando hay varias formas de hacer lo mismo y quieres agregar otras sin tocar el contexto, o cambiarlas en ejecución.',
+    cuidado: 'Si solo hay dos variantes que nunca cambiarán, un if puede ser más simple. Lo que el objeto es se hereda; lo que hace y puede cambiar, se compone.',
+  },
+};
+
+export default function Guia({ tema, onTema, onCerrar, patrones = [], misiones = [] }) {
   const ref = useRef(null);
   useEffect(() => {
     ref.current?.focus();
@@ -29,10 +73,11 @@ export default function Guia({ tema, onTema, onCerrar }) {
           <div className="tabs-guia" role="tablist">
             <button type="button" role="tab" aria-selected={tema === 'relaciones'} onClick={() => onTema('relaciones')}>Relaciones</button>
             <button type="button" role="tab" aria-selected={tema === 'interfaces'} onClick={() => onTema('interfaces')}>Interfaces</button>
+            <button type="button" role="tab" aria-selected={tema === 'patrones'} onClick={() => onTema('patrones')}>Códice ✦ {patrones.length}/{Object.keys(CODICE).length}</button>
           </div>
           <button type="button" className="btn-mini" onClick={onCerrar}>Cerrar</button>
         </header>
-        <div className="guia-cuerpo">{tema === 'interfaces' ? <Interfaces /> : <Relaciones />}</div>
+        <div className="guia-cuerpo">{tema === 'interfaces' ? <Interfaces /> : tema === 'patrones' ? <Codice abiertos={patrones} misiones={misiones} /> : <Relaciones />}</div>
       </div>
     </div>
   );
@@ -105,6 +150,39 @@ function Interfaces() {
       </table>
       <h3>Interfaces que Java ya trae</h3>
       <p><code>Comparable&lt;T&gt;</code> para ordenar, <code>List&lt;T&gt;</code> para listas y <code>Runnable</code> para tareas. Cuando tu clase las implementa, la biblioteca de Java puede trabajar con ella sin conocerla.</p>
+    </>
+  );
+}
+
+function Codice({ abiertos, misiones }) {
+  return (
+    <>
+      <p className="guia-lead">El <strong>Códice de patrones</strong> registra cada patrón de diseño que dominas. Las misiones especiales del mapa (los ramales ✦) los desbloquean; los mundos 7 a 9 completarán el resto.</p>
+      <div className="codice">
+        {Object.entries(CODICE).map(([clave, p]) => {
+          const m = misiones.find(x => x.id === p.mision);
+          if (!abiertos.includes(clave)) return (
+            <article key={clave} className="codice-ficha bloqueada">
+              <h3>✦ ???</h3>
+              <p>Completa la misión <strong>«{m?.titulo}»</strong>, ramal del Mundo {m?.mundo}, para registrar este patrón.</p>
+            </article>
+          );
+          return (
+            <article key={clave} className="codice-ficha">
+              <h3>✦ {p.nombre} <small>{p.familia}</small></h3>
+              <p><strong>Intención.</strong> {p.intencion}</p>
+              <p><strong>Problema que resuelve.</strong> {p.problema}</p>
+              <ul className="guia-reglas">{p.estructura.map(e => <li key={e}>{e}</li>)}</ul>
+              <div className="codice-dos">
+                <pre className="codice-uml">{p.uml}</pre>
+                <pre className="ejemplo"><code dangerouslySetInnerHTML={{ __html: resaltar(p.codigo) }} /></pre>
+              </div>
+              <p><strong>Úsalo cuando…</strong> {p.cuando}</p>
+              <p className="nota"><strong>Cuidado.</strong> {p.cuidado}</p>
+            </article>
+          );
+        })}
+      </div>
     </>
   );
 }

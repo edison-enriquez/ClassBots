@@ -14,7 +14,13 @@ const LUGARES = [
   { x: 572, y: 93, zona: 'CIUDAD', techo: '#91a5c9', forma: 'ciudad' },
   { x: 467, y: 54, zona: 'CONTROL', techo: '#b87591', forma: 'torre' },
 ];
-const PUNTO_MISION = { x: 346, y: 105 };
+/* Ramales de misión: cada uno sale del sector cuyo concepto refuerza */
+const RAMALES = {
+  'mision-plantilla': { x: 318, y: 350, etiqueta: 'abajo' },
+  'mision-strategy': { x: 360, y: 104, etiqueta: 'arriba' },
+};
+const PUNTO_OTRO = { x: 330, y: 150, etiqueta: 'arriba' };
+const puntoRamal = id => RAMALES[id] || PUNTO_OTRO;
 const TRAYECTO = LUGARES.slice(0, -1).map((l, i) => [l, LUGARES[i + 1]]);
 
 const rect = (ctx, color, x, y, w, h) => {
@@ -146,8 +152,8 @@ function dibujarMaquina(ctx, lugar, bloqueado, ahora) {
   ctx.textAlign = 'start';
 }
 
-function dibujarMision(ctx, disponible, completada, ahora) {
-  const { x, y } = PUNTO_MISION, base = completada ? '#7ed6a0' : disponible ? '#f1c653' : '#788493';
+function dibujarMision(ctx, mision, disponible, completada, ahora) {
+  const { x, y, etiqueta } = puntoRamal(mision.id), base = completada ? '#7ed6a0' : disponible ? '#f1c653' : '#788493';
   sombra(ctx, x, y + 7, 42);
   rect(ctx, '#101a25', x - 22, y - 17, 44, 30);
   rect(ctx, '#687988', x - 19, y - 14, 38, 24);
@@ -157,28 +163,26 @@ function dibujarMision(ctx, disponible, completada, ahora) {
   rect(ctx, base, x - 6, y - 4, 12, 7);
   rect(ctx, '#182838', x - 2, y - 3, 4, 5);
   rect(ctx, '#536475', x - 18, y - 19, 36, 3);
-  const txt = 'MISIÓN ✦ STRATEGY';
+  const txt = `MISIÓN ✦ ${mision.corto.toUpperCase()}`;
   ctx.font = 'bold 9px monospace';
-  const w = Math.ceil(ctx.measureText(txt).width) + 14;
-  rect(ctx, '#101a25', x - w / 2, y - 44, w, 17);
-  rect(ctx, disponible || completada ? '#4a3a17' : '#2b3644', x - w / 2 + 2, y - 42, w - 4, 13);
+  const w = Math.ceil(ctx.measureText(txt).width) + 14, ty = etiqueta === 'abajo' ? y + 18 : y - 44;
+  rect(ctx, '#101a25', x - w / 2, ty, w, 17);
+  rect(ctx, disponible || completada ? '#4a3a17' : '#2b3644', x - w / 2 + 2, ty + 2, w - 4, 13);
   ctx.fillStyle = base;
   ctx.textAlign = 'center';
-  ctx.fillText(txt, x, y - 32);
+  ctx.fillText(txt, x, ty + 12);
   ctx.textAlign = 'start';
 }
 
 /* Rutas del plano: la línea principal 1→9 y el ramal de la misión desde Contratos (04) */
-const RAMAL = 3;
-const puntoDe = n => (n === 'M' ? PUNTO_MISION : LUGARES[n]);
-function ruta(desde, hasta) {
+const esRamal = n => typeof n === 'string';
+const puntoDe = n => (esRamal(n) ? puntoRamal(n) : LUGARES[n]);
+/* Ruta entre dos nodos: sectores (índices 0..8) o ramales (id de la misión), que cuelgan de su sector */
+function ruta(desde, hasta, anclaDe) {
   if (desde === hasta) return [puntoDe(desde)];
   const linea = (a, b) => { const r = []; const paso = a <= b ? 1 : -1; for (let k = a; k !== b + paso; k += paso) r.push(k); return r; };
-  let nodos;
-  if (desde === 'M' && hasta === 'M') nodos = ['M'];
-  else if (desde === 'M') nodos = ['M', ...linea(RAMAL, hasta)];
-  else if (hasta === 'M') nodos = [...linea(desde, RAMAL), 'M'];
-  else nodos = linea(desde, hasta);
+  const a = esRamal(desde) ? anclaDe(desde) : desde, b = esRamal(hasta) ? anclaDe(hasta) : hasta;
+  const nodos = [...(esRamal(desde) ? [desde] : []), ...linea(a, b), ...(esRamal(hasta) ? [hasta] : [])];
   return nodos.map(puntoDe);
 }
 const largo = pts => pts.slice(1).reduce((s, p, i) => s + Math.hypot(p.x - pts[i].x, p.y - pts[i].y), 0);
@@ -210,7 +214,7 @@ const reducido = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers
 
 export default function MapaMundo({
   mundos, actual, abierto, completo, onViajar, onCerrar, capitulos = () => null,
-  misiones = [], misionAbierta = () => false, misionCompleta = () => false, onIniciarMision = () => {}, misionActual = null,
+  misiones = [], misionAbierta = () => false, misionCompleta = () => false, onIniciarMision = () => {}, misionActual = null, pasosDe = () => null,
 }) {
   const ref = useRef(null);
   const sprite = useRef(null);
@@ -219,15 +223,16 @@ export default function MapaMundo({
   const progreso = Math.round((finalizados / mundos.length) * 100);
   const mision = misiones[0];
   const enMision = !!misionActual;
-  const origen = enMision ? 'M' : actual - 1;
+  const origen = enMision ? misionActual : actual - 1;
+  const anclaDe = id => (misiones.find(m => m.id === id)?.mundo ?? 4) - 1;
 
   // Destino elegido (vista previa de la ruta) y viaje en curso
   const [sel, setSel] = useState(() => (enMision ? { tipo: 'mision', id: misionActual } : { tipo: 'mundo', id: actual }));
   const [viaje, setViaje] = useState(null);
   const estado = useRef({});
-  estado.current = { mundos, abierto, completo, misiones, misionAbierta, misionCompleta, sel, viaje, origen, enMision };
+  estado.current = { mundos, abierto, completo, misiones, misionAbierta, misionCompleta, sel, viaje, origen, enMision, anclaDe };
 
-  const nodoDe = d => (d.tipo === 'mision' ? 'M' : d.id - 1);
+  const nodoDe = d => (d.tipo === 'mision' ? d.id : d.id - 1);
   const esAqui = d => (d.tipo === 'mision' ? d.id === misionActual : !enMision && d.id === actual);
   const puedeIr = d => (d.tipo === 'mision' ? misionAbierta(misiones.find(m => m.id === d.id)) : abierto(mundos.find(m => m.id === d.id)));
 
@@ -236,7 +241,7 @@ export default function MapaMundo({
     if (esAqui(d)) { onCerrar(); return; }
     if (!puedeIr(d)) { setSel(d); return; }
     const fin = () => (d.tipo === 'mision' ? onIniciarMision(misiones.find(m => m.id === d.id)) : onViajar(mundos.find(m => m.id === d.id)));
-    const pts = ruta(origen, nodoDe(d));
+    const pts = ruta(origen, nodoDe(d), anclaDe);
     if (reducido() || pts.length < 2) { fin(); return; }
     const dur = Math.max(700, Math.min(2200, largo(pts) * 3.2));
     setSel(d);
@@ -255,18 +260,17 @@ export default function MapaMundo({
       const e = estado.current;
       dibujarPiso(ctx);
       TRAYECTO.forEach(([a, b], i) => dibujarCinta(ctx, a, b, e.completo(e.mundos[i]), ahora));
-      const m0 = e.misiones[0];
-      if (m0) {
-        const disponible = e.misionAbierta(m0), completada = e.misionCompleta(m0);
-        dibujarCinta(ctx, LUGARES[RAMAL], PUNTO_MISION, disponible || completada, ahora, true);
-        dibujarMision(ctx, disponible, completada, ahora);
+      for (const m of e.misiones) {
+        const disponible = e.misionAbierta(m), completada = e.misionCompleta(m);
+        dibujarCinta(ctx, LUGARES[m.mundo - 1], puntoRamal(m.id), disponible || completada, ahora, true);
+        dibujarMision(ctx, m, disponible, completada, ahora);
       }
       LUGARES.forEach((l, i) => dibujarMaquina(ctx, l, !e.abierto(e.mundos[i]), ahora));
       // Ruta hacia el destino elegido
       const destino = e.viaje ? e.viaje.destino : e.sel;
-      const nodo = destino.tipo === 'mision' ? 'M' : destino.id - 1;
-      if (nodo !== e.origen) dibujarRuta(ctx, ruta(e.origen, nodo), ahora);
-      anillo(ctx, puntoDe(nodo), ahora, nodo === 'M' ? '#ffe38a' : '#7fc8ff');
+      const nodo = destino.tipo === 'mision' ? destino.id : destino.id - 1;
+      if (nodo !== e.origen) dibujarRuta(ctx, ruta(e.origen, nodo, e.anclaDe), ahora);
+      anillo(ctx, puntoDe(nodo), ahora, esRamal(nodo) ? '#ffe38a' : '#7fc8ff');
       // Robot: quieto en su ubicación o caminando por la ruta
       let pos = puntoDe(e.origen), dir = 'abajo', paso = 0;
       if (e.viaje) {
@@ -302,9 +306,9 @@ export default function MapaMundo({
       const ok = misionAbierta(m), hecho = misionCompleta(m), aqui = m.id === misionActual;
       return {
         num: '✦', titulo: m.titulo, sub: `Misión opcional · ${m.concepto}`,
-        lineas: [['Sale de', `Sector 04 · ${mundos[RAMAL].nombre}`], ['Requisito', `Completar el Mundo ${m.mundo}`], ['Recompensa', m.recompensa]],
+        lineas: [['Sale de', `Sector ${String(m.mundo).padStart(2, '0')} · ${mundos[m.mundo - 1].nombre}`], ['Pasos', pasosDe(m) ? `${pasosDe(m).hechos} de ${pasosDe(m).total} superados` : `${m.pasos?.length || 1}`], ['Requisito', `Completar el Mundo ${m.mundo}`], ['Recompensa', m.recompensa]],
         estado: aqui ? 'Estás aquí' : hecho ? 'Módulo obtenido' : ok ? 'Disponible' : 'Bloqueada',
-        boton: aqui ? 'Seguir en la misión' : ok ? (hecho ? 'Repetir misión ✦' : 'Iniciar misión ✦') : `Completa el Mundo ${m.mundo}`,
+        boton: aqui ? 'Seguir en la misión' : ok ? (hecho ? 'Repetir misión ✦' : pasosDe(m)?.hechos ? 'Continuar misión ✦' : 'Iniciar misión ✦') : `Completa el Mundo ${m.mundo}`,
         ok: ok || aqui, mision: true,
       };
     }
@@ -360,7 +364,7 @@ export default function MapaMundo({
               {misiones.map((m, i) => {
                 const ok = misionAbierta(m), terminado = misionCompleta(m), d = { tipo: 'mision', id: m.id };
                 return <button key={m.id} type="button" className={`mapa-punto mapa-punto-mision${terminado ? ' completo' : ''}${!ok ? ' cerrado' : ''}${esAqui(d) ? ' aqui' : ''}${elegido(d) ? ' elegido' : ''}`}
-                  style={{ left: `${(PUNTO_MISION.x / W) * 100}%`, top: `${(PUNTO_MISION.y / H) * 100}%` }} aria-pressed={elegido(d)}
+                  style={{ left: `${(puntoRamal(m.id).x / W) * 100}%`, top: `${(puntoRamal(m.id).y / H) * 100}%` }} aria-pressed={elegido(d)}
                   title={`Misión especial: ${m.titulo}`}
                   aria-label={`Misión especial ${i + 1}: ${m.titulo}, ${m.concepto}${esAqui(d) ? ', estás aquí' : terminado ? ', completada' : ok ? ', disponible' : ', completa el Mundo ' + m.mundo + ' para desbloquearla'}`}
                   onClick={() => tocar(d)} onDoubleClick={() => ir(d)}>✦</button>;
@@ -410,12 +414,12 @@ export default function MapaMundo({
             {misiones.length > 0 && <section className="mapa-misiones" aria-labelledby="mapa-misiones-t">
               <div className="mapa-destinos-cab">
                 <h3 id="mapa-misiones-t">Misiones especiales</h3>
-                <span>RAMAL DEL SECTOR 04</span>
+                <span>RAMALES OPCIONALES</span>
               </div>
               <ol className="mapa-lista">
                 {misiones.map(m => {
                   const ok = misionAbierta(m), terminado = misionCompleta(m), d = { tipo: 'mision', id: m.id }, aqui = esAqui(d);
-                  const etiqueta = aqui ? 'Estás aquí' : terminado ? 'Módulo obtenido' : ok ? 'Disponible' : `Completa el Mundo ${m.mundo}`;
+                  const pd = pasosDe(m), etiqueta = aqui ? 'Estás aquí' : terminado ? 'Completada' : !ok ? `Completa el Mundo ${m.mundo}` : pd?.hechos ? `Paso ${pd.hechos + 1} de ${pd.total}` : 'Disponible';
                   return <li key={m.id}>
                     <button type="button" className={`mapa-destino mapa-destino-mision${aqui ? ' actual' : ''}${terminado ? ' completo' : ''}${!ok ? ' bloqueado' : ''}${elegido(d) ? ' elegido' : ''}`}
                       aria-pressed={elegido(d)} aria-current={aqui ? 'location' : undefined} onClick={() => tocar(d)} onDoubleClick={() => ir(d)}>

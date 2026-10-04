@@ -25,7 +25,7 @@ export default function Leccion({ nivel, mundo, superado, onSolucion, onGuia }) 
       <header className="lec-head">
         <span className="chip">{nivel.concepto}</span>
         <span className="rotulo">{nivel.mision
-          ? `Misión especial · ${nivel.corto}`
+          ? `Misión especial · ${nivel.misionCorto} · paso ${nivel.enMundo + 1} de ${nivel.totalMundo}`
           : `Mundo ${mundo.id} · ${mundo.nombre} · capítulo ${nivel.enMundo + 1} de ${nivel.totalMundo}`}{superado ? ' · superado' : ''}</span>
       </header>
       <h2 className="lec-titulo">{nivel.titulo}</h2>

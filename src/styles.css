@@ -442,3 +442,19 @@ ul.plano { margin: 0 0 10px; padding-left: 18px; font-size: 15px; display: flex;
   .mapa-ir { grid-column: 1 / -1; width: 100%; }
   .mapa-leyenda .mapa-ayuda { display: none; }
 }
+
+/* Códice de patrones */
+.codice { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; }
+.codice-ficha { padding: 14px 16px; background: rgba(255,204,51,.06); border: 2px solid rgba(255,204,51,.45); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.codice-ficha h3 { margin: 0; color: var(--gold); font: 12px var(--f-pixel); line-height: 1.6; }
+.codice-ficha h3 small { color: var(--dim); font: 11px var(--f-code); margin-left: 8px; }
+.codice-ficha p { margin: 0; }
+.codice-ficha.bloqueada { background: rgba(7,5,15,.35); border-style: dashed; border-color: var(--line); color: var(--dim); }
+.codice-ficha.bloqueada h3 { color: var(--dim); }
+.codice-dos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.codice-uml { margin: 0; padding: 10px; background: var(--negro); border: 1px solid var(--line); color: var(--info); font: 12px/1.45 var(--f-code); white-space: pre; overflow-x: auto; }
+.codice-ficha .ejemplo { margin: 0; }
+button.modulo-badge { cursor: pointer; }
+button.modulo-badge:hover { background: rgba(255,204,51,.2); }
+.nodo-mision { border-style: dashed; }
+.mision-ruta .mapa-nombre { color: var(--gold); }

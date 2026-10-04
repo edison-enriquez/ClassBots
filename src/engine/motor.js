@@ -349,7 +349,7 @@ function metodo(c,h,crudo,cuerpo,cuerpoBlank,lineaCuerpo,linea,errores){
     return;
   }
   if(nombre===c.nombre){errores.push(E(A,linea,`¿Querías un constructor? Los constructores no llevan tipo de retorno: quita «${tipo}».`));return;}
-  c.metodos.push({...base,nombre,ret:tipo,estatico:/\bstatic\b/.test(mods)});
+  c.metodos.push({...base,nombre,ret:tipo,estatico:/\bstatic\b/.test(mods),final:/\bfinal\b/.test(mods)});
 }
 
 /* ---------- Traducción a JavaScript ---------- */

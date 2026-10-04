@@ -13,7 +13,14 @@ Mundos jugables (34 capítulos):
 | 5 · El Árbol | Herencia con `extends`, redefinición, clases abstractas y jerarquías multinivel | 5 | Diagrama de herencia UML |
 | 6 · La Arena | Polimorfismo: listas de la clase base, tipo declarado frente a tipo real, `instanceof` y casting, sobrecarga frente a redefinición, `toString()`, polimorfismo con interfaces y torneo abierto/cerrado | 6 | Coliseo: cada luchador muestra qué versión del método se ejecutó |
 
-Los mundos 7 a 9 (patrones de diseño) aparecen bloqueados en el mapa. Al completar el Mundo 4 se abre una rama opcional con la misión **Módulos de movimiento**, que presenta Strategy y desbloquea el módulo táctico del robot. Las misiones no alteran el avance ni la experiencia de la ruta principal. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
+Los mundos 7 a 9 (patrones de diseño) aparecen bloqueados en el mapa. Las **misiones especiales** son ramales opcionales del mapa que refuerzan, con un patrón de diseño, el concepto del mundo del que salen:
+
+| Misión | Sale de | Pasos | Recompensa |
+|---|---|---|---|
+| El manual de ensamblaje · Template Method | Mundo 5 (herencia) | 3: refactorizar dos recetas copiadas, gancho opcional y `final`, mini-jefe con un modelo desconocido | Manual de ensamblaje |
+| Estilos de combate · Strategy | Mundo 6 (polimorfismo) | 3: quitar los `if` sobre un texto, cambiar de estilo en ejecución, mini-jefe «¿herencia o composición?» | Módulo táctico |
+
+Cada misión empieza con código que huele mal, cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente) y su recompensa tiene efecto: registra el patrón en el **Códice de patrones** de la Guía y queda visible en los robots de todas las escenas. Las misiones no alteran el avance ni la experiencia de la ruta principal, y los mundos 7 a 9 no dan por hecho que se jugaron. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
 
 - **Columna izquierda (estilo CryptoZombies):** escenario pixel art, diálogo con Chispa (la jefa del taller), teoría, ejemplo, tarea, pista y respuesta.
 - **Columna derecha (estilo HackerRank):** editor Java, casos de prueba visibles y ocultos, consola, problemas, diagrama UML con fuente PlantUML y registro de eventos.
