@@ -327,6 +327,10 @@ export async function abrirConLlave(d, llaves) {
   if (nombres.length > 1 || (nombres[0] && nombres[0] !== d.perfil.nombre)) problemas.push(`trabajó con más de un nombre: ${[...new Set([...nombres, d.perfil.nombre])].join(' → ')}`);
   const cambios = metricas.eventos.filter(e => e.tipo === 'perfil' && e.de && e.de !== e.a);
   if (cambios.length) problemas.push(`cambió su nombre ${cambios.length} vez(es)`);
+  const docente = metricas.eventos.filter(e => e.tipo === 'profesor');
+  if (docente.length) problemas.push(`activó el modo profesor ${docente.length} vez(es): pudo ver las respuestas`);
+  const fallidos = metricas.eventos.filter(e => e.tipo === 'acceso-fallido');
+  if (fallidos.length) problemas.push(`intentó entrar al modo profesor ${fallidos.length} vez(es) sin la contraseña`);
   const cargas = metricas.eventos.filter(e => e.tipo === 'carga' && e.perfilId && e.perfilId !== d.perfil.id);
   if (cargas.length) problemas.push(`cargó avances de otro perfil: ${[...new Set(cargas.map(e => e.nombre))].join(', ')}`);
   if (!faltan.size) {

@@ -2,12 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar, cruzarArchivos } from '../metricas/metricas.js';
 import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase } from '../metricas/cifrado.js';
 import { resaltar } from '../util/resaltar.js';
+import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON } from '../metricas/clasesLocales.js';
 
 const CLAVE_SESION = 'classbots-llave-privada';
-const CLAVE_CLASES_ABIERTAS = 'classbots-clases-abiertas';
-const CLAVE_MIS_CLASES = 'classbots-mis-clases';
-const leerJSON = (alm, k, def) => { try { return JSON.parse(alm.getItem(k) || 'null') ?? def; } catch { return def; } };
-const guardarJSON = (alm, k, v) => { try { alm.setItem(k, JSON.stringify(v)); } catch { /* nada */ } };
 const leerLlave = () => leerJSON(sessionStorage, CLAVE_SESION, null);
 export const enlaceDeClase = c => `${location.origin}${location.pathname}?clase=${codificarClase(c)}`;
 const EVENTO = {
@@ -15,6 +12,8 @@ const EVENTO = {
   perfil: e => (e.de !== e.a ? `Cambió su nombre: «${e.de}» → «${e.a}»` : `Cambió su grupo: «${e.grupoDe || '—'}» → «${e.grupoA || '—'}»`),
   carga: e => `Cargó un avance de «${e.nombre}»${e.desde && e.desde !== e.nombre ? ` estando como «${e.desde}»` : ''} (exportado ${e.exportado ? new Date(e.exportado).toLocaleString() : '?'})`,
   clase: e => `Se unió a la clase «${e.a}»${e.de ? ` (antes «${e.de}»)` : ''}`,
+  profesor: e => `Activó el modo profesor (${e.accion === 'crear' ? 'creó' : 'abrió'} la clase «${e.clase}»)`,
+  'acceso-fallido': e => `Intentó entrar al modo profesor con una contraseña incorrecta (clase «${e.clase}»)`,
 };
 
 /* Panel del profesor: reúne los archivos de avance de la clase (sin servidor), los descifra con la

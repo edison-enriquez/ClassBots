@@ -22,7 +22,7 @@ Los mundos 7 a 9 (patrones de diseño) aparecen bloqueados en el mapa. Las **mis
 
 Cada misión empieza con código que huele mal, cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente) y su recompensa tiene efecto: registra el patrón en el **Códice de patrones** de la Guía y queda visible en los robots de todas las escenas. Las misiones no alteran el avance ni la experiencia de la ruta principal, y los mundos 7 a 9 no dan por hecho que se jugaron. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
 
-- **Columna izquierda (estilo CryptoZombies):** escenario pixel art, diálogo con Chispa (la jefa del taller), teoría, ejemplo, tarea y pista. La respuesta solo aparece en modo profesor (cinco clics en el título «ClassBots»).
+- **Columna izquierda (estilo CryptoZombies):** escenario pixel art, diálogo con Chispa (la jefa del taller), teoría, ejemplo, tarea y pista. La respuesta solo aparece en modo profesor.
 - **Columna derecha (estilo HackerRank):** editor Java, casos de prueba visibles y ocultos, consola, problemas, diagrama UML con fuente PlantUML y registro de eventos.
   - **Ejecutar código** corre los casos de ejemplo y anima el escenario.
   - **Enviar** corre además los casos ocultos; si todos pasan, el capítulo queda superado (+100 XP).
@@ -48,7 +48,7 @@ El workflow `.github/workflows/pages.yml` prueba, compila y publica en GitHub Pa
   - **Ventana:** salidas de la pestaña o de la ventana, tiempo fuera, y pegados externos en los 20 s siguientes a volver (el patrón de copiar de un chat de IA).
   - **Estilo de los envíos:** rasgos poco habituales en el curso en las líneas que escribió el estudiante (Javadoc, comentarios o nombres en inglés, lambdas, streams, `var`, `String.format`, `try/catch`, APIs no vistas).
   - **Indicio de copia o IA** (bajo, medio o alto) con sus razones. Es una heurística para conversar con el estudiante, **no una prueba**.
-- **Clases (sin tocar el repositorio):** en el Panel del profesor, «Crear una clase» pide nombre y contraseña. ClassBots genera un par de llaves **ECDH P-256** solo para esa clase y guarda la privada cifrada con la contraseña (PBKDF2-SHA256, 600 000 iteraciones, y AES-GCM).
+- **Clases (sin tocar el repositorio):** desde el acceso docente o el Panel del profesor, «Crear una clase» pide nombre y contraseña. ClassBots genera un par de llaves **ECDH P-256** solo para esa clase y guarda la privada cifrada con la contraseña (PBKDF2-SHA256, 600 000 iteraciones, y AES-GCM).
   - **Copiar enlace** da un enlace `…/?clase=…` para compartir con los estudiantes. Al abrirlo, su avance queda asociado a la clase. También pueden pegar el enlace en la bienvenida o en «Mi avance».
   - Cada archivo de estudiante lleva su clase. En cualquier computador, el profesor arrastra los archivos, escribe la contraseña y el panel **reconstruye la llave correcta**: no hay archivos de llave que guardar.
   - La contraseña no se puede recuperar. Al ir en los archivos, una contraseña débil podría adivinarse por fuerza bruta, así que conviene usar una frase larga.
@@ -59,7 +59,8 @@ El workflow `.github/workflows/pages.yml` prueba, compila y publica en GitHub Pa
   - **código idéntico** en capítulos no triviales y **comentarios propios idénticos**;
   - **mismo computador**, solo como dato (en un laboratorio es normal).
 - **Mi avance** (botón con el nombre): el estudiante ve solo su progreso (capítulos, mundos, misiones). Desde ahí puede **⬇ Descargar mi avance** (el `.json` entregable, que también sirve para seguir en otro equipo), **⬆ Cargar un avance** o **Cambiar de estudiante**.
-- **Panel del profesor** (modo profesor, cinco clics en el título):
+- **Modo profesor (secreto):** un gesto oculto, que el autor comparte con los docentes y no se publica, abre el *acceso docente*. Solo se activa entrando a una clase con su contraseña o creando una nueva. Dura hasta cerrar la pestaña, así que en un equipo compartido no queda activo, y cada activación o intento fallido queda en el historial cifrado del perfil.
+- **Panel del profesor** (menú de usuario, en modo profesor):
   - carga tu **llave privada** (queda solo en esa pestaña) y arrastra los `.json` de la clase;
   - verás los indicadores del grupo, los capítulos más difíciles, los errores frecuentes, la tabla con indicio de copia o IA y el detalle por capítulo con el código del estudiante;
   - exporta **CSV resumen** y **CSV por capítulo** (separados por `;`).
