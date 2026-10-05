@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { deflateRaw } from 'pako';
 import { miembrosUML, relaciones, plantuml } from '../engine/motor.js';
 
@@ -55,17 +55,32 @@ export default function UmlPanel({ modelo, objetivo }) {
     const ok = () => { setCopiado('Copiado'); setTimeout(() => setCopiado(''), 1500); };
     try { navigator.clipboard.writeText(fuente).then(ok, () => setCopiado('Selecciona y copia con Ctrl+C')); } catch { setCopiado('Selecciona y copia con Ctrl+C'); }
   };
+  const [expandido, setExpandido] = useState(false);
+  const listaRels = rels.length > 0 && (
+    <ul className="rel-lista" aria-label="Relaciones detectadas">
+      {rels.map((r, k) => (
+        <li key={k}><Flecha tipo={r.tipo} ancho={56} de="" a="" /><span><strong>{r.de} {SIMBOLO_REL[r.tipo]} {r.a}</strong>{r.mult ? ` (${r.mult})` : ''} · {NOMBRE_REL[r.tipo]}. {r.razon}</span></li>
+      ))}
+    </ul>
+  );
   return (
     <div className="uml">
       {objetivo?.length > 0 && <Objetivo objetivo={objetivo} rels={rels} />}
-      <div className="uml-svg"><Diagrama modelo={modelo} rels={rels} /></div>
-      {rels.length > 0 && (
-        <ul className="rel-lista" aria-label="Relaciones detectadas">
-          {rels.map((r, k) => (
-            <li key={k}><Flecha tipo={r.tipo} ancho={56} de="" a="" /><span><strong>{r.de} {SIMBOLO_REL[r.tipo]} {r.a}</strong>{r.mult ? ` (${r.mult})` : ''} · {NOMBRE_REL[r.tipo]}. {r.razon}</span></li>
-          ))}
-        </ul>
+      {expandido
+        ? <p className="uml-fuera">El diagrama está expandido. <button type="button" className="enlace" onClick={() => setExpandido(false)}>Contraer</button></p>
+        : <VistaDiagrama modelo={modelo} rels={rels} onExpandir={() => setExpandido(true)} />}
+      {expandido && (
+        <div className={'uml-expandido' + (objetivo?.length > 0 || rels.length > 0 ? '' : ' solo')} role="dialog" aria-modal="true" aria-label="Diagrama UML expandido">
+          <VistaDiagrama modelo={modelo} rels={rels} grande onContraer={() => setExpandido(false)} />
+          {(objetivo?.length > 0 || rels.length > 0) && (
+            <aside className="uml-lateral">
+              {objetivo?.length > 0 && <Objetivo objetivo={objetivo} rels={rels} />}
+              {listaRels}
+            </aside>
+          )}
+        </div>
       )}
+      {listaRels}
       <div className="uml-head">
         <span className="rotulo">Fuente PlantUML</span>
         <span className="uml-acc">
@@ -96,6 +111,89 @@ function Objetivo({ objetivo, rels }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/* Diagrama con zoom (botones, Ctrl+rueda), arrastre para moverse y modo expandido */
+const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
+function VistaDiagrama({ modelo, rels, grande = false, onExpandir, onContraer }) {
+  const caja = useRef(null);
+  const [escala, setEscala] = useState(1);
+  const [ajustado, setAjustado] = useState(grande);
+  const arrastre = useRef(null);
+  // Tamaño natural del diagrama (viewBox del SVG)
+  const natural = () => { const v = caja.current?.querySelector('svg')?.viewBox?.baseVal; return v && v.width ? { w: v.width, h: v.height } : null; };
+  const ajustar = useCallback(() => {
+    const n = natural(), c = caja.current;
+    if (!n || !c) return;
+    const e = Math.min((c.clientWidth - 28) / n.w, (c.clientHeight - 28) / n.h, grande ? 1.6 : 1);
+    setEscala(Math.max(0.2, +e.toFixed(3)));
+  }, [grande]);
+  // En modo ajustado, se reajusta cuando cambia el diagrama o el tamaño de la ventana
+  useLayoutEffect(() => { if (ajustado) ajustar(); }, [ajustado, ajustar, modelo, rels]);
+  useEffect(() => {
+    if (!ajustado || !caja.current) return undefined;
+    const ro = new ResizeObserver(() => ajustar());
+    ro.observe(caja.current);
+    return () => ro.disconnect();
+  }, [ajustado, ajustar]);
+  useEffect(() => {
+    if (!grande) return undefined;
+    const tecla = e => {
+      if (e.key === 'Escape') onContraer?.();
+      else if ((e.key === '+' || e.key === '=') && !e.ctrlKey) paso(1);
+      else if (e.key === '-' && !e.ctrlKey) paso(-1);
+      else if (e.key === '0') { setAjustado(false); setEscala(1); }
+    };
+    window.addEventListener('keydown', tecla);
+    return () => window.removeEventListener('keydown', tecla);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const paso = d => {
+    setAjustado(false);
+    setEscala(e => {
+      const k = ZOOMS.findIndex(z => z >= e - 1e-3);
+      const i = d > 0 ? (ZOOMS[k] > e + 1e-3 ? k : k + 1) : (k > 0 ? k - 1 : 0);
+      return ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i))] ?? e;
+    });
+  };
+  // Ctrl + rueda acerca o aleja (sin Ctrl, la rueda desplaza como siempre)
+  useEffect(() => {
+    const c = caja.current;
+    if (!c) return undefined;
+    const rueda = e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); paso(e.deltaY < 0 ? 1 : -1); };
+    c.addEventListener('wheel', rueda, { passive: false });
+    return () => c.removeEventListener('wheel', rueda);
+  });
+  const abajo = e => {
+    if (e.button !== 0 || e.pointerType === 'touch') return;
+    arrastre.current = { x: e.clientX, y: e.clientY, l: caja.current.scrollLeft, t: caja.current.scrollTop };
+    caja.current.setPointerCapture(e.pointerId);
+  };
+  const mover = e => {
+    const a = arrastre.current;
+    if (!a) return;
+    caja.current.scrollLeft = a.l - (e.clientX - a.x);
+    caja.current.scrollTop = a.t - (e.clientY - a.y);
+  };
+  const soltar = () => { arrastre.current = null; };
+  return (
+    <div className={'uml-vista' + (grande ? ' grande' : '')}>
+      <div className="uml-barra" role="toolbar" aria-label="Zoom del diagrama">
+        {grande && <span className="rotulo">Diagrama de clases</span>}
+        <button type="button" className="btn-mini" onClick={() => paso(-1)} aria-label="Alejar" title="Alejar (−)">−</button>
+        <span className="uml-zoom" aria-live="polite">{Math.round(escala * 100)}%</span>
+        <button type="button" className="btn-mini" onClick={() => paso(1)} aria-label="Acercar" title="Acercar (+)">+</button>
+        <button type="button" className="btn-mini" aria-pressed={ajustado} onClick={() => setAjustado(true)} title="Ajustar al espacio disponible">Ajustar</button>
+        <button type="button" className="btn-mini" onClick={() => { setAjustado(false); setEscala(1); }} title="Tamaño real (0)">100%</button>
+        {grande
+          ? <button type="button" className="btn-mini uml-expandir" onClick={onContraer} autoFocus title="Contraer (Esc)">⤡ Contraer</button>
+          : <button type="button" className="btn-mini uml-expandir" onClick={onExpandir} title="Ver el diagrama en grande">⤢ Expandir</button>}
+      </div>
+      <div ref={caja} className="uml-svg" onPointerDown={abajo} onPointerMove={mover} onPointerUp={soltar} onPointerCancel={soltar}
+        style={{ '--escala': escala }}>
+        <Diagrama modelo={modelo} rels={rels} />
+      </div>
     </div>
   );
 }
@@ -151,7 +249,7 @@ function Diagrama({ modelo, rels }) {
     return { x: cx + dx * s, y: cy + dy * s };
   };
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Diagrama de clases UML">
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ width: `calc(${W}px * var(--escala, 1))`, height: `calc(${H}px * var(--escala, 1))` }} role="img" aria-label="Diagrama de clases UML">
       <Marcadores id="u" />
       {rs.map((r, k) => {
         const A = pos[r.de], B = pos[r.a];
