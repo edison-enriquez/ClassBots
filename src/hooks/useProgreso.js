@@ -14,7 +14,7 @@ function dispositivo() {
     return d;
   } catch { return null; }
 }
-const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico', perfil: null, metricas: metricasVacias(), segmentos: [], clase: null, pendientes: [] };
+const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, asistente: 'basico', perfil: null, metricas: metricasVacias(), segmentos: [], clase: null, pendientes: [] };
 
 /* El segmento cifrado de la sesión anterior pasa a la lista de segmentos cerrados */
 function conSegmentoAnterior(segmentos) {
@@ -48,7 +48,7 @@ export function useProgreso() {
   const t = useRef(null);
   useEffect(() => {
     clearTimeout(t.current);
-    t.current = setTimeout(() => { try { localStorage.setItem(CLAVE, JSON.stringify({ ...p, metricas: undefined })); } catch { /* sin almacenamiento */ } }, 300);
+    t.current = setTimeout(() => { try { localStorage.setItem(CLAVE, JSON.stringify({ ...p, metricas: undefined, profe: undefined })); } catch { /* sin almacenamiento */ } }, 300);
   }, [p]);
   return [p, setP];
 }
@@ -93,7 +93,7 @@ function codigoGuardado(p, n, base) {
 export function guardarYRecargar(p) {
   try {
     localStorage.removeItem(CLAVE_SEGMENTO);
-    if (p) localStorage.setItem(CLAVE, JSON.stringify({ ...p, metricas: undefined })); else localStorage.removeItem(CLAVE);
+    if (p) localStorage.setItem(CLAVE, JSON.stringify({ ...p, metricas: undefined, profe: undefined })); else localStorage.removeItem(CLAVE);
   } catch { /* sin almacenamiento */ }
   location.reload();
 }

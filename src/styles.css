@@ -592,3 +592,6 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
 .profe-historial li.cambio { color: var(--warn); }
 .profe-historial time { color: var(--dim); font: 11px var(--f-code); margin-right: 6px; }
 .profe-problemas li.info { color: var(--dim); }
+.acceso-docente { width: min(480px, 100%); align-items: stretch; text-align: left; }
+.acceso-form { display: flex; flex-direction: column; gap: 10px; }
+.acceso-form select { font: 14px var(--f-body, inherit); padding: 8px; color: var(--ink); background: var(--negro); border: 2px solid var(--line); }

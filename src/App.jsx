@@ -18,6 +18,8 @@ import MapaMundo from './components/MapaMundo.jsx';
 import { Bienvenida, MiAvance } from './components/Avance.jsx';
 import PanelProfesor from './components/PanelProfesor.jsx';
 import MenuUsuario from './components/MenuUsuario.jsx';
+import AccesoDocente from './components/AccesoDocente.jsx';
+import { profeEnSesion, ponerProfeEnSesion } from './metricas/clasesLocales.js';
 import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo, exportar, descargar, nombreArchivo, registrarEvento } from './metricas/metricas.js';
 import { decodificarClase, clasePublica } from './metricas/cifrado.js';
 import { useSellado } from './metricas/sellado.js';
@@ -40,6 +42,10 @@ export default function App() {
   const [avance, setAvance] = useState(false);
   const [panelProfe, setPanelProfe] = useState(false);
   const [claseNueva, setClaseNueva] = useState(null);
+  // Modo profesor: acceso oculto, con contraseña de clase y solo en esta pestaña
+  const [profe, setProfeEstado] = useState(profeEnSesion);
+  const [acceso, setAcceso] = useState(false);
+  const setProfe = v => { ponerProfeEnSesion(v); setProfeEstado(v); };
 
   const [cod, setCod] = useState(() => codigoDe(prog, i));
   const [revision, setRevision] = useState(0);
@@ -140,8 +146,8 @@ export default function App() {
     clearTimeout(temporizadorMarca.current);
     if (clicsMarca.current === 5) {
       clicsMarca.current = 0;
-      setProg(p => ({ ...p, profe: !p.profe }));
-      avisar(`Modo profesor ${prog.profe ? 'desactivado' : 'activado'}.`);
+      if (profe) { setProfe(false); avisar('Modo profesor desactivado.'); }
+      else setAcceso(true);
     } else {
       temporizadorMarca.current = setTimeout(() => { clicsMarca.current = 0; }, 1800);
     }
@@ -155,9 +161,9 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hecho = k => prog.hechos.includes(NIVELES[k].id);
-  const abierto = k => prog.profe || k === 0 || hecho(k - 1) || hecho(k);
+  const abierto = k => profe || k === 0 || hecho(k - 1) || hecho(k);
   const pasosHechos = prog.pasosHechos || [];
-  const misionAbierta = m => misionDisponible(m, prog.hechos, prog.profe);
+  const misionAbierta = m => misionDisponible(m, prog.hechos, profe);
   const misionCompleta = m => misionCompletada(m, pasosHechos, prog.misionesHechas || []);
   const completadas = MISIONES.filter(misionCompleta);
   // Las recompensas de las misiones se ven en los robots de todas las escenas
@@ -173,7 +179,7 @@ export default function App() {
   };
   const irPaso = paso => {
     const m = MISIONES.find(x => x.id === paso.misionId);
-    if (!misionAbierta(m) || !pasoAbierto(paso, pasosHechos, prog.profe)) return;
+    if (!misionAbierta(m) || !pasoAbierto(paso, pasosHechos, profe)) return;
     setPasoId(paso.id);
     setVerMundo(paso.mundo);
     setCod(codigoPaso({ ...prog, codigo: { ...prog.codigo, [nivel.id]: cod } }, paso));
@@ -182,7 +188,7 @@ export default function App() {
   const iniciarMision = m => {
     if (!misionAbierta(m)) return;
     const pasos = PASOS.filter(p => p.misionId === m.id);
-    irPaso(pasos.find(p => !pasosHechos.includes(p.id) && pasoAbierto(p, pasosHechos, prog.profe)) || pasos[0]);
+    irPaso(pasos.find(p => !pasosHechos.includes(p.id) && pasoAbierto(p, pasosHechos, profe)) || pasos[0]);
   };
   const volverARuta = () => {
     setPasoId(null);
@@ -271,7 +277,7 @@ export default function App() {
               <span className="mapa-nombre">✦ {misionDeNivel.titulo}</span>
               <ol>
                 {misionDeNivel.pasos.map((p0, k) => {
-                  const p = PASOS.find(x => x.id === p0.id), ok = pasoAbierto(p, pasosHechos, prog.profe);
+                  const p = PASOS.find(x => x.id === p0.id), ok = pasoAbierto(p, pasosHechos, profe);
                   return (
                     <li key={p.id} className={pasosHechos.includes(p.id) ? 'hecho' : ''}>
                       <button type="button" className={'nodo nodo-mision' + (p.jefe ? ' jefe' : '')} aria-current={p.id === nivel.id ? 'step' : undefined} disabled={!ok} onClick={() => irPaso(p)}
@@ -300,10 +306,10 @@ export default function App() {
         <div className="hud">
           <button type="button" className="btn-sec herramienta mapa-btn" onClick={() => setMapa(true)} title="Mapa del mundo y misiones">Mapa</button>
           <button type="button" className="btn-sec herramienta guia-btn" onClick={() => setGuia('relaciones')} title="Guía: relaciones, interfaces y Códice de patrones">Guía</button>
-          <MenuUsuario perfil={prog.perfil} nv={nv} xp={xp} pct={pctMundo} mundo={mundo.id} profe={!!prog.profe} recompensas={completadas}
+          <MenuUsuario perfil={prog.perfil} nv={nv} xp={xp} pct={pctMundo} mundo={mundo.id} profe={!!profe} recompensas={completadas}
             onAvance={() => setAvance(true)} onCodice={() => setGuia('patrones')} onPanel={() => setPanelProfe(true)}
             onDescargar={async () => { const sobre = await sellar(); descargar(nombreArchivo(prog.perfil), JSON.stringify(exportar(prog, [...(prog.segmentos || []), sobre]), null, 2)); }}
-            onSalirProfe={() => { setProg(p => ({ ...p, profe: false })); avisar('Modo profesor desactivado.'); }} />
+            onSalirProfe={() => { setProfe(false); avisar('Modo profesor desactivado.'); }} />
         </div>
       </header>
 
@@ -316,7 +322,7 @@ export default function App() {
             </div>
             <Dialogo caption={caption} reposo={resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : `${prog.perfil ? `¡Hola, ${prog.perfil.nombre.split(' ')[0]}! ` : ''}Escribe tu código y pulsa Ejecutar para ver la escena.`} />
           </div>
-          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : prog.hechos.includes(nivel.id)} onSolucion={() => { if (prog.profe) { reemplazarTodo({ ...nivel.solucion }); medir(m => registrarSolucion(m, nivel.id)); } }} onGuia={setGuia} profe={!!prog.profe} onPista={() => medir(m => registrarPista(m, nivel.id))} />
+          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : prog.hechos.includes(nivel.id)} onSolucion={() => { if (profe) { reemplazarTodo({ ...nivel.solucion }); medir(m => registrarSolucion(m, nivel.id)); } }} onGuia={setGuia} profe={!!profe} onPista={() => medir(m => registrarPista(m, nivel.id))} />
         </aside>
 
         <section className="der">
@@ -388,7 +394,10 @@ export default function App() {
           </div>
         </div>
       )}
-      {panelProfe && prog.profe && <PanelProfesor onCerrar={() => setPanelProfe(false)} />}
+      {panelProfe && profe && <PanelProfesor onCerrar={() => setPanelProfe(false)} />}
+      {acceso && <AccesoDocente claseActual={prog.clase} onCerrar={() => setAcceso(false)}
+        onFallo={c => medir(m => registrarEvento(m, { tipo: 'acceso-fallido', clase: c.nombre, claseId: c.id }))}
+        onListo={(c, accion) => { setProfe(true); setAcceso(false); medir(m => registrarEvento(m, { tipo: 'profesor', accion, clase: c.nombre, claseId: c.id })); avisar(`Modo profesor activado · clase «${c.nombre}».`); }} />}
 
       {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={MISIONES} />}
 

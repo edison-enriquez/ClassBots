@@ -11,7 +11,8 @@ const path = require('path');
   if (await p.$('.bienvenida')) { await p.fill('.bienvenida input >> nth=0', 'Prueba E2E'); await p.click('text=Entrar al taller'); }
   await p.waitForTimeout(600);
   await p.screenshot({ path: 'e2e/01-inicio.png' });
-  for (let k = 0; k < 5; k++) await p.click('.marca h1'); // modo profesor (5 clics en el título)
+  for (let k = 0; k < 5; k++) await p.click('.marca h1'); // acceso docente
+  if (await p.$('.acceso-docente')) { await p.click('.acceso-docente [role=tab] >> text=Crear una clase'); const f = '.acceso-form input'; await p.fill(f + ' >> nth=0', 'Clase E2E'); await p.fill(f + ' >> nth=2', 'contrasena-e2e'); await p.fill(f + ' >> nth=3', 'contrasena-e2e'); await p.click('text=Crear clase y entrar'); await p.waitForSelector('.acceso-docente', { state: 'detached' }); }
   await p.click('.mapa li:nth-child(3) .nodo');
   await p.waitForTimeout(300);
   const ghost = () => p.evaluate(() => document.querySelector('.cm-ghost')?.textContent ?? null);
