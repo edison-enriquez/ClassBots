@@ -5,7 +5,16 @@ import { metricasVacias } from '../metricas/metricas.js';
 
 export const CLAVE = 'taller-objetos-react-v2';
 export const CLAVE_SEGMENTO = 'classbots-segmento-actual';
-const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico', perfil: null, metricas: metricasVacias(), segmentos: [] };
+const CLAVE_DISPOSITIVO = 'classbots-dispositivo';
+/* Identificador del navegador: sobrevive a «Cambiar de estudiante» (sirve para ver qué archivos salieron del mismo equipo) */
+function dispositivo() {
+  try {
+    let d = localStorage.getItem(CLAVE_DISPOSITIVO);
+    if (!d) { d = Math.random().toString(36).slice(2, 12); localStorage.setItem(CLAVE_DISPOSITIVO, d); }
+    return d;
+  } catch { return null; }
+}
+const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, profe: false, asistente: 'basico', perfil: null, metricas: metricasVacias(), segmentos: [], clase: null, pendientes: [] };
 
 /* El segmento cifrado de la sesión anterior pasa a la lista de segmentos cerrados */
 function conSegmentoAnterior(segmentos) {
@@ -30,12 +39,12 @@ function leer() {
       segmentos: conSegmentoAnterior(Array.isArray(g.segmentos) ? g.segmentos : []),
     };
   } catch { /* sin almacenamiento */ }
-  return VACIO;
+  return { ...VACIO, segmentos: conSegmentoAnterior([]) };
 }
 
 /* Progreso local: ruta principal y misiones especiales se registran por separado. */
 export function useProgreso() {
-  const [p, setP] = useState(leer);
+  const [p, setP] = useState(() => ({ ...leer(), dispositivo: dispositivo() }));
   const t = useRef(null);
   useEffect(() => {
     clearTimeout(t.current);

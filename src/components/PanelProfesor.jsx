@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar } from '../metricas/metricas.js';
-import { generarLlaves, huella, llavePublica } from '../metricas/cifrado.js';
+import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar, cruzarArchivos } from '../metricas/metricas.js';
+import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase } from '../metricas/cifrado.js';
 import { resaltar } from '../util/resaltar.js';
 
 const CLAVE_SESION = 'classbots-llave-privada';
-const leerLlave = () => { try { return JSON.parse(sessionStorage.getItem(CLAVE_SESION) || 'null'); } catch { return null; } };
+const CLAVE_CLASES_ABIERTAS = 'classbots-clases-abiertas';
+const CLAVE_MIS_CLASES = 'classbots-mis-clases';
+const leerJSON = (alm, k, def) => { try { return JSON.parse(alm.getItem(k) || 'null') ?? def; } catch { return def; } };
+const guardarJSON = (alm, k, v) => { try { alm.setItem(k, JSON.stringify(v)); } catch { /* nada */ } };
+const leerLlave = () => leerJSON(sessionStorage, CLAVE_SESION, null);
+export const enlaceDeClase = c => `${location.origin}${location.pathname}?clase=${codificarClase(c)}`;
+const EVENTO = {
+  alta: e => `Se registró como «${e.nombre}»${e.grupo ? ` (${e.grupo})` : ''}`,
+  perfil: e => (e.de !== e.a ? `Cambió su nombre: «${e.de}» → «${e.a}»` : `Cambió su grupo: «${e.grupoDe || '—'}» → «${e.grupoA || '—'}»`),
+  carga: e => `Cargó un avance de «${e.nombre}»${e.desde && e.desde !== e.nombre ? ` estando como «${e.desde}»` : ''} (exportado ${e.exportado ? new Date(e.exportado).toLocaleString() : '?'})`,
+  clase: e => `Se unió a la clase «${e.a}»${e.de ? ` (antes «${e.de}»)` : ''}`,
+};
 
 /* Panel del profesor: reúne los archivos de avance de la clase (sin servidor), los descifra con la
    llave privada del profesor y los resume */
@@ -16,7 +27,15 @@ export default function PanelProfesor({ onCerrar }) {
   const [sel, setSel] = useState(null);
   const [arrastre, setArrastre] = useState(false);
   const [llave, setLlave] = useState(leerLlave);
+  const [abiertas, setAbiertas] = useState(() => leerJSON(sessionStorage, CLAVE_CLASES_ABIERTAS, {}));
+  const abrir = (id, priv) => setAbiertas(a => { const n = { ...a, [id]: priv }; guardarJSON(sessionStorage, CLAVE_CLASES_ABIERTAS, n); return n; });
   const input = useRef(null);
+  // Clases que aparecen en los archivos cargados
+  const clasesEnArchivos = useMemo(() => {
+    const m = new Map();
+    for (const d of crudos) if (d.clase?.id) m.set(d.clase.id, { ...d.clase, n: (m.get(d.clase.id)?.n || 0) + 1 });
+    return [...m.values()];
+  }, [crudos]);
 
   const cargar = async files => {
     const nuevos = [], errs = [];
@@ -26,9 +45,11 @@ export default function PanelProfesor({ onCerrar }) {
     setErrores(errs);
     setCrudos(prev => {
       // Un estudiante por id: se queda el archivo exportado más recientemente
-      const m = new Map(prev.map(e => [e.perfil.id || e.perfil.nombre, e]));
+      // Un archivo por perfil y nombre: el mismo perfil con otro nombre se conserva para alertarlo
+      const clave = e => `${e.perfil.id || ''}|${e.perfil.nombre}`;
+      const m = new Map(prev.map(e => [clave(e), e]));
       for (const e of nuevos) {
-        const k = e.perfil.id || e.perfil.nombre, viejo = m.get(k);
+        const k = clave(e), viejo = m.get(k);
         if (!viejo || viejo.exportado < e.exportado) m.set(k, e);
       }
       return [...m.values()];
@@ -40,15 +61,18 @@ export default function PanelProfesor({ onCerrar }) {
     let vivo = true;
     (async () => {
       const lista = [];
+      const llaves = { clases: abiertas, rsa: llave?.privada };
       for (const d of crudos) {
-        if (!llave) { lista.push({ ...d, r: resumen({ progreso: d.progreso }), problemas: ['métricas cifradas: carga tu llave privada'], cifrado: true }); continue; }
-        const { metricas, problemas } = await abrirConLlave(d, llave.privada);
-        lista.push({ ...d, r: resumen({ progreso: d.progreso, metricas }), problemas });
+        const x = await abrirConLlave(d, llaves);
+        const cifrado = d.segmentos.length > 0 && x.leidos === 0;
+        lista.push({ ...d, ...x, r: resumen({ progreso: d.progreso, metricas: x.metricas }), cifrado, problemas: cifrado ? [d.clase ? `escribe la contraseña de la clase «${d.clase.nombre}»` : 'carga la llave privada del despliegue'] : x.problemas });
       }
+      const cruces = cruzarArchivos(lista);
+      for (const e of lista) e.cruces = cruces.get(e) || [];
       if (vivo) setEstudiantes(lista);
     })();
     return () => { vivo = false; };
-  }, [crudos, llave]);
+  }, [crudos, llave, abiertas]);
 
   const clase = useMemo(() => {
     if (!estudiantes.length) return null;
@@ -70,7 +94,7 @@ export default function PanelProfesor({ onCerrar }) {
     for (const e of estudiantes) for (const [k, v] of Object.entries(e.r.categorias)) cats[k] = (cats[k] || 0) + v;
     return {
       n, avance: Math.round(prom(e => e.r.pct)), tiempo: prom(e => e.r.tiempoTotal),
-      revisar: estudiantes.filter(e => !e.cifrado && e.problemas.length).length,
+      revisar: estudiantes.filter(e => (!e.cifrado && e.problemas.length) || e.cruces.some(c => c.fuerte)).length,
       alertas: estudiantes.filter(e => e.r.indicios.nivel !== 'bajo').length,
       dificiles, categorias: Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 5),
     };
@@ -94,7 +118,8 @@ export default function PanelProfesor({ onCerrar }) {
     const f = COLS.find(c => c[0] === orden.col)[2], x = f(a), y = f(b);
     return (x < y ? -1 : x > y ? 1 : 0) * (orden.asc ? 1 : -1);
   });
-  const est = sel != null ? estudiantes.find(e => (e.perfil.id || e.perfil.nombre) === sel) : null;
+  const claveDe = e => `${e.perfil.id || ''}|${e.perfil.nombre}`;
+  const est = sel != null ? estudiantes.find(e => claveDe(e) === sel) : null;
   const pct = (a, b) => (a + b ? Math.round((100 * a) / (a + b)) : 0);
 
   return (
@@ -108,7 +133,11 @@ export default function PanelProfesor({ onCerrar }) {
           <button type="button" className="mapa-cerrar" onClick={onCerrar} aria-label="Cerrar" autoFocus>×</button>
         </header>
 
-        <Llave llave={llave} onLlave={l => { setLlave(l); try { if (l) sessionStorage.setItem(CLAVE_SESION, JSON.stringify(l)); else sessionStorage.removeItem(CLAVE_SESION); } catch { /* nada */ } }} />
+        <Clases enArchivos={clasesEnArchivos} abiertas={abiertas} onAbrir={abrir} />
+        <details className="profe-avanzado">
+          <summary>Avanzado: archivos sin clase (llave del despliegue)</summary>
+          <Llave llave={llave} onLlave={l => { setLlave(l); try { if (l) sessionStorage.setItem(CLAVE_SESION, JSON.stringify(l)); else sessionStorage.removeItem(CLAVE_SESION); } catch { /* nada */ } }} />
+        </details>
 
         <div className={'profe-soltar' + (arrastre ? ' activo' : '')}
           onDragOver={e => { e.preventDefault(); setArrastre(true); }} onDragLeave={() => setArrastre(false)}
@@ -141,7 +170,7 @@ export default function PanelProfesor({ onCerrar }) {
             </section>
             <section>
               <h3>Errores más frecuentes en la clase</h3>
-              {clase.categorias.length ? clase.categorias.map(([k, v]) => <div key={k} className="avance-cat"><span>{CATEGORIAS[k] || k}</span><i style={{ width: `${(100 * v) / clase.categorias[0][1]}%` }} /><small>{v}</small></div>) : <p className="bienv-nota">{llave ? 'Sin errores registrados.' : 'Carga tu llave privada para ver los errores.'}</p>}
+              {clase.categorias.length ? clase.categorias.map(([k, v]) => <div key={k} className="avance-cat"><span>{CATEGORIAS[k] || k}</span><i style={{ width: `${(100 * v) / clase.categorias[0][1]}%` }} /><small>{v}</small></div>) : <p className="bienv-nota">{estudiantes.some(e => e.cifrado) ? 'Abre las clases (o carga la llave) para ver los errores.' : 'Sin errores registrados.'}</p>}
             </section>
           </div>
 
@@ -155,12 +184,12 @@ export default function PanelProfesor({ onCerrar }) {
               <table className="profe-tabla">
                 <thead><tr>{COLS.map(([k, t]) => <th key={k} aria-sort={orden.col === k ? (orden.asc ? 'ascending' : 'descending') : undefined}><button type="button" onClick={() => setOrden(o => ({ col: k, asc: o.col === k ? !o.asc : true }))}>{t}{orden.col === k ? (orden.asc ? ' ▲' : ' ▼') : ''}</button></th>)}</tr></thead>
                 <tbody>{filas.map(e => {
-                  const k = e.perfil.id || e.perfil.nombre, w = e.r.escritura;
+                  const k = claveDe(e), w = e.r.escritura, alertas = [...(e.cifrado ? [] : e.problemas), ...e.cruces.filter(c => c.fuerte).map(c => c.txt)];
                   return (
                     <tr key={k} className={sel === k ? 'sel' : ''} onClick={() => setSel(sel === k ? null : k)}>
-                      <td>{!e.cifrado && e.problemas.length > 0 && <span className="avance-alerta" title={e.problemas.join('\n')}>⚠ </span>}<button type="button" className="enlace">{e.perfil.nombre}</button></td>
+                      <td>{alertas.length > 0 && <span className="avance-alerta" title={alertas.join('\n')}>⚠{alertas.length} </span>}<button type="button" className="enlace">{e.perfil.nombre}</button></td>
                       <td>{e.perfil.grupo}</td><td>{e.r.capitulos}/{e.r.totalCapitulos}</td><td>{e.r.actual}</td>
-                      {e.cifrado ? <td colSpan={7} className="profe-cifrado">🔒 cifrado</td> : <>
+                      {e.cifrado ? <td colSpan={7} className="profe-cifrado">🔒 {e.clase ? `clase «${e.clase.nombre}»: falta la contraseña` : 'cifrado con la llave del despliegue'}</td> : <>
                         <td>{minutos(e.r.tiempoTotal)}</td><td>{e.r.intentosPromedio ?? '—'}</td><td>{e.r.primerEnvio != null ? e.r.primerEnvio + '%' : '—'}</td>
                         <td>{pct(w.externosChars, w.tecleados)}%</td>
                         <td><span className={'indicio ' + e.r.indicios.nivel} title={e.r.indicios.razones.join('\n') || 'Sin indicios'}>{e.r.indicios.nivel}</span></td>
@@ -237,7 +266,8 @@ function DetalleEstudiante({ e }) {
   return (
     <section className="profe-detalle">
       <h3>{e.perfil.nombre} <small>· {e.archivo} · exportado {new Date(e.exportado).toLocaleString()}</small></h3>
-      {e.problemas.length > 0 && <ul className="profe-problemas">{e.problemas.map(p => <li key={p}>⚠ {p}</li>)}</ul>}
+      {(e.problemas.length > 0 || e.cruces.length > 0) && <ul className="profe-problemas">{e.problemas.map(p => <li key={p}>⚠ {p}</li>)}{e.cruces.map(c => <li key={c.txt} className={c.fuerte ? '' : 'info'}>{c.fuerte ? '⚠' : 'ℹ'} {c.txt}</li>)}</ul>}
+      {!e.cifrado && <Historial e={e} />}
       {!e.cifrado && (
         <div className="profe-escritura">
           <div><strong>{w.tecleados}</strong><span>caracteres tecleados</span></div>
@@ -272,5 +302,91 @@ function DetalleEstudiante({ e }) {
         </div>
       )}
     </section>
+  );
+}
+
+/* Historial de identidad del estudiante (viene cifrado dentro de sus métricas) */
+function Historial({ e }) {
+  const evs = (e.metricas?.eventos || []).filter(x => EVENTO[x.tipo]);
+  return (
+    <details className="profe-historial" open={evs.some(x => x.tipo !== 'alta')}>
+      <summary>Historial de identidad ({evs.length} evento{evs.length === 1 ? '' : 's'}{e.clase ? ` · clase «${e.clase.nombre}»` : ''} · {(e.dispositivos || []).length} equipo{(e.dispositivos || []).length === 1 ? '' : 's'})</summary>
+      {evs.length ? (
+        <ol>{evs.map((x, k) => <li key={k} className={x.tipo === 'alta' ? '' : 'cambio'}><time>{new Date(x.t).toLocaleString()}</time> {EVENTO[x.tipo](x)}</li>)}</ol>
+      ) : <p className="bienv-nota">Sin eventos registrados.</p>}
+    </details>
+  );
+}
+
+/* Clases: crear (enlace para los estudiantes) y abrir con contraseña las que aparecen en los archivos */
+function Clases({ enArchivos, abiertas, onAbrir }) {
+  const [mias, setMias] = useState(() => leerJSON(localStorage, CLAVE_MIS_CLASES, []));
+  const [form, setForm] = useState(null);
+  const [error, setError] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [copiado, setCopiado] = useState('');
+  const todas = [...mias, ...enArchivos.filter(c => !mias.some(m => m.id === c.id))];
+  const crear = async ev => {
+    ev.preventDefault(); setError('');
+    if (form.contrasena !== form.repetir) { setError('Las contraseñas no coinciden.'); return; }
+    setOcupado(true);
+    try {
+      const c = await crearClase(form);
+      const n = [...mias, c]; setMias(n); guardarJSON(localStorage, CLAVE_MIS_CLASES, n);
+      onAbrir(c.id, await abrirClase(c, form.contrasena));
+      setForm(null);
+    } catch (e) { setError(e.message); }
+    setOcupado(false);
+  };
+  const copiar = async c => {
+    try { await navigator.clipboard.writeText(enlaceDeClase(c)); setCopiado(c.id); setTimeout(() => setCopiado(''), 2000); } catch { window.prompt('Copia el enlace de la clase:', enlaceDeClase(c)); }
+  };
+  return (
+    <section className="profe-clases">
+      <div className="profe-barra">
+        <h3>Clases</h3>
+        {!form && <button type="button" className="btn-pri" onClick={() => setForm({ nombre: '', docente: '', contrasena: '', repetir: '' })}>+ Crear una clase</button>}
+      </div>
+      {form && (
+        <form className="profe-form" onSubmit={crear}>
+          <label className="campo">Nombre de la clase<input required autoFocus value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="POO 2026-2 · Grupo 1" maxLength={60} /></label>
+          <label className="campo">Docente<input value={form.docente} onChange={e => setForm({ ...form, docente: e.target.value })} placeholder="Tu nombre" maxLength={60} /></label>
+          <label className="campo">Contraseña de la clase<input type="password" required minLength={8} value={form.contrasena} onChange={e => setForm({ ...form, contrasena: e.target.value })} autoComplete="new-password" /></label>
+          <label className="campo">Repite la contraseña<input type="password" required minLength={8} value={form.repetir} onChange={e => setForm({ ...form, repetir: e.target.value })} autoComplete="new-password" /></label>
+          <p className="bienv-nota">Con esta contraseña leerás las métricas de la clase en cualquier computador. No se puede recuperar: si la olvidas, no podrás leerlas. Usa una frase larga que no compartas con nadie.</p>
+          {error && <p className="avance-alerta">{error}</p>}
+          <div className="modal-acc"><button type="button" className="btn-sec" onClick={() => setForm(null)}>Cancelar</button><button type="submit" className="btn-pri" disabled={ocupado}>{ocupado ? 'Creando…' : 'Crear clase'}</button></div>
+        </form>
+      )}
+      {todas.length === 0 && !form && <p className="bienv-nota">Crea una clase y comparte su enlace con tus estudiantes: sus métricas se cifrarán para ella y solo tú podrás leerlas con la contraseña. No necesitas acceso al repositorio.</p>}
+      {todas.map(c => (
+        <div key={c.id} className={'profe-clase' + (abiertas[c.id] ? ' abierta' : '')}>
+          <div>
+            <strong>🏫 {c.nombre}</strong> <small>{c.docente}{c.n ? ` · ${c.n} archivo(s) cargado(s)` : ''}</small>
+          </div>
+          <div className="profe-clase-acc">
+            <button type="button" className="btn-sec" onClick={() => copiar(c)}>{copiado === c.id ? '✔ Enlace copiado' : 'Copiar enlace'}</button>
+            {abiertas[c.id] ? <span className="avance-ok">🔓 abierta</span> : <AbrirClase clase={c} onAbrir={onAbrir} />}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+function AbrirClase({ clase, onAbrir }) {
+  const [pass, setPass] = useState('');
+  const [error, setError] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const ir = async e => {
+    e.preventDefault(); setOcupado(true); setError('');
+    try { onAbrir(clase.id, await abrirClase(clase, pass)); } catch (err) { setError(err.message); }
+    setOcupado(false);
+  };
+  return (
+    <form className="profe-abrir" onSubmit={ir}>
+      <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Contraseña de la clase" aria-label={`Contraseña de la clase ${clase.nombre}`} autoComplete="current-password" />
+      <button type="submit" className="btn-pri" disabled={!pass || ocupado}>{ocupado ? '…' : 'Abrir'}</button>
+      {error && <span className="avance-alerta">{error}</span>}
+    </form>
   );
 }
