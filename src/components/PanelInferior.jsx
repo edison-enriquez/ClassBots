@@ -161,6 +161,10 @@ function Eventos({ r }) {
         if (ev.t === 'crear') { op = 'new'; val = `${ev.cls}#${ev.id}`; }
         else if (ev.t === 'set') { op = 'set'; val = `${cls[ev.id] || 'Obj'}#${ev.id}.${ev.campo} = ${v(ev.valor)}`; }
         else if (ev.t === 'llamada') { op = 'call'; val = `${cls[ev.id] || 'Obj'}#${ev.id}.${ev.metodo}(${ev.args.join(', ')})`; }
+        else if (ev.t === 'lanza') { op = 'throw'; val = `${ev.exc}${ev.msg != null ? `: ${ev.msg}` : ''}`; }
+        else if (ev.t === 'atrapa') { op = 'catch'; val = `${ev.como} atrapó ${ev.exc}`; }
+        else if (ev.t === 'finally') { op = 'finally'; val = 'se ejecuta siempre'; }
+        else if (ev.t === 'add') { op = 'add'; val = ev.texto || 'lista'; }
         else { op = 'out'; val = ev.texto; }
         return <li key={i}><span className="n">{i + 1}</span><span className={'op op-' + op}>{op}</span><span className="val">{val}</span></li>;
       })}

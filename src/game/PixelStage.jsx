@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { escenaBoveda, escenaConexiones, escenaEstacion, alEntrarEscena } from './escenas2.js';
 import { escenaArena, alEntrarArena, escenaLinea } from './escenas3.js';
+import { escenaAverias } from './escenas4.js';
 import { W, H, P, ETIQUETA, BALDE, BATERIA, sprite, texto, colorDe } from './sprites.js';
 import { suelo, muro, ventana, placa, mesa, cristal, escaleras, plataforma, antorcha, monitorPared, maceta, paletaRPG, R_ABAJO } from './rpg.js';
 import { dibujarRobot, linea } from './dibujo.js';
@@ -8,7 +9,7 @@ import { dibujarRobot, linea } from './dibujo.js';
 /* Escenario RPG en vista cenital. Dibuja a 192×112 y el CSS lo escala con image-rendering: pixelated.
    Reproduce el registro de eventos que devuelve el motor (o el motor Java real). */
 
-const DUR = { x: 430, energia: 160, llamada: 240, print: 320, crear: 520, set: 110, add: 260 };
+const DUR = { x: 430, energia: 160, llamada: 240, print: 320, crear: 520, set: 110, add: 260, lanza: 900, atrapa: 800, finally: 600 };
 const reducido = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PISO_TALLER = 90;
 
@@ -100,6 +101,7 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
     else if (nivel.escena === 'estacion') escenaEstacion(ctx, datos);
     else if (nivel.escena === 'arena') escenaArena(ctx, datos);
     else if (nivel.escena === 'linea') escenaLinea(ctx, datos);
+    else if (nivel.escena === 'averias') escenaAverias(ctx, datos);
     else escenaPasillo(ctx, nivel, fr, prev, s, now);
     s.part = s.part.filter(q => q.vida > 0);
     for (const q of s.part) {

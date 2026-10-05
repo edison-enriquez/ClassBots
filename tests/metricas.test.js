@@ -31,6 +31,8 @@ test('clasifica errores por concepto', () => {
   assert.equal(categoria('energia es private en Maquina: Robot lo hereda…'), 'encapsulamiento');
   assert.equal(categoria('ClassCastException: el objeto es un Robot…'), 'polimorfismo');
   assert.equal(categoria('NullPointerException: estás usando un objeto que todavía es null.'), 'null');
+  assert.equal(categoria('Excepción sin atrapar: IllegalStateException: x. Nadie la atrapó con try/catch'), 'excepciones');
+  assert.equal(categoria('SinEnergiaException es una excepción comprobada (checked): atrápala…'), 'excepciones');
   assert.equal(categoria('Maquina no tiene constructor sin parámetros: empieza este constructor con super(nombre);'), 'herencia');
 });
 

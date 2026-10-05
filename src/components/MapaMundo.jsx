@@ -10,6 +10,7 @@ const LUGARES = [
   { x: 282, y: 205, zona: 'CONTRATOS', techo: '#6fa8d8', forma: 'estacion' },
   { x: 390, y: 246, zona: 'ÁRBOL', techo: '#83bd68', forma: 'arbol' },
   { x: 462, y: 146, zona: 'ARENA', techo: '#d97869', forma: 'arena' },
+  { x: 540, y: 318, zona: 'AVERÍAS', techo: '#e0606e', forma: 'averias' },
   { x: 548, y: 229, zona: 'FÁBRICA', techo: '#d7a85f', forma: 'fabrica' },
   { x: 572, y: 93, zona: 'CIUDAD', techo: '#91a5c9', forma: 'ciudad' },
   { x: 467, y: 54, zona: 'CONTROL', techo: '#b87591', forma: 'torre' },
@@ -61,7 +62,7 @@ function dibujarPiso(ctx) {
   ctx.fillText('CLASSBOTS // COMPLEJO DE ENSAMBLAJE', 38, 42);
 
   // Bancos de montaje secundarios y siluetas de maquinaria.
-  for (const [x, y, w, h] of [[42, 76, 110, 40], [446, 292, 145, 56], [190, 74, 110, 38], [40, 174, 54, 82]]) {
+  for (const [x, y, w, h] of [[42, 76, 110, 40], [190, 74, 110, 38], [40, 174, 54, 82]]) {
     rect(ctx, '#101d2c', x, y, w, h);
     rect(ctx, '#34485b', x + 2, y + 2, w - 4, h - 4);
     rect(ctx, '#263a4d', x + 5, y + 5, w - 10, h - 10);
@@ -122,6 +123,16 @@ function dibujarMaquina(ctx, lugar, bloqueado, ahora) {
     rect(ctx, '#101a25', x + 14, y - 34, 10, 17);
     rect(ctx, '#71808e', x + 16, y - 32, 6, 15);
     if (!bloqueado && Math.floor(ahora / 500) % 2 === 0) rect(ctx, '#c4d2dc', x + 17, y - 39, 4, 5);
+  } else if (lugar.forma === 'averias') {
+    // Baliza de alarma y cruz de reparación
+    const on = !bloqueado && Math.floor(ahora / 350) % 2 === 0;
+    rect(ctx, '#101a25', x - 5, y - 30, 10, 12);
+    rect(ctx, on ? '#ff3355' : bloqueado ? '#6d6f7a' : '#8a2a3a', x - 4, y - 29, 8, 8);
+    if (on) { rect(ctx, '#ff3355', x - 10, y - 27, 3, 1); rect(ctx, '#ff3355', x + 7, y - 27, 3, 1); }
+    rect(ctx, '#f1eef5', x - 2, y - 7, 4, 12);
+    rect(ctx, '#f1eef5', x - 6, y - 3, 12, 4);
+    rect(ctx, bloqueado ? '#777' : '#e0606e', x - 1, y - 6, 2, 10);
+    rect(ctx, bloqueado ? '#777' : '#e0606e', x - 5, y - 2, 10, 2);
   } else if (lugar.forma === 'boveda') {
     rect(ctx, '#101a25', x - 8, y - 10, 16, 15);
     rect(ctx, '#bbc4c8', x - 5, y - 7, 10, 9);
@@ -174,10 +185,10 @@ function dibujarMision(ctx, mision, disponible, completada, ahora) {
   ctx.textAlign = 'start';
 }
 
-/* Rutas del plano: la línea principal 1→9 y el ramal de la misión desde Contratos (04) */
+/* Rutas del plano: la línea principal 1→10 y el ramal de la misión desde Contratos (04) */
 const esRamal = n => typeof n === 'string';
 const puntoDe = n => (esRamal(n) ? puntoRamal(n) : LUGARES[n]);
-/* Ruta entre dos nodos: sectores (índices 0..8) o ramales (id de la misión), que cuelgan de su sector */
+/* Ruta entre dos nodos: sectores (índices 0..9) o ramales (id de la misión), que cuelgan de su sector */
 function ruta(desde, hasta, anclaDe) {
   if (desde === hasta) return [puntoDe(desde)];
   const linea = (a, b) => { const r = []; const paso = a <= b ? 1 : -1; for (let k = a; k !== b + paso; k += paso) r.push(k); return r; };
