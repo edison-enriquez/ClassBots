@@ -60,33 +60,64 @@ export async function descifrar(sobre, privadaJwk) {
      el panel reconstruye la llave correcta desde los propios archivos.
    ====================================================================== */
 const ECDH = { name: 'ECDH', namedCurve: 'P-256' };
-const b64u = buf => aB64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const deB64u = s => deB64(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+const ECDSA = { name: 'ECDSA', namedCurve: 'P-256' };
+export const b64u = buf => aB64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export const deB64u = s => deB64(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
 const ITER = 600000;
 
 async function llaveDeContrasena(contrasena, sal) {
   const base = await sutil().importKey('raw', new TextEncoder().encode(contrasena), 'PBKDF2', false, ['deriveKey']);
   return sutil().deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: sal, iterations: ITER }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
-export async function crearClase({ nombre, docente = '', contrasena }) {
+/* El id de la clase se deriva de sus llaves públicas: así nadie puede hacer pasar otras llaves por
+   la misma clase (el servidor del aula lo comprueba) */
+export async function idDeClase(pub, firma) {
+  const h = await sutil().digest('SHA-256', new TextEncoder().encode(`${pub.x}.${pub.y}.${firma.x}.${firma.y}`));
+  return b64u(h).slice(0, 16);
+}
+/* Servidor del aula en vivo configurado al compilar (VITE_AULA_URL); vacío si no hay */
+export function aulaPorDefecto() {
+  try { return import.meta.env?.VITE_AULA_URL || ''; } catch { return ''; }
+}
+export async function crearClase({ nombre, docente = '', contrasena, aula = aulaPorDefecto() }) {
   if (!contrasena || contrasena.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
   const s = sutil();
   const par = await s.generateKey(ECDH, true, ['deriveBits']);
-  const jwk = await s.exportKey('jwk', par.privateKey);
-  const sal = globalThis.crypto.getRandomValues(new Uint8Array(16)), iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
-  const cif = await s.encrypt({ name: 'AES-GCM', iv }, await llaveDeContrasena(contrasena, sal), new TextEncoder().encode(jwk.d));
-  const id = b64u(globalThis.crypto.getRandomValues(new Uint8Array(6)));
-  return { v: 1, id, nombre: String(nombre || 'Mi clase').slice(0, 60), docente: String(docente).slice(0, 60), creada: new Date().toISOString(), pub: { x: jwk.x, y: jwk.y }, llave: { sal: b64u(sal), iv: b64u(iv), d: b64u(cif) } };
+  const firma = await s.generateKey(ECDSA, true, ['sign', 'verify']);
+  const jwk = await s.exportKey('jwk', par.privateKey), fjwk = await s.exportKey('jwk', firma.privateKey);
+  const sal = globalThis.crypto.getRandomValues(new Uint8Array(16)), iv = globalThis.crypto.getRandomValues(new Uint8Array(12)), fiv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const aes = await llaveDeContrasena(contrasena, sal);
+  const cif = await s.encrypt({ name: 'AES-GCM', iv }, aes, new TextEncoder().encode(jwk.d));
+  const fcif = await s.encrypt({ name: 'AES-GCM', iv: fiv }, aes, new TextEncoder().encode(fjwk.d));
+  const pub = { x: jwk.x, y: jwk.y }, fpub = { x: fjwk.x, y: fjwk.y };
+  return {
+    v: 1, id: await idDeClase(pub, fpub), nombre: String(nombre || 'Mi clase').slice(0, 60), docente: String(docente).slice(0, 60), creada: new Date().toISOString(),
+    pub, firma: fpub, llave: { sal: b64u(sal), iv: b64u(iv), d: b64u(cif), fiv: b64u(fiv), f: b64u(fcif) },
+    ...(aula ? { aula: String(aula).trim().slice(0, 200) } : {}),
+  };
 }
-/* Con la contraseña correcta devuelve la llave privada de la clase; si no, lanza un error */
+/* Con la contraseña correcta devuelve la llave privada de la clase (y la de firma, si la clase la tiene) */
 export async function abrirClase(clase, contrasena) {
   try {
-    const d = new TextDecoder().decode(await sutil().decrypt({ name: 'AES-GCM', iv: deB64u(clase.llave.iv) }, await llaveDeContrasena(contrasena, deB64u(clase.llave.sal)), deB64u(clase.llave.d)));
-    return { kty: 'EC', crv: 'P-256', x: clase.pub.x, y: clase.pub.y, d };
+    const aes = await llaveDeContrasena(contrasena, deB64u(clase.llave.sal));
+    const abre = async (iv, d) => new TextDecoder().decode(await sutil().decrypt({ name: 'AES-GCM', iv: deB64u(iv) }, aes, deB64u(d)));
+    const d = await abre(clase.llave.iv, clase.llave.d);
+    const priv = { kty: 'EC', crv: 'P-256', x: clase.pub.x, y: clase.pub.y, d };
+    if (clase.firma && clase.llave.f) priv.firma = { x: clase.firma.x, y: clase.firma.y, d: await abre(clase.llave.fiv, clase.llave.f) };
+    return priv;
   } catch { throw new Error('Contraseña incorrecta para la clase «' + clase.nombre + '».'); }
 }
+/* El profesor prueba ante el servidor del aula que tiene la contraseña: firma el reto que este le envía */
+export const textoReto = (claseId, reto) => `classbots-aula|${claseId}|${reto}`;
+export async function firmarReto(priv, claseId, reto) {
+  if (!priv?.firma) throw new Error('Esta clase no tiene llave de firma (créala de nuevo para usar el aula en vivo).');
+  const k = await sutil().importKey('jwk', { kty: 'EC', crv: 'P-256', ...priv.firma, ext: true }, ECDSA, false, ['sign']);
+  return b64u(await sutil().sign({ name: 'ECDSA', hash: 'SHA-256' }, k, new TextEncoder().encode(textoReto(claseId, reto))));
+}
 /* Solo lo público de la clase (lo que viaja en el enlace y en los archivos) */
-export const clasePublica = c => (c ? { v: c.v, id: c.id, nombre: c.nombre, docente: c.docente, creada: c.creada, pub: c.pub, llave: c.llave } : null);
+export const clasePublica = c => (c ? { v: c.v, id: c.id, nombre: c.nombre, docente: c.docente, creada: c.creada, pub: c.pub, ...(c.firma ? { firma: c.firma } : {}), llave: c.llave, ...(c.aula ? { aula: c.aula } : {}) } : null);
+/* La clase puede usar el aula en vivo si tiene servidor y llave de firma */
+export const tieneAula = c => !!(c?.aula && c.firma && c.llave?.f);
 export const codificarClase = c => b64u(new TextEncoder().encode(JSON.stringify(clasePublica(c))));
 export function decodificarClase(texto) {
   const t = String(texto || '').trim();

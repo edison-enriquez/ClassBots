@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar, cruzarArchivos } from '../metricas/metricas.js';
-import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase } from '../metricas/cifrado.js';
+import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase, aulaPorDefecto, tieneAula } from '../metricas/cifrado.js';
+import { useAulaProfesor } from '../aula/useAula.js';
 import { resaltar } from '../util/resaltar.js';
-import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON } from '../metricas/clasesLocales.js';
+import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON, misClases } from '../metricas/clasesLocales.js';
 
 const CLAVE_SESION = 'classbots-llave-privada';
 const leerLlave = () => leerJSON(sessionStorage, CLAVE_SESION, null);
@@ -42,6 +43,16 @@ export default function PanelProfesor({ onCerrar }) {
       try { nuevos.push({ ...leerArchivo(await f.text()), archivo: f.name }); } catch (e) { errs.push(`${f.name}: ${e.message}`); }
     }
     setErrores(errs);
+    juntar(nuevos);
+  };
+  // Archivos que llegan del aula en vivo: se agrupan para no recalcular el panel con cada uno
+  const cola = useRef([]), tCola = useRef(null);
+  const delAula = arch => {
+    try { cola.current.push({ ...leerArchivo(JSON.stringify(arch)), archivo: 'aula en vivo' }); } catch { return; }
+    if (!tCola.current) tCola.current = setTimeout(() => { tCola.current = null; const l = cola.current; cola.current = []; juntar(l); }, 800);
+  };
+  useEffect(() => () => clearTimeout(tCola.current), []);
+  const juntar = nuevos => {
     setCrudos(prev => {
       // Un estudiante por id: se queda el archivo exportado más recientemente
       // Un archivo por perfil y nombre: el mismo perfil con otro nombre se conserva para alertarlo
@@ -54,15 +65,19 @@ export default function PanelProfesor({ onCerrar }) {
       return [...m.values()];
     });
   };
+  const vivas = misClases().filter(c => abiertas[c.id] && tieneAula(c));
 
   // Descifrar y resumir cada vez que cambian los archivos o la llave
+  const cache = useRef({ llaves: null, m: new WeakMap() });
   useEffect(() => {
     let vivo = true;
     (async () => {
       const lista = [];
       const llaves = { clases: abiertas, rsa: llave?.privada };
+      if (cache.current.llaves !== llaves.clases || cache.current.rsa !== llaves.rsa) cache.current = { llaves: llaves.clases, rsa: llaves.rsa, m: new WeakMap() };
       for (const d of crudos) {
-        const x = await abrirConLlave(d, llaves);
+        let x = cache.current.m.get(d);
+        if (!x) { x = await abrirConLlave(d, llaves); cache.current.m.set(d, x); }
         const cifrado = d.segmentos.length > 0 && x.leidos === 0;
         lista.push({ ...d, ...x, r: resumen({ progreso: d.progreso, metricas: x.metricas }), cifrado, problemas: cifrado ? [d.clase ? `escribe la contraseña de la clase «${d.clase.nombre}»` : 'carga la llave privada del despliegue'] : x.problemas });
       }
@@ -133,6 +148,7 @@ export default function PanelProfesor({ onCerrar }) {
         </header>
 
         <Clases enArchivos={clasesEnArchivos} abiertas={abiertas} onAbrir={abrir} />
+        {vivas.map(c => <AulaEnVivo key={c.id} clase={c} priv={abiertas[c.id]} onArchivo={delAula} />)}
         <details className="profe-avanzado">
           <summary>Avanzado: archivos sin clase (llave del despliegue)</summary>
           <Llave llave={llave} onLlave={l => { setLlave(l); try { if (l) sessionStorage.setItem(CLAVE_SESION, JSON.stringify(l)); else sessionStorage.removeItem(CLAVE_SESION); } catch { /* nada */ } }} />
@@ -344,7 +360,7 @@ function Clases({ enArchivos, abiertas, onAbrir }) {
     <section className="profe-clases">
       <div className="profe-barra">
         <h3>Clases</h3>
-        {!form && <button type="button" className="btn-pri" onClick={() => setForm({ nombre: '', docente: '', contrasena: '', repetir: '' })}>+ Crear una clase</button>}
+        {!form && <button type="button" className="btn-pri" onClick={() => setForm({ nombre: '', docente: '', contrasena: '', repetir: '', aula: aulaPorDefecto() })}>+ Crear una clase</button>}
       </div>
       {form && (
         <form className="profe-form" onSubmit={crear}>
@@ -352,6 +368,10 @@ function Clases({ enArchivos, abiertas, onAbrir }) {
           <label className="campo">Docente<input value={form.docente} onChange={e => setForm({ ...form, docente: e.target.value })} placeholder="Tu nombre" maxLength={60} /></label>
           <label className="campo">Contraseña de la clase<input type="password" required minLength={8} value={form.contrasena} onChange={e => setForm({ ...form, contrasena: e.target.value })} autoComplete="new-password" /></label>
           <label className="campo">Repite la contraseña<input type="password" required minLength={8} value={form.repetir} onChange={e => setForm({ ...form, repetir: e.target.value })} autoComplete="new-password" /></label>
+          <details className="campo-aula"><summary>📡 Aula en vivo: {form.aula ? 'activada' : 'sin servidor'}</summary>
+            <label className="campo">Servidor del aula<input value={form.aula} onChange={e => setForm({ ...form, aula: e.target.value })} placeholder="wss://api.tu-dominio/aula" maxLength={200} /></label>
+            <p className="bienv-nota">Con servidor, verás en vivo el avance y el código de cada estudiante y les podrás enviar mensajes. Vacío: la clase funciona solo con los archivos que entregan.</p>
+          </details>
           <p className="bienv-nota">Con esta contraseña leerás las métricas de la clase en cualquier computador. No se puede recuperar: si la olvidas, no podrás leerlas. Usa una frase larga que no compartas con nadie.</p>
           {error && <p className="avance-alerta">{error}</p>}
           <div className="modal-acc"><button type="button" className="btn-sec" onClick={() => setForm(null)}>Cancelar</button><button type="submit" className="btn-pri" disabled={ocupado}>{ocupado ? 'Creando…' : 'Crear clase'}</button></div>
@@ -387,5 +407,83 @@ function AbrirClase({ clase, onAbrir }) {
       <button type="submit" className="btn-pri" disabled={!pass || ocupado}>{ocupado ? '…' : 'Abrir'}</button>
       {error && <span className="avance-alerta">{error}</span>}
     </form>
+  );
+}
+
+/* ---------- Aula en vivo: quién está trabajando, en qué va, su código y mensajes ---------- */
+const hace = t => {
+  if (!t) return '—';
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 60 ? 'hace un momento' : s < 3600 ? `hace ${Math.round(s / 60)} min` : new Date(t).toLocaleString();
+};
+const ESTADO_PROFE = { conectado: '🟢 en vivo', conectando: '🟡 conectando…', desconectado: '⚪ sin conexión, reintentando', rechazado: '🔴 rechazado', apagado: '' };
+function situacion(a) {
+  if (!a.conectado) return ['desconectado', `⚫ desconectado · ${hace(a.vivoT)}`];
+  if (a.vivo?.fuera) return ['fuera', '🟠 fuera de la ventana'];
+  if (a.vivo?.inactivo) return ['inactivo', '🟡 inactivo'];
+  return ['activo', '🟢 trabajando'];
+}
+function resultadoCorto(r) {
+  if (!r) return 'sin ejecutar';
+  if (r.estado === 'compilacion') return '✖ no compila';
+  if (r.todosOk && r.enviado) return '✔ superado';
+  return `${r.aprobados}/${r.evaluados} pruebas`;
+}
+function AulaEnVivo({ clase, priv, onArchivo }) {
+  const { estado, detalle, alumnos, mensaje } = useAulaProfesor({ clase, priv, onArchivo });
+  const [sel, setSel] = useState(null);
+  const [archivo, setArchivo] = useState(null);
+  const [texto, setTexto] = useState('');
+  const [aviso, setAviso] = useState('');
+  const [, refrescar] = useState(0);
+  useEffect(() => { const t = setInterval(() => refrescar(x => x + 1), 15000); return () => clearInterval(t); }, []);
+  const lista = Object.entries(alumnos).filter(([, a]) => a.vivo).map(([id, a]) => ({ id, ...a }))
+    .sort((a, b) => (b.conectado - a.conectado) || a.vivo.perfil.nombre.localeCompare(b.vivo.perfil.nombre));
+  const enLinea = lista.filter(a => a.conectado).length;
+  const elegido = lista.find(a => a.id === sel);
+  const v = elegido?.vivo;
+  const nombres = v ? Object.keys(v.archivos || {}) : [];
+  const actual = archivo && nombres.includes(archivo) ? archivo : v?.activo;
+  const enviar = e => {
+    e.preventDefault();
+    if (!texto.trim()) return;
+    const para = sel || '*';
+    if (mensaje(para, texto.trim())) { setAviso(`✔ Enviado a ${elegido ? elegido.vivo.perfil.nombre : 'toda la clase'}`); setTexto(''); } else setAviso('Sin conexión con el aula: no se envió.');
+    setTimeout(() => setAviso(''), 4000);
+  };
+  return (
+    <section className="aula-vivo">
+      <div className="profe-barra">
+        <h3>📡 Aula en vivo · {clase.nombre}</h3>
+        <span className="aula-estado">{ESTADO_PROFE[estado]}{detalle ? `: ${detalle}` : ''}</span>
+        <span className="bienv-nota">{enLinea} conectado{enLinea === 1 ? '' : 's'} · {lista.length} en total</span>
+      </div>
+      {lista.length === 0
+        ? <p className="bienv-nota">{estado === 'conectado' ? 'Aún no hay estudiantes. Cuando abran el enlace de la clase aparecerán aquí.' : 'Conectando con el servidor del aula…'}</p>
+        : <div className="aula-grilla">{lista.map(a => {
+            const [cls, txt] = situacion(a);
+            return (
+              <button key={a.id} type="button" className={`aula-tarjeta ${cls}${sel === a.id ? ' sel' : ''}`} onClick={() => { setSel(sel === a.id ? null : a.id); setArchivo(null); }} aria-pressed={sel === a.id}>
+                <strong>{a.vivo.perfil.nombre}</strong>
+                <small>{a.vivo.perfil.grupo}</small>
+                <span className="aula-cap">{a.vivo.nivel.etiqueta} · {a.vivo.nivel.titulo}</span>
+                <span className="aula-linea"><span>{txt}</span></span>
+                <span className="aula-linea"><span className={a.vivo.errores ? 'on-err' : ''}>● {a.vivo.errores}</span> <span>{resultadoCorto(a.vivo.resultado)}</span> <span>{a.vivo.capitulos} cap.</span></span>
+              </button>
+            );
+          })}</div>}
+      {elegido && (
+        <div className="aula-detalle">
+          <h4>{v.perfil.nombre} <small>· {v.nivel.etiqueta} {v.nivel.titulo} ({v.nivel.concepto}) · actualizado {hace(elegido.vivoT)}{v.linea ? ` · línea ${v.linea}` : ''}</small></h4>
+          <div className="tabs-guia" role="tablist">{nombres.map(n => <button key={n} type="button" role="tab" aria-selected={n === actual} onClick={() => setArchivo(n)}>{n}{n === v.activo ? ' ✎' : ''}</button>)}</div>
+          <pre className="ejemplo"><code dangerouslySetInnerHTML={{ __html: resaltar(v.archivos?.[actual] || '') }} /></pre>
+        </div>
+      )}
+      <form className="aula-mensaje" onSubmit={enviar}>
+        <input value={texto} onChange={e => setTexto(e.target.value)} maxLength={500} placeholder={elegido ? `Mensaje para ${elegido.vivo.perfil.nombre}…` : 'Mensaje para toda la clase…'} aria-label="Mensaje" />
+        <button type="submit" className="btn-pri" disabled={!texto.trim() || estado !== 'conectado'}>{elegido ? 'Enviar' : 'Enviar a todos'}</button>
+        {aviso && <span className={aviso.startsWith('✔') ? 'avance-ok' : 'avance-alerta'}>{aviso}</span>}
+      </form>
+    </section>
   );
 }

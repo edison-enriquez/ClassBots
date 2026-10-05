@@ -595,3 +595,31 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
 .acceso-docente { width: min(480px, 100%); align-items: stretch; text-align: left; }
 .acceso-form { display: flex; flex-direction: column; gap: 10px; }
 .acceso-form select { font: 14px var(--f-body, inherit); padding: 8px; color: var(--ink); background: var(--negro); border: 2px solid var(--line); }
+
+/* ---------- Aula en vivo ---------- */
+.aula-vivo { margin: 12px 0; padding: 10px; border: 2px solid var(--info); background: rgba(124,212,255,.05); }
+.aula-vivo h3 { margin: 0; }
+.aula-estado { font-size: 13px; color: var(--info); }
+.aula-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-top: 8px; }
+.aula-tarjeta { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-left-width: 6px; font: 13px/1.4 var(--f-body); cursor: pointer; min-width: 0; }
+.aula-tarjeta strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aula-tarjeta small, .aula-cap { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aula-tarjeta.activo { border-left-color: var(--go); }
+.aula-tarjeta.inactivo { border-left-color: var(--warn); }
+.aula-tarjeta.fuera { border-left-color: #ff9e64; }
+.aula-tarjeta.desconectado { border-left-color: var(--gutter); opacity: .65; }
+.aula-tarjeta.sel, .aula-tarjeta:hover { border-color: var(--info); }
+.aula-tarjeta:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.aula-linea { display: flex; flex-wrap: wrap; gap: 8px; }
+.aula-linea .on-err { color: var(--err); }
+.aula-detalle { margin-top: 10px; }
+.aula-detalle h4 { margin: 0 0 6px; font-size: 15px; }
+.aula-detalle h4 small { color: var(--dim); font-weight: normal; }
+.aula-detalle pre { max-height: 360px; overflow: auto; }
+.aula-mensaje { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.aula-mensaje input { flex: 1 1 240px; min-width: 0; font: 14px var(--f-body); padding: 8px; color: var(--ink); background: var(--negro); border: 2px solid var(--line); }
+.aula-aviso { font-size: 13px; color: var(--dim); border-left: 3px solid var(--info); padding: 4px 8px; margin: 6px 0; text-align: left; }
+.campo-aula { text-align: left; font-size: 13px; }
+.campo-aula summary { cursor: pointer; color: var(--info); }
+.campo-aula[open] summary { margin-bottom: 6px; }
+.mensaje-profe h2 { font-size: 18px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }

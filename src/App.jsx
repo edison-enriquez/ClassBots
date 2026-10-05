@@ -23,6 +23,7 @@ import { profeEnSesion, ponerProfeEnSesion } from './metricas/clasesLocales.js';
 import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo, exportar, descargar, nombreArchivo, registrarEvento } from './metricas/metricas.js';
 import { decodificarClase, clasePublica } from './metricas/cifrado.js';
 import { useSellado } from './metricas/sellado.js';
+import { useAulaEstudiante } from './aula/useAula.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
 
@@ -217,6 +218,7 @@ export default function App() {
         : { ...p, hechos: [...p.hechos, nivel.id] });
       const espera = Math.min(6000, 400 + (r.animacion?.frames.length || 0) * 260);
       setTimeout(() => setExito({ nuevo, esMision, ultimo: !!nivel.ultimo, recompensa: cierra }), espera);
+      setTimeout(aula.enviarArchivo, 1500);
     }
   };
   const ejecutarRef = useRef(ejecutar);
@@ -249,6 +251,23 @@ export default function App() {
   };
   const nErr = diag.lista.filter(p => p.sev === 'err').length, nWarn = diag.lista.length - nErr;
   const modo = prog.asistente || 'basico';
+
+  // Aula en vivo: si la clase tiene servidor, el profesor ve el avance y el código mientras se trabaja
+  const [mensajeProfe, setMensajeProfe] = useState(null);
+  const aula = useAulaEstudiante({
+    clase: prog.clase, perfilId: prog.perfil?.id, activo: !!prog.perfil && !profe,
+    estadoVivo: () => ({
+      perfil: { id: prog.perfil?.id, nombre: prog.perfil?.nombre, grupo: prog.perfil?.grupo || '' },
+      nivel: { id: nivel.id, titulo: nivel.titulo, concepto: nivel.concepto, etiqueta: esMision ? `${misionDeNivel.corto} · paso ${nivel.enMundo + 1}` : `${nivel.mundo}.${nivel.enMundo + 1}` },
+      capitulos: prog.hechos.length, pasos: pasosHechos.length,
+      archivos: cod.files, activo: cod.activo, linea: cursor[0],
+      errores: nErr, avisos: nWarn,
+      resultado: resultado && { estado: resultado.estado, aprobados: resultado.aprobados ?? 0, evaluados: resultado.evaluados ?? 0, enviado, todosOk: !!resultado.todosOk },
+      fuera: salio.current != null, inactivo: Date.now() - actividad.current > 120000,
+    }),
+    archivoActual: async () => { const sobre = await sellar(); return exportar(prog, [...(prog.segmentos || []), sobre]); },
+    onMensaje: m => setMensajeProfe(m),
+  });
 
   return (
     <div className="app">
@@ -380,7 +399,7 @@ export default function App() {
 
       {!prog.perfil && <Bienvenida prog={prog} onClase={c => setProg(p => ({ ...p, clase: clasePublica(c) }))}
         onListo={perfil => { setProg(p => ({ ...p, perfil })); medir(m => registrarEvento(m, { tipo: 'alta', nombre: perfil.nombre, grupo: perfil.grupo, perfilId: perfil.id, claseId: prog.clase?.id || null })); }} />}
-      {avance && prog.perfil && <MiAvance prog={prog} sellar={sellar} onCerrar={() => setAvance(false)} onClase={unirseAClase}
+      {avance && prog.perfil && <MiAvance prog={prog} sellar={sellar} aula={aula.estado} onCerrar={() => setAvance(false)} onClase={unirseAClase}
         onPerfil={perfil => { medir(m => registrarEvento(m, { tipo: 'perfil', de: prog.perfil.nombre, a: perfil.nombre, grupoDe: prog.perfil.grupo || '', grupoA: perfil.grupo || '' })); setProg(p => ({ ...p, perfil })); }} />}
       {claseNueva && prog.perfil && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="clase-t">
@@ -399,6 +418,15 @@ export default function App() {
         onFallo={c => medir(m => registrarEvento(m, { tipo: 'acceso-fallido', clase: c.nombre, claseId: c.id }))}
         onListo={(c, accion) => { setProfe(true); setAcceso(false); medir(m => registrarEvento(m, { tipo: 'profesor', accion, clase: c.nombre, claseId: c.id })); avisar(`Modo profesor activado · clase «${c.nombre}».`); }} />}
 
+      {mensajeProfe && (
+        <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="msj-t">
+          <div className="modal rpg-ventana mensaje-profe">
+            <p className="mapa-kicker">MENSAJE DE TU PROFESOR · {new Date(mensajeProfe.enviado).toLocaleTimeString()}</p>
+            <h2 id="msj-t">📣 {mensajeProfe.texto}</h2>
+            <div className="modal-acc"><button type="button" className="btn-pri" autoFocus onClick={() => setMensajeProfe(null)}>Entendido</button></div>
+          </div>
+        </div>
+      )}
       {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={MISIONES} />}
 
       {exito && (

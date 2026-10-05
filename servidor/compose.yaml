@@ -1,0 +1,22 @@
+# docker compose up -d --build   (como el usuario sin privilegios, con Docker rootless)
+services:
+  aula:
+    build: .
+    image: classbots-aula
+    restart: unless-stopped
+    # Solo escucha en la máquina: el proxy con HTTPS (Nginx o Caddy) le pasa el tráfico
+    ports: ["127.0.0.1:8787:8787"]
+    environment:
+      ORIGENES: https://classbots.eehub.ing
+      DIAS_RETENCION: "180"
+      MAX_ALUMNOS: "300"
+    volumes: [aula-datos:/datos]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 100
+    logging: { driver: local, options: { max-size: 10m, max-file: "3" } }
+volumes:
+  aula-datos: {}

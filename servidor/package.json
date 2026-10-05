@@ -1,0 +1,16 @@
+{
+  "name": "classbots-aula",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Servidor del aula en vivo de ClassBots (WebSocket + SQLite)",
+  "type": "module",
+  "main": "servidor.js",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node servidor.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

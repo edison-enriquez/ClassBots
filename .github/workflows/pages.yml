@@ -9,7 +9,17 @@ permissions:
   id-token: write
 concurrency: { group: pages, cancel-in-progress: true }
 jobs:
+  servidor:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: servidor } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci
+      - run: npm test
   build:
+    needs: servidor
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +31,7 @@ jobs:
         env:
           VITE_AI_URL: ${{ vars.VITE_AI_URL }}
           VITE_LLAVE_PROFESOR: ${{ vars.VITE_LLAVE_PROFESOR }}
+          VITE_AULA_URL: ${{ vars.VITE_AULA_URL }}
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
   deploy:
