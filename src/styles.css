@@ -595,3 +595,22 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
 .acceso-docente { width: min(480px, 100%); align-items: stretch; text-align: left; }
 .acceso-form { display: flex; flex-direction: column; gap: 10px; }
 .acceso-form select { font: 14px var(--f-body, inherit); padding: 8px; color: var(--ink); background: var(--negro); border: 2px solid var(--line); }
+
+/* ---------- UML: zoom y modo expandido ---------- */
+.uml-vista { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.uml-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.uml-zoom { font: 12px var(--f-code); color: var(--dim); min-width: 4ch; text-align: center; }
+.uml-barra .btn-mini[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+.uml-expandir { margin-left: auto; }
+.uml-vista .uml-svg { overflow: auto; cursor: grab; max-height: 60vh; }
+.uml-vista .uml-svg:active { cursor: grabbing; }
+.uml-fuera { margin: 0; color: var(--dim); font-size: 13px; }
+.uml-expandido { position: fixed; inset: 0; z-index: 60; display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 340px); gap: 12px; padding: 12px; background: var(--bg); }
+.uml-expandido.solo { grid-template-columns: 1fr; }
+.uml-expandido .uml-vista.grande { min-height: 0; }
+.uml-expandido .uml-vista.grande .uml-svg { flex: 1; max-height: none; min-height: 0; }
+.uml-lateral { overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; padding-right: 4px; }
+@media (max-width: 820px) {
+  .uml-expandido { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+  .uml-lateral { max-height: 30vh; }
+}
