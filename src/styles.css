@@ -207,7 +207,7 @@ kbd { font-family: var(--f-code); font-size: .72rem; border: 1px solid currentCo
 .eventos { list-style: none; margin: 0; padding: 0; font: 12.5px/1.75 var(--f-code); background: var(--code); border: 2px solid var(--negro); }
 .eventos li { display: grid; grid-template-columns: 3em 3.4em minmax(0, 1fr); gap: 8px; padding: 0 10px; border-bottom: 1px solid rgba(59,52,104,.6); }
 .eventos .n { color: var(--gutter); text-align: right; font-variant-numeric: tabular-nums; }
-.op { font-weight: 600; } .op-new { color: var(--go); } .op-set { color: var(--info); } .op-call { color: var(--gold); } .op-out { color: var(--s-str); }
+.op { font-weight: 600; } .op-throw { color: var(--err); } .op-catch { color: var(--go); } .op-finally { color: var(--info); } .op-add { color: var(--s-num); } .op-new { color: var(--go); } .op-set { color: var(--info); } .op-call { color: var(--gold); } .op-out { color: var(--s-str); }
 .eventos .val { overflow-wrap: anywhere; }
 
 /* UML */

@@ -1,7 +1,14 @@
 /* Motor del taller: analiza un subconjunto de Java, lo traduce a JS y registra eventos. */
 const PRIM=new Set(['int','double','float','long','short','byte','boolean','char','String','void']);
 const INTS=new Set(['int','long','short','byte']);
-const CONOCIDOS=new Set(['ArrayList','List','Object','Integer','Double','Boolean','Math','Comparable','Collections']);
+/* Excepciones de Java que el taller conoce (hijo → padre) */
+const EXC_PADRE={Throwable:null,Exception:'Throwable',RuntimeException:'Exception',IllegalArgumentException:'RuntimeException',IllegalStateException:'RuntimeException',ArithmeticException:'RuntimeException',NullPointerException:'RuntimeException',IndexOutOfBoundsException:'RuntimeException',ClassCastException:'RuntimeException',NumberFormatException:'IllegalArgumentException',UnsupportedOperationException:'RuntimeException'};
+const CONOCIDOS=new Set(['ArrayList','List','Object','Integer','Double','Boolean','Math','Comparable','Collections',...Object.keys(EXC_PADRE)]);
+/* Cadena de ancestros de una clase, pasando de las clases del estudiante a las de Java */
+function ancestros(clases,n){const r=[];let x=n,k=0;while(x&&k++<40&&!r.includes(x)){r.push(x);x=clases[x]?(clases[x].__padre||(clases[x].hereda&&tipoBase(clases[x].hereda) in EXC_PADRE?tipoBase(clases[x].hereda):null)):(EXC_PADRE[x]??null);}return r;}
+const esLanzable=(clases,n)=>ancestros(clases,n).includes('Throwable');
+const esComprobada=(clases,n)=>{const a=ancestros(clases,n);return a.includes('Throwable')&&!a.includes('RuntimeException');};
+const esSubtipoExc=(clases,a,b)=>ancestros(clases,a).includes(b);
 const PALABRAS=new Set(['return','new','else','throw','case','final','var','break','continue','do','this','super','if','for','while','switch','default','static','public','private','protected','class','import','package']);
 
 class JavaError extends Error{constructor(msg){super(msg);this.java=true;}}
@@ -93,6 +100,7 @@ function parsePrograma(files){
     const base=tipoBase(c.hereda),p=clases[base];
     if(c.hereda.includes(','))errores.push(E(c.archivo,c.linea,'Una clase solo puede extender una clase base.'));
     else if(base==='Object')c.__padre=null;
+    else if(!p&&base in EXC_PADRE)c.__padre=base;
     else if(!p)errores.push(E(c.archivo,c.linea,`No encuentro la clase base ${base}. Revisa su nombre o crea ${base}.java.`));
     else if(p.tipo==='interface')errores.push(E(c.archivo,c.linea,`${base} es una interfaz: una clase la implementa con implements, no con extends.`));
     else if(p.final)errores.push(E(c.archivo,c.linea,`${base} es final: no se puede extender.`));
@@ -248,6 +256,7 @@ function parsePrograma(files){
         const reL=/(?<![\w$.)\]])([a-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
         while((q=reL.exec(b.cuerpoBlank))){
           const t=tipoVar(q[1]);if(!t||!clases[t]||UNIVERSALES.has(q[2]))continue;
+          if(esLanzable(clases,t)&&['getMessage','printStackTrace','getCause'].includes(q[2]))continue;
           const ms=metodosDeTipo(t);if(ms.has(q[2]))continue;
           const conElMetodo=Object.values(clases).filter(x=>x!==clases[t]&&metodosDeTipo(x.nombre).has(q[2])&&(x.tipo==='interface'?false:(()=>{let y=x;while(y){if(y.nombre===t||(y.__interfaces||[]).includes(t))return true;y=y.__padre&&clases[y.__padre];}return false;})()));
           const sug=conElMetodo[0];
@@ -279,8 +288,101 @@ function parsePrograma(files){
       for(const mt of o.metodos.filter(x=>x.vis==='private'))revisar(mt.nombre,true,`${mt.nombre}() es private en ${o.nombre}.`);
     }
   }
+  revisarExcepciones(clases,errores,conocido);
   errores.sort((a,b)=>a.archivo===b.archivo?a.linea-b.linea:a.archivo<b.archivo?-1:1);
   return {clases,errores};
+}
+
+/* Bloques try/catch/finally de un cuerpo (sobre el texto con comentarios y cadenas en blanco) */
+function bloquesTry(b){
+  const out=[];const re=/\btry\s*\{/g;let m;
+  while((m=re.exec(b))){
+    const ini=m.index+m[0].length-1,fin=llaveFinal(b,ini);if(fin<0)continue;
+    const t={pos:m.index,ini,fin,catches:[],fn:null};let k=fin+1;
+    for(;;){
+      const r=/^\s*catch\s*\(([^()]*)\)\s*\{/.exec(b.slice(k));if(!r)break;
+      const dentro=r[1].replace(/\s+/g,' ').trim(),mm=/^(?:final\s+)?([\w$.|\s]+?)\s+([A-Za-z_$][\w$]*)$/.exec(dentro);
+      const abre=k+r[0].length-1,cierra=llaveFinal(b,abre);
+      t.catches.push({tipos:mm?mm[1].split('|').map(x=>x.trim()).filter(Boolean):[],nombre:mm?mm[2]:null,pos:k+r[0].search(/catch/),abre,cierra});
+      if(cierra<0)break;k=cierra+1;
+    }
+    const f=/^\s*finally\s*\{/.exec(b.slice(k));
+    if(f){const abre=k+f[0].length-1;t.fn={pos:k+f[0].search(/finally/),abre,cierra:llaveFinal(b,abre)};}
+    out.push(t);
+  }
+  return out;
+}
+/* Reglas de Java para excepciones: catch bien formados y en orden, throw solo de excepciones,
+   y las excepciones comprobadas (checked) se atrapan o se declaran con throws */
+function revisarExcepciones(clases,errores,conocido){
+  const lanzadores=new Map();// nombre de método → [{clase,m}] que declaran excepciones comprobadas
+  for(const c of Object.values(clases))for(const m of [...c.metodos,...c.ctors.map(k=>({...k,nombre:'<init>'+c.nombre}))]){
+    const ch=(m.lanza||[]).filter(t=>esComprobada(clases,tipoBase(t)));
+    if(ch.length){const k=m.nombre;if(!lanzadores.has(k))lanzadores.set(k,[]);lanzadores.get(k).push({clase:c.nombre,m,ch});}
+  }
+  const esDe=(t,base)=>{let x=clases[t],k=0;while(x&&k++<40){if(x.nombre===base||(x.__interfaces||[]).includes(base))return true;x=x.__padre&&clases[x.__padre];}return false;};
+  for(const c of Object.values(clases)){
+    const lineaDe=(b,idx)=>b.linea+lineaEn(b.cuerpoBlank,idx)-1;
+    for(const m of [...c.metodos,...c.ctors])for(const t of m.lanza||[]){
+      const b=tipoBase(t);
+      if(!conocido(b))errores.push(E(c.archivo,m.linea,`No encuentro la excepción ${b} de throws. ¿Existe esa clase o está mal escrita?`));
+      else if(!esLanzable(clases,b))errores.push(E(c.archivo,m.linea,`${b} no es una excepción: throws solo admite clases que extienden Exception.`));
+    }
+    for(const b of [...c.ctors,...c.metodos.filter(x=>!x.abstracto)]){
+      const B=b.cuerpoBlank;if(!B)continue;
+      const nombreB=b.nombre?`${b.nombre}()`:`el constructor de ${c.nombre}`;
+      const trys=bloquesTry(B);
+      const nCatch=(B.match(/\bcatch\s*\(/g)||[]).length,nCatchOk=trys.reduce((s,t)=>s+t.catches.length,0);
+      if(nCatch>nCatchOk){const r=/\bcatch\s*\(/.exec(B);errores.push(E(c.archivo,lineaDe(b,r.index),'Este catch no va pegado a un try { ... }: cada catch va justo después del bloque try o de otro catch.'));}
+      for(const t of trys){
+        if(!t.catches.length&&!t.fn)errores.push(E(c.archivo,lineaDe(b,t.pos),'Un try necesita al menos un catch (...) { ... } o un finally { ... } después.'));
+        t.catches.forEach((ca,j)=>{
+          if(!ca.nombre||!ca.tipos.length){errores.push(E(c.archivo,lineaDe(b,ca.pos),'El catch necesita el tipo de la excepción y un nombre, por ejemplo: catch (IllegalArgumentException e)'));return;}
+          for(const tp of ca.tipos){
+            if(!conocido(tp))errores.push(E(c.archivo,lineaDe(b,ca.pos),`No encuentro la excepción ${tp}. ¿Existe esa clase o está mal escrita?`));
+            else if(!esLanzable(clases,tp))errores.push(E(c.archivo,lineaDe(b,ca.pos),`${tp} no es una excepción: catch solo atrapa clases que extienden Exception.`));
+            else for(const prev of t.catches.slice(0,j))for(const pt of prev.tipos)if(esSubtipoExc(clases,tp,pt)){
+              errores.push(E(c.archivo,lineaDe(b,ca.pos),`${tp} ya la atrapa el catch (${pt}) de arriba, así que este nunca se usaría. Pon primero los catch más específicos y al final los más generales.`));}
+          }
+        });
+      }
+      // ¿Una excepción comprobada en la posición p queda atrapada o declarada?
+      const manejada=(p,T)=>trys.some(t=>t.ini<p&&p<t.fin&&t.catches.some(ca=>ca.tipos.some(x=>esSubtipoExc(clases,T,x))))||(b.lanza||[]).some(x=>esSubtipoExc(clases,T,tipoBase(x)));
+      const reT=/\bthrow\s+new\s+([A-Za-z_$][\w$]*)\s*\(/g;let q;
+      while((q=reT.exec(B))){
+        const T=q[1];
+        if(!conocido(T))continue;
+        if(!esLanzable(clases,T)){errores.push(E(c.archivo,lineaDe(b,q.index),`Con throw solo se lanzan excepciones: ${T} no extiende Exception.`));continue;}
+        if(esComprobada(clases,T)&&!manejada(q.index,T))errores.push(E(c.archivo,lineaDe(b,q.index),`${T} es una excepción comprobada (checked): atrápala con try/catch o declara «throws ${T}» en ${nombreB}.`));
+      }
+      if(/\bthrow\s*;/.test(B)){const r=/\bthrow\s*;/.exec(B);errores.push(E(c.archivo,lineaDe(b,r.index),'throw necesita una excepción: throw new IllegalArgumentException("motivo");'));}
+      if(!lanzadores.size)continue;
+      // Llamadas a métodos (y constructores) que declaran excepciones comprobadas
+      const tipos=new Map();
+      for(const p of b.params||[])tipos.set(p.nombre,tipoBase(p.tipo));
+      for(const d of B.matchAll(/(?<![\w$.])([A-Z][\w$]*)(?:\s*<[^<>]*>)?\s+([a-z_$][\w$]*)\s*(?=[=;:,)])/g))tipos.set(d[2],d[1]);
+      const tipoVar=n=>n==='this'?c.nombre:tipos.get(n)||tipoBase((c.__campos||c.campos).find(f=>f.nombre===n)?.tipo||'')||null;
+      const nArgs=i=>{const a=B.indexOf('(',i),z=parentesisFinal(B,a);return B.slice(a+1,z).trim()?partirComas(B.slice(a+1,z)).length:0;};
+      const reL=/(?<![\w$])(?:(new)\s+([A-Z][\w$]*)|(?:([A-Za-z_$][\w$]*)\s*\.\s*)?([a-z_$][\w$]*))\s*\(/g;
+      while((q=reL.exec(B))){
+        if(!q[1]&&q[3]==null&&/[.]\s*$/.test(B.slice(Math.max(0,q.index-3),q.index)))continue;
+        const nombre=q[1]?'<init>'+q[2]:q[4];
+        if(!q[1]&&PALABRAS.has(nombre))continue;
+        let cands=lanzadores.get(nombre);if(!cands)continue;
+        const n=nArgs(q.index);
+        cands=cands.filter(x=>x.m.params.length===n);
+        if(!q[1]){
+          const rec=q[3];
+          if(rec==null)cands=cands.filter(x=>esDe(c.nombre,x.clase));
+          else if(clases[rec]&&!tipos.has(rec))cands=cands.filter(x=>esDe(rec,x.clase));
+          else{const t=tipoVar(rec);if(t&&clases[t])cands=cands.filter(x=>esDe(t,x.clase)||esDe(x.clase,t));else if(cands.length>1)continue;}
+        }
+        const x=cands[0];if(!x)continue;
+        const falta=x.ch.map(tipoBase).find(T=>!manejada(q.index,T));
+        if(falta)errores.push(E(c.archivo,lineaDe(b,q.index),`${q[1]?`El constructor de ${q[2]}`:`${nombre}()`} puede lanzar ${falta} (lo declara con throws). Llámalo dentro de un try/catch que la atrape, o declara «throws ${falta}» en ${nombreB}.`));
+      }
+    }
+  }
 }
 
 function miembros(c,clean,blank,ini,fin,archivo,L,errores){
@@ -302,12 +404,12 @@ function miembros(c,clean,blank,ini,fin,archivo,L,errores){
 }
 function campo(c,texto,crudo,linea,errores){
   const A=c.archivo;
-  const sig=/^((?:(?:public|private|protected|static|final|abstract|default)\s+)*)([A-Za-z_$][\w$]*(?:\s*<[^>]*>)?(?:\s*\[\s*\])*)\s+([A-Za-z_$][\w$]*)\s*\(([^()]*)\)$/.exec(texto);
+  const sig=/^((?:(?:public|private|protected|static|final|abstract|default)\s+)*)([A-Za-z_$][\w$]*(?:\s*<[^>]*>)?(?:\s*\[\s*\])*)\s+([A-Za-z_$][\w$]*)\s*\(([^()]*)\)(?:\s*throws\s+([\w\s,.]+))?$/.exec(texto);
   if(sig&&!PALABRAS.has(sig[2])){
     if(c.tipo==='interface'||/\babstract\b/.test(sig[1])){
       const params=[];
       for(const p of partirComas(sig[4])){const m=/^(?:final\s+)?(\S+(?:\s*<[^>]*>)?)\s+([A-Za-z_$][\w$]*)$/.exec(p);if(!m){errores.push(E(A,linea,`El parámetro «${p}» necesita tipo y nombre.`));return;}params.push({tipo:m[1].replace(/\s+/g,''),nombre:m[2]});}
-      c.metodos.push({nombre:sig[3],ret:sig[2].replace(/\s+/g,''),params,vis:c.tipo==='interface'?'public':visDe(sig[1]),abstracto:true,estatico:false,linea,cuerpo:'',cuerpoBlank:''});
+      c.metodos.push({nombre:sig[3],ret:sig[2].replace(/\s+/g,''),params,vis:c.tipo==='interface'?'public':visDe(sig[1]),abstracto:true,estatico:false,linea,cuerpo:'',cuerpoBlank:'',lanza:sig[5]?partirComas(sig[5]).map(x=>x.trim()):[]});
       return;
     }
     errores.push(E(A,linea,`Al método ${sig[3]}() le falta el cuerpo: escribe { ... } en lugar de ;`));return;
@@ -326,7 +428,7 @@ function campo(c,texto,crudo,linea,errores){
 }
 function metodo(c,h,crudo,cuerpo,cuerpoBlank,lineaCuerpo,linea,errores){
   const A=c.archivo;
-  const r=/^((?:(?:public|private|protected|static|final|abstract|synchronized|default)\s+)*)(?:([A-Za-z_$][\w$]*(?:\s*<[^>]*>)?(?:\s*\[\s*\])*)\s+)?([A-Za-z_$][\w$]*)\s*\(([^()]*)\)(?:\s*throws\s+[\w\s,.]+)?$/.exec(h);
+  const r=/^((?:(?:public|private|protected|static|final|abstract|synchronized|default)\s+)*)(?:([A-Za-z_$][\w$]*(?:\s*<[^>]*>)?(?:\s*\[\s*\])*)\s+)?([A-Za-z_$][\w$]*)\s*\(([^()]*)\)(?:\s*throws\s+([\w\s,.]+))?$/.exec(h);
   if(!r){
     const primera=crudo.split('\n').find(x=>x.trim());
     if(crudo.trim().includes('\n')&&primera&&!/[({]\s*$/.test(primera)&&!/\(/.test(primera))errores.push(E(A,linea,'Parece que falta ; al final de esta línea.'));
@@ -342,7 +444,7 @@ function metodo(c,h,crudo,cuerpo,cuerpoBlank,lineaCuerpo,linea,errores){
     params.push({tipo:m[1].replace(/\s+/g,''),nombre:m[2]});
   }
   lintCuerpo(cuerpoBlank,lineaCuerpo,A,errores);
-  const base={params,vis:c.tipo==='interface'?'public':visDe(mods),cuerpo,cuerpoBlank,linea};
+  const base={params,vis:c.tipo==='interface'?'public':visDe(mods),cuerpo,cuerpoBlank,linea,lanza:r[5]?partirComas(r[5]).map(x=>x.trim()):[]};
   if(!tipo){
     if(nombre===c.nombre)c.ctors.push(base);
     else errores.push(E(A,linea,`El método ${nombre} necesita un tipo de retorno. Si no devuelve nada, usa void: public void ${nombre}()`));
@@ -381,9 +483,46 @@ function envolverEnteros(code,enteros,retEntero){
   }
   return out+code.slice(i);
 }
+/* throw x;  →  throw __rt.lanzado(x);  (registra el evento para la escena) */
+function traducirThrow(code){
+  let out='',i=0,m;const re=/\bthrow\s+/g;
+  while((m=re.exec(code))){
+    const ini=m.index+m[0].length;let d=0,k=ini;
+    for(;k<code.length;k++){const ch=code[k];if('([{'.includes(ch))d++;else if(')]}'.includes(ch))d--;else if(ch===';'&&d<=0)break;}
+    out+=code.slice(i,m.index)+`throw __rt.lanzado(${code.slice(ini,k)})`;i=k;re.lastIndex=k;
+  }
+  return out+code.slice(i);
+}
+/* try { } catch (A | B e) { } catch (C e) { } finally { }  →  un solo catch de JavaScript que elige
+   el bloque según la jerarquía de excepciones; lo que no se atrapa se vuelve a lanzar */
+let __nTry=0;
+function traducirTry(code){
+  for(;;){
+    const ms=[...code.matchAll(/\btry\s*\{/g)];if(!ms.length)return code;
+    const m=ms[ms.length-1],ini=m.index+m[0].length-1,fin=llaveFinal(code,ini);if(fin<0)return code;
+    const id=++__nTry,partes=[];let k=fin+1,r;
+    while((r=/^\s*catch\s*\(([^()]*)\)\s*\{/.exec(code.slice(k)))){
+      const dentro=r[1].replace(/\s+/g,' ').trim(),mm=/^(?:final\s+)?([\w$.|\s]+?)\s+([A-Za-z_$][\w$]*)$/.exec(dentro);
+      const abre=k+r[0].length-1,cierra=llaveFinal(code,abre);if(!mm||cierra<0)break;
+      partes.push({tipos:mm[1].split('|').map(x=>x.trim()),nombre:mm[2],cuerpo:code.slice(abre+1,cierra)});k=cierra+1;
+    }
+    let fn=null;const f=/^\s*finally\s*\{/.exec(code.slice(k));
+    if(f){const abre=k+f[0].length-1,cierra=llaveFinal(code,abre);fn=code.slice(abre+1,cierra);k=cierra+1;}
+    let js=`__TRY__{${code.slice(ini+1,fin)}}`;
+    if(partes.length){
+      js+=` catch(__x${id}){ const __e${id}=__rt.excepcion(__x${id});\n`;
+      partes.forEach((p,j)=>{js+=`${j?'else ':''}if(__e${id}&&__rt.atrapa(__e${id},${JSON.stringify(p.tipos)})){ __rt.atrapado(__e${id},${JSON.stringify(p.tipos.join(' | '))}); ${p.tipos[0]} ${p.nombre} = __e${id};${p.cuerpo}}\n`;});
+      js+=`else throw __x${id};\n}`;
+    }
+    if(fn!=null)js+=` finally { __rt.finalmente();${fn}}`;
+    code=code.slice(0,m.index)+js+code.slice(k);
+  }
+}
 function traducir(code,c,locales,self,retTipo){
   const lits=[];
   code=code.replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g,m=>{lits.push(m);return `__S${lits.length-1}__`;});
+  if(/\bthrow\b/.test(code))code=traducirThrow(code);
+  if(/\btry\b/.test(code))code=traducirTry(code).replace(/__TRY__/g,'try');
   const loc=new Set(locales);const enteros=new Set();
   code=code.replace(RE_DECL,(m,pre,tipo,nombre)=>{loc.add(nombre);if(INTS.has(tipo.trim()))enteros.add(nombre);return `${pre}let ${nombre}`;});
   code=envolverEnteros(code,enteros,retTipo&&INTS.has(retTipo));
@@ -451,7 +590,8 @@ function genClase(c,modelo){
   let s=`class ${c.nombre} {\nstatic [Symbol.hasInstance](o){ return __rt.esInstancia(o,${JSON.stringify(c.nombre)}); }\n`;
   for(const f of est)s+=`static ${f.nombre} = ${f.init!=null?traducir(f.init,c,[],c.nombre):defVal(f.tipo)};\n`;
   // Orden de Java: valores por defecto, constructor del padre (super), inicializadores propios y cuerpo del constructor.
-  s+=`constructor(...__a){\n${inst.map(f=>`this.${f.nombre}=${defVal(f.tipo)};`).join('')}\nconst __self=__rt.track(this,${JSON.stringify(c.nombre)});\n${c.nombre}.__ctor(__self,...__a);\nreturn __self;\n}\n`;
+  const lanzable=esLanzable(modelo.clases,c.nombre);
+  s+=`constructor(...__a){\n${lanzable?'this.__msg=null;':''}${inst.map(f=>`this.${f.nombre}=${defVal(f.tipo)};`).join('')}\nconst __self=__rt.track(this,${JSON.stringify(c.nombre)});\n${c.nombre}.__ctor(__self,...__a);\nreturn __self;\n}\n`;
   const ctors=c.ctors.length?c.ctors:[{params:[],cuerpo:'{}',cuerpoBlank:'{}'}];
   const inits=c.campos.filter(f=>!f.estatico&&f.init!=null).map(f=>`__self.${f.nombre}=(${traducir(f.init,c,[],'__self')});\n`).join('');
   s+='static __ctor(__self,...__a){ switch(__a.length){\n';
@@ -476,14 +616,22 @@ function genClase(c,modelo){
     s+=porAridad(g,m=>{const ns=m.params.map(p=>p.nombre),d=declaracion(m);return `let [${ns.join(',')}]=__a;\n${traducir(m.cuerpo,d,ns,st?d.nombre:'this',m.ret)}\nreturn;`;},`el método ${nm}`,modelo);
     s+=`}\nthrow new __rt.JavaError(${JSON.stringify(`El método ${nm} no recibe `)}+__a.length+' argumento(s).'); }\n`;
   }
-  if(!grupos.has('toString'))s+='toString(){ return __rt.ref(this); }\n';
+  if(lanzable){
+    if(!grupos.has('getMessage'))s+='getMessage(){ return this.__msg; }\n';
+    if(!grupos.has('printStackTrace'))s+='printStackTrace(){ __rt.print(String(this)); }\n';
+    if(!grupos.has('toString'))s+=`toString(){ const m=this.getMessage(); return ${JSON.stringify(c.nombre)}+(m!=null?': '+m:''); }\n`;
+  }
+  else if(!grupos.has('toString'))s+='toString(){ return __rt.ref(this); }\n';
   s+=`getClass(){ return ${c.nombre}; }\nstatic getSimpleName(){ return ${JSON.stringify(c.nombre)}; }\nstatic getName(){ return ${JSON.stringify(c.nombre)}; }\n`;
   return s+'}\n';
 }
-const PRELUDIO=`class ArrayList extends Array{constructor(){super();} add(x){__rt.tick();this.push(x);__rt.agregado(this,x);return true;} get(i){if(i<0||i>=this.length)throw new __rt.JavaError('IndexOutOfBoundsException: la posición '+i+' no existe; la lista tiene '+this.length+' elemento(s).');return this[i];} size(){return this.length;} isEmpty(){return this.length===0;} remove(i){const x=this.splice(typeof i==='number'?i:this.indexOf(i),1)[0];__rt.agregado(this,null);return x;} contains(x){return this.includes(x);} clear(){this.length=0;}}
+const PRELUDIO=`class Throwable{constructor(m=null){this.__exc=new.target.name;this.__msg=m==null?null:String(m);} getMessage(){return this.__msg;} toString(){const m=this.getMessage();return this.__exc+(m!=null?': '+m:'');} printStackTrace(){__rt.print(String(this));} getClass(){return this.constructor;} static __ctor(s,m=null){s.__msg=m==null?null:String(m);} static getSimpleName(){return this.name;} static getName(){return this.name;} static [Symbol.hasInstance](o){return __rt.esExcepcion(o,this.name);}}
+${Object.entries(EXC_PADRE).filter(([,p])=>p).map(([n,p])=>`class ${n} extends ${p}{}`).join('\n')}
+__rt.EXC={${Object.keys(EXC_PADRE).join(',')}};
+class ArrayList extends Array{constructor(){super();} add(x){__rt.tick();this.push(x);__rt.agregado(this,x);return true;} get(i){if(i<0||i>=this.length)throw new __rt.JavaError('IndexOutOfBoundsException: la posición '+i+' no existe; la lista tiene '+this.length+' elemento(s).');return this[i];} size(){return this.length;} isEmpty(){return this.length===0;} remove(i){const x=this.splice(typeof i==='number'?i:this.indexOf(i),1)[0];__rt.agregado(this,null);return x;} contains(x){return this.includes(x);} clear(){this.length=0;}}
 const List=ArrayList;
 const Collections={sort(l,c){l.sort((a,b)=>c?c.compare(a,b):a.compareTo(b));__rt.agregado(l,null);}};
-const Integer={parseInt:s=>parseInt(s,10),compare:(a,b)=>a<b?-1:a>b?1:0,MAX_VALUE:2147483647,MIN_VALUE:-2147483648};\n`;
+const Integer={parseInt:s=>{const t=s==null?'':String(s).trim();if(!/^[+-]?\\d+$/.test(t))throw __rt.lanzado(new NumberFormatException('For input string: "'+s+'"'));return parseInt(t,10);},compare:(a,b)=>a<b?-1:a>b?1:0,MAX_VALUE:2147483647,MIN_VALUE:-2147483648};\n`;
 for(const [k,f] of Object.entries({
   equals(o){return this.valueOf()===o;},
   equalsIgnoreCase(o){return o!=null&&this.toLowerCase()===String(o).toLowerCase();},
@@ -496,9 +644,25 @@ function tipoJava(v,rt){if(v===null||v===undefined)return 'null';if(typeof v==='
 function crearRuntime(modelo){
   const log=[],salida=[],registro=[],ids=new WeakMap();let pasos=0;
   const ser=v=>{if(v===null||v===undefined)return null;if(Array.isArray(v))return {lista:Array.from(v,ser)};if(typeof v==='object'){const id=ids.get(v);return id?{ref:id}:null;}return v;};
-  const foto=()=>registro.map(r=>{const f={};for(const k of Object.keys(r.raw))f[k]=ser(r.raw[k]);return {id:r.id,cls:r.cls,f};});
+  const foto=()=>registro.map(r=>{const f={};for(const k of Object.keys(r.raw))if(!k.startsWith('__'))f[k]=ser(r.raw[k]);return {id:r.id,cls:r.cls,f};});
   const rt={JavaError,log,salida,registro,idDe:o=>ids.get(o),foto,
-    entero(v){return typeof v==='number'?Math.trunc(v):v;},
+    entero(v){if(typeof v!=='number')return v;if(!Number.isFinite(v))throw rt.lanzado(new rt.EXC.ArithmeticException('/ by zero'));return Math.trunc(v);},
+    EXC:null,actual:null,
+    /* Excepciones: nombre de la clase de un objeto lanzable (de Java o del estudiante) */
+    nombreExc(o){if(o==null||typeof o!=='object')return null;if(typeof o.__exc==='string')return o.__exc;const id=ids.get(o);const r=registro[(id||0)-1];return r&&esLanzable(modelo.clases,r.cls)?r.cls:null;},
+    esExcepcion(o,nom){const n=rt.nombreExc(o);return !!n&&ancestros(modelo.clases,n).includes(nom);},
+    /* Convierte lo que llegó a un catch en una excepción de Java (los errores del taller como IndexOutOfBounds también) */
+    excepcion(x){
+      if(rt.nombreExc(x))return x;
+      const E=rt.EXC;if(!E)return null;
+      if(x&&x.java){const m=/^(\w+Exception): ([\s\S]*)$/.exec(x.message);if(m&&E[m[1]])return rt.lanzado(new E[m[1]](m[2]));return null;}
+      if(x instanceof TypeError&&/null|undefined/.test(x.message)){const k=/\(reading '([^']+)'\)/.exec(x.message);return rt.lanzado(new E.NullPointerException(`se usó un objeto null${k?` al pedirle ${k[1]}`:''}`));}
+      return null;
+    },
+    atrapa(e,tipos){return tipos.some(t=>rt.esExcepcion(e,t));},
+    lanzado(e){const n=rt.nombreExc(e);if(n)log.push({t:'lanza',exc:n,msg:e.__msg??null,quien:rt.actual,foto:foto()});return e;},
+    atrapado(e,como){log.push({t:'atrapa',exc:rt.nombreExc(e),msg:e.__msg??null,como,foto:foto()});},
+    finalmente(){log.push({t:'finally',foto:foto()});},
     implementa(o,nom){const id=ids.get(o);const r=registro[(id||0)-1];if(!r)return false;const c=modelo.clases[r.cls];return !!c&&(c.__interfaces||c.implementa).some(x=>tipoBase(x)===nom);},
     coincide(args,tipos){return tipos.every((t,i)=>{const v=args[i],b=tipoBase(t);
       if(INTS.has(b))return typeof v==='number'&&Number.isInteger(v);
@@ -536,18 +700,21 @@ function crearRuntime(modelo){
         if(b==='String'||b==='char'){if(v!==null&&typeof v!=='string')mal();return v;}
         if(v!==null&&typeof v!=='object')mal();return v;};
       const p=new Proxy(raw,{
-        set(o,k,v){rt.tick();if(typeof k==='string'){if(!(k in tipos))throw new JavaError(`La clase ${cls} no tiene un atributo llamado ${k}.`);v=coercer(tipos[k],v,k);o[k]=v;log.push({t:'set',id,campo:k,valor:v,foto:foto()});}else o[k]=v;return true;},
+        set(o,k,v){rt.tick();if(typeof k==='string'&&k.startsWith('__')){o[k]=v;return true;}if(typeof k==='string'){if(!(k in tipos))throw new JavaError(`La clase ${cls} no tiene un atributo llamado ${k}.`);v=coercer(tipos[k],v,k);o[k]=v;log.push({t:'set',id,campo:k,valor:v,foto:foto()});}else o[k]=v;return true;},
         get(o,k){
+          if(typeof k==='string'&&k.startsWith('__'))return Reflect.get(o,k);
           if(typeof k==='string'&&!(k in o)&&!['then','toJSON','asymmetricMatch','$$typeof','nodeType'].includes(k))throw new JavaError(`${cls} no tiene un atributo ni un método llamado ${k}.`);
           const v=Reflect.get(o,k);
-          if(typeof k==='string'&&typeof v==='function'&&mets.has(k))return function(...args){rt.tick();log.push({t:'llamada',id,metodo:k,args:args.map(a=>rt.fmtCorto(a)),argIds:args.map(a=>(a&&typeof a==='object'&&ids.get(a))||null),antes:{...o},foto:foto()});return v.apply(this,args);};
+          if(typeof k==='string'&&typeof v==='function'&&mets.has(k))return function(...args){rt.tick();log.push({t:'llamada',id,metodo:k,args:args.map(a=>rt.fmtCorto(a)),argIds:args.map(a=>(a&&typeof a==='object'&&ids.get(a))||null),antes:{...o},foto:foto()});const prev=rt.actual;rt.actual=id;try{return v.apply(this,args);}finally{rt.actual=prev;}};
           return v;}
       });
       ids.set(raw,id);ids.set(p,id);return p;
     }};
   return rt;
 }
-function traducirError(e){
+function traducirError(e,rt){
+  const n=rt&&rt.nombreExc?.(e);
+  if(n){const m=e.__msg;return `Excepción sin atrapar: ${n}${m!=null?`: ${m}`:''}. Nadie la atrapó con try/catch, así que el programa se detuvo.`;}
   if(e&&e.java)return e.message;
   const msg=String((e&&e.message)||e);let m;
   if(e instanceof ReferenceError&&(m=/^(\S+) is not defined/.exec(msg)))return `No encuentro el símbolo «${m[1]}». ¿Lo declaraste antes de usarlo, o está escrito distinto?`;
@@ -564,8 +731,8 @@ function ejecutar(modelo,arnes){
   const nombres=Object.keys(modelo.clases);
   const js=PRELUDIO+Object.values(modelo.clases).map(c=>genClase(c,modelo)).join('\n')+`\nreturn {${nombres.join(',')}};`;
   let C;
-  try{C=new Function('__rt',js)(rt);}catch(e){return {rt,error:traducirError(e),js};}
-  try{arnes(C,rt);}catch(e){return {rt,error:traducirError(e),js};}
+  try{C=new Function('__rt',js)(rt);}catch(e){return {rt,error:traducirError(e,rt),js};}
+  try{arnes(C,rt);}catch(e){return {rt,error:traducirError(e,rt),js};}
   return {rt,js};
 }
 function repasar(log){
@@ -587,6 +754,9 @@ function repasar(log){
     }
     else if(ev.t==='llamada'){ultimo[ev.id]=ev.metodo;const e=est[ev.id];if(ev.metodo==='recargar')info.recargas.push({id:ev.id,x:ev.antes.x});snap(`${eti(e,ev.id)}.${ev.metodo}(${ev.args.join(', ')})`,'llamada',{quien:ev.id,metodo:ev.metodo,argIds:ev.argIds});}
     else if(ev.t==='print')snap(`System.out.println → ${ev.texto}`,'print');
+    else if(ev.t==='lanza')snap(`throw ${ev.exc}${ev.msg!=null?`: «${ev.msg}»`:''}`,'lanza',{exc:ev.exc,msg:ev.msg,quien:ev.quien});
+    else if(ev.t==='atrapa')snap(`catch (${ev.como}) atrapó ${ev.exc}`,'atrapa',{exc:ev.exc,msg:ev.msg,como:ev.como});
+    else if(ev.t==='finally')snap('finally { … } se ejecuta siempre','finally');
   }
   return {frames,info,estados:est};
 }
@@ -660,4 +830,4 @@ function plantuml(modelo){
 }
 
 /* ---------- Niveles ---------- */
-export {JavaError,blankComments,blankStrings,parsePrograma,ejecutar,repasar,plantuml,miembrosUML,relaciones,crearRuntime,tipoBase};
+export {JavaError,EXC_PADRE,esLanzable,esComprobada,ancestros,blankComments,blankStrings,parsePrograma,ejecutar,repasar,plantuml,miembrosUML,relaciones,crearRuntime,tipoBase};

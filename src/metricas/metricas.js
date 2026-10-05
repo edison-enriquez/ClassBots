@@ -32,10 +32,11 @@ const conNivel = (met, id, f) => {
 export const CATEGORIAS = {
   sintaxis: 'Sintaxis', nombres: 'Nombres y declaraciones', tipos: 'Tipos', constructores: 'Constructores',
   encapsulamiento: 'Encapsulamiento', interfaces: 'Interfaces y clases abstractas', herencia: 'Herencia',
-  polimorfismo: 'Polimorfismo', null: 'Referencias null', estructura: 'Estructura pedida', logica: 'Lógica (pruebas)', otros: 'Otros',
+  polimorfismo: 'Polimorfismo', excepciones: 'Excepciones', null: 'Referencias null', estructura: 'Estructura pedida', logica: 'Lógica (pruebas)', otros: 'Otros',
 };
 export function categoria(msg = '') {
   const m = String(msg);
+  if (/Excepción sin atrapar|excepción comprobada|throws|\bcatch\b|\btry\b|throw\b|no es una excepción|ya la atrapa/.test(m)) return 'excepciones';
   if (/NullPointer|es null/.test(m)) return 'null';
   if (/ClassCastException|es de tipo .* no tiene|instanceof/.test(m)) return 'polimorfismo';
   if (/es private|protected|visibilidad|getter/.test(m)) return 'encapsulamiento';
@@ -90,7 +91,7 @@ export const SENALES = {
   streams: 'Streams (.stream(), .map(), .filter(), .forEach())',
   format: 'String.format / printf',
   var: 'Uso de var',
-  excepciones: 'try/catch o throws (no vistos en el curso)',
+  excepciones: 'try/catch o throws antes del Mundo 7',
   avanzado: 'APIs no vistas (Optional, Objects, HashMap, StringBuilder, switch con ->)',
 };
 const REGLAS = [
@@ -105,10 +106,10 @@ const REGLAS = [
   ['avanzado', /\bOptional\b|\bObjects\.|\bHashMap\b|\bStringBuilder\b|case\s+[^:]+->/],
 ];
 /* Revisa solo las líneas que escribió el estudiante (las que no venían en el código inicial) */
-export function analizarEstilo(archivos, inicial = {}) {
+export function analizarEstilo(archivos, inicial = {}, vistos = []) {
   const base = new Set(Object.values(inicial || {}).join('\n').split('\n').map(l => l.trim()).filter(Boolean));
   const propio = Object.values(archivos || {}).join('\n').split('\n').filter(l => !base.has(l.trim())).join('\n');
-  return REGLAS.filter(([, re]) => re.test(propio)).map(([k]) => k);
+  return REGLAS.filter(([k, re]) => !vistos.includes(k) && re.test(propio)).map(([k]) => k);
 }
 export const registrarSenales = (met, id, lista) => conNivel(met, id, n => { for (const k of lista) n.senales[k] = (n.senales[k] || 0) + 1; });
 
