@@ -1,4 +1,5 @@
 # docker compose up -d --build   (como el usuario sin privilegios, con Docker rootless)
+name: classbots-aula
 services:
   aula:
     build: .

@@ -2,6 +2,10 @@
 
 Node.js + WebSocket + SQLite (`node:sqlite`, sin módulos nativos). Una sala por clase; guarda y reenvía sobres **cifrados para la clase**, que no puede leer. El profesor entra firmando un reto con la llave de firma de la clase.
 
+> ¿Lo va a instalar un agente? Pídele que siga [`AGENTS.md`](AGENTS.md): trae los datos que debe preguntar, las comprobaciones de cada paso y lo que no debe tocar.
+>
+> Descarga directa de esta carpeta: `https://classbots.eehub.ing/classbots-aula.zip` (se publica con el juego).
+
 ## Instalación con Docker rootless
 
 Todo corre con un usuario sin privilegios (`classbots`). Puede convivir con el Docker normal que ya tengas: son daemons distintos.
@@ -19,7 +23,7 @@ systemctl --user enable --now docker
 echo 'export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock' >> ~/.bashrc && source ~/.bashrc
 
 # 3. Código y arranque
-git clone https://github.com/edison-enriquez/ClassBots.git && cd ClassBots/servidor
+curl -LO https://classbots.eehub.ing/classbots-aula.zip && unzip classbots-aula.zip && cd classbots-aula
 docker compose up -d --build
 curl -s http://127.0.0.1:8787/salud           # {"ok":true,"salas":0}
 ```
@@ -65,7 +69,7 @@ Límites: 1 MiB por mensaje, 4 mensajes/s sostenidos por conexión, 300 estudian
 ## Respaldos
 
 ```bash
-docker run --rm -v servidor_aula-datos:/datos -v "$PWD":/r alpine cp /datos/aula.db /r/aula-$(date +%F).db
+docker run --rm -v classbots-aula_aula-datos:/datos -v "$PWD":/r alpine cp /datos/aula.db /r/aula-$(date +%F).db
 ```
 
 ## Pruebas

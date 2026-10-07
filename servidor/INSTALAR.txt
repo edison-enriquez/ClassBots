@@ -1,0 +1,21 @@
+ClassBots · Servidor del aula en vivo
+=====================================
+
+1. Copia esta carpeta a la VPS (por ejemplo con scp) y entra con el usuario sin privilegios:
+     scp classbots-aula.zip usuario@tu-vps:
+     sudo machinectl shell classbots@
+     unzip classbots-aula.zip && cd classbots-aula
+
+2. Revisa compose.yaml: ORIGENES debe ser la dirección del juego (https://classbots.eehub.ing).
+
+3. Arranca el servidor con Docker rootless:
+     docker compose up -d --build
+     curl -s http://127.0.0.1:8787/salud        → {"ok":true,"salas":0}
+
+4. Configura el proxy con HTTPS: proxy/Caddyfile o proxy/nginx.conf.
+
+5. En GitHub crea la variable VITE_AULA_URL = wss://api.classbots.eehub.ing/aula
+   y crea una clase nueva en el juego.
+
+Si un agente (Claude Code u otro) va a hacer la instalación, pídele que siga AGENTS.md.
+El README.md explica cada paso con detalle (instalar Docker rootless, respaldos, variables).
