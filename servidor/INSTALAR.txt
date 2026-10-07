@@ -12,9 +12,10 @@ ClassBots · Servidor del aula en vivo
      docker compose up -d --build
      curl -s http://127.0.0.1:8787/salud        → {"ok":true,"salas":0}
 
-4. Configura el proxy con HTTPS: proxy/Caddyfile o proxy/nginx.conf.
+4. Publica el aula con HTTPS: proxy/Caddyfile, proxy/nginx.conf o, si usas Cloudflare Tunnel,
+   proxy/cloudflared.yml (usa un subdominio de un nivel, p. ej. aula.eehub.ing; ver README.md).
 
-5. En GitHub crea la variable VITE_AULA_URL = wss://api.classbots.eehub.ing/aula
+5. En GitHub crea la variable VITE_AULA_URL = wss://<tu subdominio>/aula
    y crea una clase nueva en el juego.
 
 Si un agente (Claude Code u otro) va a hacer la instalación, pídele que siga AGENTS.md.

@@ -42,6 +42,21 @@ El servidor escucha en `127.0.0.1:8787`; el proxy que ya tengas le pasa `wss://a
 
 Crea el registro DNS `api.classbots` → IP de la VPS (en Cloudflare, con la nube gris o con WebSockets activos).
 
+### Con Cloudflare Tunnel (cloudflared)
+
+Si la VPS publica sus servicios con `cloudflared`, no hace falta Caddy, Nginx ni certificados: el túnel sale de la VPS hacia Cloudflare y Cloudflare pone el HTTPS.
+
+- **Usa un subdominio de un solo nivel**, como `aula.eehub.ing`. El certificado gratuito de Cloudflare cubre `*.eehub.ing`, pero no `*.classbots.eehub.ing`: con `api.classbots.eehub.ing` el navegador daría error de certificado, salvo que pagues Advanced Certificate Manager.
+- **Túnel administrado desde el panel** (Zero Trust → Networks → Tunnels → tu túnel → *Public hostnames* → *Add a public hostname*):
+  - Subdomain: `aula` · Domain: `eehub.ing` · Path: `^/(aula|salud)$`
+  - Service: `HTTP` · URL: `localhost:8787`
+  Cloudflare crea solo el registro DNS (un CNAME al túnel). Si ya existía un registro `A` con ese nombre, bórralo antes.
+- **Túnel con archivo** (`config.yml`): agrega la regla de [`proxy/cloudflared.yml`](proxy/cloudflared.yml) antes de la regla final `http_status:404`. Luego ejecuta `cloudflared tunnel route dns <túnel> aula.eehub.ing` y `sudo systemctl restart cloudflared`.
+- Si `cloudflared` corre **en un contenedor** del Docker normal, `localhost` es el del contenedor: usa `http://172.17.0.1:8787` y publica el aula en esa IP (`"172.17.0.1:8787:8787"` en `ports`), o corre el contenedor de cloudflared con `network_mode: host`.
+- Los WebSockets pasan por el túnel sin configuración extra. El servidor envía un ping cada 30 s, así que Cloudflare no corta las conexiones por inactividad.
+
+En ese caso la variable del juego es `VITE_AULA_URL` = `wss://aula.eehub.ing/aula`.
+
 ## Conectar el juego
 
 En GitHub: *Settings → Secrets and variables → Actions → Variables*, crea `VITE_AULA_URL` = `wss://api.classbots.eehub.ing/aula` y vuelve a publicar. Las clases **nuevas** traerán esa dirección; también se puede escribir a mano al crear la clase. Las clases creadas antes de esta versión no tienen llave de firma: crea una nueva para usar el aula en vivo.

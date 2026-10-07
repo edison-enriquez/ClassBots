@@ -12,9 +12,9 @@ Pregúntalos todos juntos y no los inventes:
 
 | Dato | Ejemplo | Uso |
 |---|---|---|
-| `DOMINIO` | `api.classbots.eehub.ing` | Subdominio público del aula |
+| `DOMINIO` | `aula.eehub.ing` | Subdominio público del aula (con Cloudflare, de un solo nivel) |
 | `ORIGEN_JUEGO` | `https://classbots.eehub.ing` | Única página que puede conectarse (`ORIGENES`) |
-| Proxy existente | Caddy, Nginx, Traefik o ninguno | Paso 5 |
+| Proxy existente | Caddy, Nginx, Traefik, Cloudflare Tunnel (`cloudflared`) o ninguno | Paso 5 |
 | ¿El proxy corre dentro de un contenedor? | sí / no | Paso 5 |
 | Permiso para usar `sudo` | sí / no | Pasos 1 y 5 |
 
@@ -114,6 +114,13 @@ Muestra el cambio a la persona antes de aplicarlo. Haz una copia de seguridad de
 - **A · Caddy en el sistema:** agrega el bloque de `proxy/Caddyfile` (con `DOMINIO`) al Caddyfile del sistema y luego ejecuta `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
 - **B · Nginx en el sistema:** copia `proxy/nginx.conf` a `/etc/nginx/sites-available/classbots-aula` (en RHEL: `/etc/nginx/conf.d/classbots-aula.conf`) con `DOMINIO`. Habilítalo, emite el certificado con `sudo certbot --nginx -d <DOMINIO>` y ejecuta `sudo nginx -t && sudo systemctl reload nginx`. Conserva las cabeceras `Upgrade`/`Connection` y `proxy_read_timeout 1h`.
 - **C · Proxy en un contenedor (Docker con root):** apunta el upstream a `172.17.0.1:8787` (o a `host.docker.internal:8787` si el contenedor lo define) en lugar de `127.0.0.1`. Usa la configuración de la plantilla correspondiente.
+- **E · Cloudflare Tunnel (`cloudflared`):** no instales Caddy, Nginx ni certbot, y no abras puertos.
+  - Antes de nada, comprueba que `DOMINIO` tenga **un solo nivel** bajo la zona (por ejemplo `aula.eehub.ing`, no `api.classbots.eehub.ing`), porque el certificado gratuito de Cloudflare no cubre dos niveles. Si tiene dos niveles, detente y propón a la persona uno de un nivel.
+  - Averigua el tipo de túnel con `cloudflared tunnel list` y `ls /etc/cloudflared ~/.cloudflared 2>/dev/null`. Si hay `config.yml` con `ingress:`, el túnel se administra con archivo. Si el servicio arranca con `--token`, se administra desde el panel.
+  - **Túnel con archivo:** haz una copia `config.yml.bak-classbots`. Agrega la regla de `proxy/cloudflared.yml` (`hostname: <DOMINIO>`, `path: ^/(aula|salud)$`, `service: http://localhost:8787`) antes de la regla final `http_status:404`. Luego ejecuta `cloudflared tunnel ingress validate`, `cloudflared tunnel route dns <túnel> <DOMINIO>` y `sudo systemctl restart cloudflared`.
+  - **Túnel del panel:** no puedes cambiarlo desde la terminal sin un token de API. Dale a la persona estos valores para *Public hostname*: subdominio, dominio, Path `^/(aula|salud)$`, Service `HTTP`, URL `localhost:8787`. Espera su confirmación.
+  - Si `cloudflared` corre en un contenedor, usa `172.17.0.1:8787` como en el caso C.
+  - Si ya existe un registro `A` o `AAAA` con ese nombre, la persona debe borrarlo para que el túnel cree su CNAME.
 - **D · Traefik u otro:** traduce la plantilla. Lo esencial: solo las rutas `/aula` (WebSocket) y `/salud`, sin tiempo de espera corto para el WebSocket, y la cabecera `X-Forwarded-For` con la IP real.
 
 **DNS:** el registro `A`/`AAAA` de `DOMINIO` debe apuntar a la VPS. Compruébalo con `dig +short <DOMINIO>`. Si no apunta, pide a la persona que lo cree; no lo modifiques tú salvo que te lo pida. En Cloudflare puede ir con proxy naranja, porque los WebSockets funcionan.
