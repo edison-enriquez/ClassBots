@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import { exportar, leerArchivo, aProgreso, resumen, nombreArchivo, descargar } from '../metricas/metricas.js';
 import { guardarYRecargar } from '../hooks/useProgreso.js';
-import { decodificarClase } from '../metricas/cifrado.js';
+import { decodificarClase, tieneAula } from '../metricas/cifrado.js';
 
 /* Campo para pegar el enlace o código de clase que comparte el profesor */
 function CampoClase({ onClase, texto = 'Unirme' }) {
@@ -23,6 +23,11 @@ function CampoClase({ onClase, texto = 'Unirme' }) {
 }
 const Clase = ({ clase }) => (clase
   ? <p className="clase-chip">🏫 Clase <strong>{clase.nombre}</strong>{clase.docente ? ` · ${clase.docente}` : ''}</p>
+  : null);
+/* Aviso de transparencia: con aula en vivo, el profesor ve el avance y el código mientras se trabaja */
+const ESTADO_AULA = { conectado: '🟢 conectado', conectando: '🟡 conectando…', desconectado: '⚪ sin conexión (se reintenta solo)', rechazado: '🔴 el servidor rechazó la conexión', apagado: '' };
+const AvisoAula = ({ clase, estado }) => (tieneAula(clase)
+  ? <p className="aula-aviso">📡 Esta clase usa el <strong>aula en vivo</strong>: mientras trabajas, tu profesor ve en qué capítulo vas, tu código y tus métricas (cifradas, solo él puede leerlas), y te puede enviar mensajes.{estado && ESTADO_AULA[estado] ? <> Estado: <span className="aula-estado">{ESTADO_AULA[estado]}</span></> : null}</p>
   : null);
 
 /* Lee un archivo de avance elegido por el usuario y pide confirmación antes de reemplazar */
@@ -71,6 +76,7 @@ export function Bienvenida({ prog, onListo, onClase }) {
         <h2 id="bienv-t">¡Bienvenido a ClassBots!</h2>
         <p>Soy Chispa, la jefa del taller. ¿Cómo te llamas? Así registro tu avance para que se lo puedas entregar a tu profesor.</p>
         {prog.clase && <Clase clase={prog.clase} />}
+        <AvisoAula clase={prog.clase} />
         <label className="campo">Nombre completo
           <input name="nombre" autoFocus value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej.: Ana María Pérez" maxLength={60} autoComplete="name" />
         </label>
@@ -96,7 +102,7 @@ export function Bienvenida({ prog, onListo, onClase }) {
 }
 
 /* ---------- Mi avance: resumen, descarga del entregable y carga en otro equipo ---------- */
-export function MiAvance({ prog, sellar, onCerrar, onPerfil, onClase }) {
+export function MiAvance({ prog, sellar, aula, onCerrar, onPerfil, onClase }) {
   // El estudiante ve su avance, no las métricas: esas viajan cifradas para el profesor
   const r = resumen({ progreso: prog });
   const carga = useCargarAvance(prog);
@@ -151,6 +157,7 @@ export function MiAvance({ prog, sellar, onCerrar, onPerfil, onClase }) {
         </section>
 
         <section className="avance-clase">
+          {prog.clase && <AvisoAula clase={prog.clase} estado={aula} />}
           {prog.clase ? <Clase clase={prog.clase} /> : <p className="bienv-nota">Todavía no estás en una clase. Si tu profesor te dio un enlace o código, pégalo aquí.</p>}
           <details>
             <summary>{prog.clase ? 'Cambiar de clase' : 'Unirme a una clase'}</summary>

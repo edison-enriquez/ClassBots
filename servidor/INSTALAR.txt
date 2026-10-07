@@ -1,0 +1,27 @@
+ClassBots · Servidor del aula en vivo
+=====================================
+
+Modo recomendado: dos contenedores con Docker rootless. El aula no publica ningún puerto
+y Cloudflare Tunnel, en su propio contenedor, es la única entrada.
+
+1. Docker rootless con el usuario classbots (ver README.md, sección 1).
+
+2. En Cloudflare: Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared → Docker.
+   Copia solo el token. En Public hostnames:
+     Subdomain: aula · Domain: eehub.ing · Path: ^/(aula|salud)$
+     Service: HTTP · URL: aula:8787        (el contenedor, no localhost)
+   Usa un subdominio de un solo nivel (aula.eehub.ing), no api.classbots.eehub.ing.
+
+3. En la VPS, como classbots:
+     unzip classbots-aula.zip && cd classbots-aula
+     cp .env.ejemplo .env && chmod 600 .env
+     nano .env                              → pega el token en TUNNEL_TOKEN=
+     docker compose up -d --build
+     docker compose ps                      → aula «healthy», tunel «running»
+     curl -s https://aula.eehub.ing/salud   → {"ok":true,"salas":0}
+
+4. Crea una clase nueva en el juego: ya usa wss://aula.eehub.ing/aula por defecto.
+   (Para otra dirección: variable VITE_AULA_URL en GitHub y volver a publicar.)
+
+¿Sin Cloudflare? Con tu propio proxy (Caddy/Nginx): ver README.md, «Sin Cloudflare».
+Si un agente (Claude Code u otro) va a hacer la instalación, pídele que siga AGENTS.md.

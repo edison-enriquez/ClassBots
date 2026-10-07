@@ -1,0 +1,8 @@
+# Modo sin Cloudflare Tunnel: el aula escucha en 127.0.0.1:8787 y tu proxy con HTTPS
+# (Caddy o Nginx, ver proxy/) le pasa el tráfico. Se activa en .env con:
+#   COMPOSE_FILE=compose.yaml:compose.puerto.yaml
+# Si el proxy corre dentro de un contenedor del Docker normal, cambia 127.0.0.1 por 172.17.0.1.
+services:
+  aula:
+    networks: [interna, salida]
+    ports: ["127.0.0.1:8787:8787"]

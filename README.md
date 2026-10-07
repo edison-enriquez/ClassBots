@@ -72,6 +72,19 @@ El workflow `.github/workflows/pages.yml` prueba, compila y publica en GitHub Pa
   - alguien con conocimientos podría fabricar un archivo nuevo cifrado con la llave pública; el panel no lo detecta todo;
   - el código de los capítulos viaja en claro, porque el estudiante lo necesita para continuar.
 
+## Aula en vivo (opcional, con servidor propio)
+
+Si la clase tiene **servidor del aula**, el profesor ve en vivo a cada estudiante y le puede escribir. Sin servidor, todo funciona igual con los archivos.
+
+- **Al crear la clase**, el campo «📡 Aula en vivo» trae la dirección del servidor (por defecto `wss://aula.eehub.ing/aula`; se cambia con la variable `VITE_AULA_URL` al compilar, o el profesor escribe otra). La clase genera además una llave de firma **ECDSA P-256** protegida con la misma contraseña, y su id se deriva de sus llaves públicas.
+- **El estudiante** que entra con el enlace se conecta solo y envía, **cifrado para la clase**:
+  - cada 3 s, si algo cambió: capítulo, código abierto, errores, resultado de las pruebas, si está fuera de la ventana o inactivo;
+  - cada minuto y al superar un capítulo: su archivo de avance completo (el mismo `.json`, comprimido).
+  El juego le avisa en la bienvenida y en «Mi avance» que la clase usa el aula en vivo, y muestra el estado de la conexión.
+- **El profesor**, en el Panel con la clase abierta, ve las tarjetas de la clase (🟢 trabajando, 🟡 inactivo, 🟠 fuera de la ventana, ⚫ desconectado), el código de cualquier estudiante en tiempo real, y puede enviar mensajes a uno o a todos. Los archivos que llegan del aula entran en las mismas tablas, indicadores y alertas que los archivos arrastrados.
+- **Seguridad:** el servidor solo guarda y reenvía sobres cerrados; no puede leer métricas ni código. Para recibir datos, el profesor firma un reto con la llave de la clase, así que adivinar el id de una sala no sirve. Un estudiante no puede enviar mensajes ni recibir los datos de otros.
+- **Servidor:** carpeta [`servidor/`](servidor/README.md) (Node.js, WebSocket y SQLite, sin dependencias nativas), con `Dockerfile` y `compose.yaml` endurecidos para **Docker rootless**. Por defecto se publica con Cloudflare Tunnel en su propio contenedor, sin puertos abiertos; también trae configuración para Nginx o Caddy. Incluye `AGENTS.md` para que un agente haga la instalación, y el despliegue publica el paquete en `/classbots-aula.zip`.
+
 ## Editor
 
 Basado en CodeMirror 6, con un asistente propio que entiende las clases del proyecto:

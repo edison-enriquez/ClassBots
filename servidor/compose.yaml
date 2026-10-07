@@ -1,0 +1,54 @@
+# Servidor del aula en vivo de ClassBots (Docker rootless, usuario sin privilegios)
+#   1. cp .env.ejemplo .env && chmod 600 .env   y pon el token del túnel
+#   2. docker compose up -d --build
+# Por defecto el aula NO publica ningún puerto: la única entrada es el contenedor de
+# Cloudflare Tunnel, que llega a ella por la red interna (http://aula:8787).
+# Sin Cloudflare: ver compose.puerto.yaml (lo activa COMPOSE_FILE en .env).
+name: classbots-aula
+
+services:
+  aula:
+    build: .
+    image: classbots-aula
+    restart: unless-stopped
+    environment:
+      ORIGENES: ${ORIGENES:-https://classbots.eehub.ing}
+      DIAS_RETENCION: ${DIAS_RETENCION:-180}
+      MAX_ALUMNOS: ${MAX_ALUMNOS:-300}
+    volumes: [aula-datos:/datos]
+    networks: [interna]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 100
+    logging: { driver: local, options: { max-size: 10m, max-file: "3" } }
+
+  # Conector de Cloudflare Tunnel solo para el aula (perfil «tunel», activado en .env)
+  tunel:
+    image: cloudflare/cloudflared:latest
+    profiles: [tunel]
+    command: tunnel --no-autoupdate run
+    restart: unless-stopped
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      aula: { condition: service_healthy }
+    # interna: para llegar al aula · salida: para conectarse a Cloudflare
+    networks: [interna, salida]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    pids_limit: 100
+    logging: { driver: local, options: { max-size: 10m, max-file: "3" } }
+
+networks:
+  # Sin acceso a internet: el aula no lo necesita y nadie le llega por fuera del túnel
+  interna: { internal: true }
+  salida: {}
+
+volumes:
+  aula-datos: {}

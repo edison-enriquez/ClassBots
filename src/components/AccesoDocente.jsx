@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { crearClase, abrirClase, decodificarClase } from '../metricas/cifrado.js';
+import { crearClase, abrirClase, decodificarClase, aulaPorDefecto } from '../metricas/cifrado.js';
 import { misClases, guardarMiClase, abrirEnSesion } from '../metricas/clasesLocales.js';
 
 /* Acceso docente (se abre con el gesto secreto). Sin la contraseña de una clase no se activa nada:
@@ -10,7 +10,7 @@ export default function AccesoDocente({ claseActual, onListo, onFallo, onCerrar 
   const [sel, setSel] = useState(conocidas[0]?.id || '');
   const [codigo, setCodigo] = useState('');
   const [pass, setPass] = useState('');
-  const [form, setForm] = useState({ nombre: '', docente: '', contrasena: '', repetir: '' });
+  const [form, setForm] = useState({ nombre: '', docente: '', contrasena: '', repetir: '', aula: aulaPorDefecto() });
   const [error, setError] = useState('');
   const [ocupado, setOcupado] = useState(false);
 
@@ -73,6 +73,10 @@ export default function AccesoDocente({ claseActual, onListo, onFallo, onCerrar 
             <label className="campo">Docente<input value={form.docente} onChange={e => setForm({ ...form, docente: e.target.value })} placeholder="Tu nombre" maxLength={60} /></label>
             <label className="campo">Contraseña de la clase<input type="password" required minLength={8} value={form.contrasena} onChange={e => setForm({ ...form, contrasena: e.target.value })} autoComplete="new-password" /></label>
             <label className="campo">Repite la contraseña<input type="password" required minLength={8} value={form.repetir} onChange={e => setForm({ ...form, repetir: e.target.value })} autoComplete="new-password" /></label>
+            <details className="campo-aula"><summary>📡 Aula en vivo: {form.aula ? 'activada' : 'sin servidor'}</summary>
+              <label className="campo">Servidor del aula<input value={form.aula} onChange={e => setForm({ ...form, aula: e.target.value })} placeholder="wss://aula.tu-dominio.com/aula" maxLength={200} /></label>
+              <p className="bienv-nota">Con servidor, verás en vivo el avance y el código de cada estudiante y les podrás enviar mensajes. Vacío: la clase funciona solo con los archivos que entregan.</p>
+            </details>
             <p className="bienv-nota">Con esta contraseña entrarás al modo profesor y leerás las métricas de la clase en cualquier computador. No se puede recuperar: usa una frase larga que no compartas.</p>
             {error && <p className="avance-alerta">{error}</p>}
             <button type="submit" className="btn-pri" disabled={ocupado}>{ocupado ? 'Creando…' : 'Crear clase y entrar'}</button>

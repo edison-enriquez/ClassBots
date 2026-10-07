@@ -1,0 +1,17 @@
+# Cloudflare Tunnel (túnel administrado con archivo): agrega la regla del aula a tu config.yml
+# (por ejemplo /etc/cloudflared/config.yml) ANTES de la regla final http_status:404.
+# Con un túnel administrado desde el panel de Cloudflare no se usa este archivo: ver README.md.
+#
+# Ojo: el certificado gratuito de Cloudflare cubre un solo nivel de subdominio (*.eehub.ing).
+# Un nombre como aula.eehub.ing funciona sin costo; api.classbots.eehub.ing (dos niveles) no.
+
+tunnel: <ID-DEL-TUNEL>
+credentials-file: /etc/cloudflared/<ID-DEL-TUNEL>.json
+
+ingress:
+  # Aula en vivo de ClassBots: solo /aula (WebSocket) y /salud
+  - hostname: aula.eehub.ing
+    path: ^/(aula|salud)$
+    service: http://localhost:8787
+  # ... tus otras reglas ...
+  - service: http_status:404
