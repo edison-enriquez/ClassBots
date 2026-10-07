@@ -27,7 +27,7 @@ import { useAulaEstudiante } from './aula/useAula.js';
 import { useParejaEstudiante } from './aula/useParejaEstudiante.js';
 import { AulaDocente, useDocente, textoHabilitar } from './aula/docente.js';
 import { archivosDeDoc } from './aula/pareja.js';
-import { verificarTexto } from './metricas/cifrado.js';
+import { verificarTexto, tieneAula } from './metricas/cifrado.js';
 import { clasesAbiertas, misClases } from './metricas/clasesLocales.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
@@ -136,15 +136,19 @@ export default function App() {
     const c = decodificarClase(location.href);
     if (!c) return;
     try { history.replaceState(null, '', location.pathname + location.hash.replace(/clase=[\w-]+&?/, '')); } catch { /* nada */ }
-    if (prog.clase?.id === c.id) return;
+    // La misma clase sin cambios: nada que hacer (si el profesor le agregó el aula, se pregunta)
+    if (prog.clase?.id === c.id && (c.aula || '') === (prog.clase.aula || '')) return;
     if (!prog.perfil) setProg(p => ({ ...p, clase: clasePublica(c) }));
     else setClaseNueva(c);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // ¿El enlace es la versión actualizada de la clase del estudiante? (misma clase con aula, o la que la reemplaza)
+  const esActualizacion = c => !!prog.clase && (c.id === prog.clase.id || c.reemplaza === prog.clase.id);
   const unirseAClase = c => {
-    medir(m => registrarEvento(m, { tipo: 'clase', de: prog.clase?.nombre || null, a: c.nombre, claseId: c.id }));
+    const actualizada = esActualizacion(c);
+    medir(m => registrarEvento(m, { tipo: 'clase', de: prog.clase?.nombre || null, a: c.nombre, claseId: c.id, ...(actualizada ? { actualizada: true, deId: prog.clase.id } : {}) }));
     setProg(p => ({ ...p, clase: clasePublica(c) }));
     setClaseNueva(null);
-    avisar(`Ahora estás en la clase «${c.nombre}».`);
+    avisar(actualizada ? `Tu clase «${c.nombre}» se actualizó: ahora usa el aula en vivo.` : `Ahora estás en la clase «${c.nombre}».`);
   };
 
   // Las métricas se sellan cifradas con la llave pública del profesor: el estudiante no las puede leer
@@ -530,12 +534,23 @@ export default function App() {
       {claseNueva && prog.perfil && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="clase-t">
           <div className="modal rpg-ventana">
-            <h2 id="clase-t">¿Unirte a la clase «{claseNueva.nombre}»?</h2>
-            <p>{claseNueva.docente ? `Docente: ${claseNueva.docente}. ` : ''}{prog.clase ? `Ahora estás en «${prog.clase.nombre}». ` : ''}Desde ahora tus métricas se cifrarán para esta clase. Tu avance se conserva.</p>
-            <div className="modal-acc">
-              <button type="button" className="btn-sec" onClick={() => setClaseNueva(null)}>No, seguir como estoy</button>
-              <button type="button" className="btn-pri" autoFocus onClick={() => unirseAClase(claseNueva)}>Unirme</button>
-            </div>
+            {esActualizacion(claseNueva) ? <>
+              <h2 id="clase-t">🔄 Tu profesor actualizó la clase «{claseNueva.nombre}»</h2>
+              <p>{claseNueva.docente ? `Docente: ${claseNueva.docente}. ` : ''}Tu avance se conserva.</p>
+              {tieneAula(claseNueva) && <p className="aula-aviso">📡 Desde ahora la clase usa el <strong>aula en vivo</strong>: mientras trabajas, tu profesor ve en qué capítulo vas, tu código y tus métricas (cifradas, solo él puede leerlas), y te puede enviar mensajes.</p>}
+              <div className="modal-acc">
+                <button type="button" className="btn-sec" onClick={() => setClaseNueva(null)}>Ahora no</button>
+                <button type="button" className="btn-pri" autoFocus onClick={() => unirseAClase(claseNueva)}>Actualizar</button>
+              </div>
+            </> : <>
+              <h2 id="clase-t">¿Unirte a la clase «{claseNueva.nombre}»?</h2>
+              <p>{claseNueva.docente ? `Docente: ${claseNueva.docente}. ` : ''}{prog.clase ? `Ahora estás en «${prog.clase.nombre}». ` : ''}Desde ahora tus métricas se cifrarán para esta clase. Tu avance se conserva.</p>
+              {tieneAula(claseNueva) && <p className="aula-aviso">📡 Esta clase usa el <strong>aula en vivo</strong>: tu profesor verá tu avance y tu código mientras trabajas.</p>}
+              <div className="modal-acc">
+                <button type="button" className="btn-sec" onClick={() => setClaseNueva(null)}>No, seguir como estoy</button>
+                <button type="button" className="btn-pri" autoFocus onClick={() => unirseAClase(claseNueva)}>Unirme</button>
+              </div>
+            </>}
           </div>
         </div>
       )}

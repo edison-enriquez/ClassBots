@@ -89,6 +89,10 @@ Si la clase tiene **servidor del aula**, el profesor ve en vivo a cada estudiant
   - La invitación va firmada con la llave de la clase, así que solo el profesor puede iniciarla.
   - La sesión se cifra de punta a punta con una llave efímera (ECDH + AES-GCM); el servidor solo reenvía y no guarda nada.
   - Lo que escribe el profesor no cuenta como tecleado del estudiante, y la sesión queda en su historial. Los archivos que llegan del aula entran en las mismas tablas, indicadores y alertas que los archivos arrastrados.
+- **Clases anteriores al aula en vivo:** en el Panel, «⬆ Actualizar al aula en vivo» pide la contraseña.
+  - Si la clase no tenía llave de firma, crea su versión nueva con el mismo nombre y la misma contraseña, enlazada a la anterior. La anterior se conserva para leer sus archivos, y con la contraseña se abren las dos.
+  - Si ya tenía llave de firma, solo se le agrega el servidor.
+  - El panel da el enlace nuevo y un mensaje listo para enviar. El estudiante que lo abre ve «Tu profesor actualizó la clase», conserva su avance y queda registrado en su historial.
 - **Seguridad:** el servidor solo guarda y reenvía sobres cerrados; no puede leer métricas ni código. Para recibir datos, el profesor firma un reto con la llave de la clase, así que adivinar el id de una sala no sirve. Un estudiante no puede enviar mensajes ni recibir los datos de otros.
 - **Servidor:** carpeta [`servidor/`](servidor/README.md) (Node.js, WebSocket y SQLite, sin dependencias nativas), con `Dockerfile` y `compose.yaml` endurecidos para **Docker rootless**. Por defecto se publica con Cloudflare Tunnel en su propio contenedor, sin puertos abiertos; también trae configuración para Nginx o Caddy. Incluye `AGENTS.md` para que un agente haga la instalación, y el despliegue publica el paquete en `/classbots-aula.zip`.
 

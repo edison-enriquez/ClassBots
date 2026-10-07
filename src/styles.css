@@ -670,3 +670,7 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
 .aula-ver { position: absolute; top: 6px; right: 6px; }
 
 @media (max-width: 1100px) { .vista-banda { grid-row: 3; } }
+.profe-clase.reemplazada { opacity: .75; border-style: dashed; }
+.profe-clase-nota { display: block; color: var(--dim); }
+.profe-actualizar { flex-basis: 100%; }
+.profe-clase .profe-nueva, .profe-clases .profe-nueva textarea { width: 100%; }
