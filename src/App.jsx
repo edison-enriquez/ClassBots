@@ -484,6 +484,7 @@ export default function App() {
                 </button>
               ))}
             </div>
+            {vista ? null : <button type="button" className="btn-mini" onClick={() => editor.current?.ordenar()} title="Corrige la sangría de todo el archivo (Shift+Alt+F)">Ordenar</button>}
             {vista ? null : !confirmarReset
               ? <button type="button" className="btn-mini" onClick={() => setConfirmarReset(true)}>Reiniciar</button>
               : <span className="confirmar">¿Borrar tu código de este capítulo? <button type="button" className="btn-mini peligro" onClick={() => { setConfirmarReset(false); reemplazarTodo(esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i)); }}>Sí, reiniciar</button><button type="button" className="btn-mini" onClick={() => setConfirmarReset(false)}>No</button></span>}
@@ -510,7 +511,7 @@ export default function App() {
           <PanelInferior nivel={nivel} objetivo={nivel.objetivoUML} resultado={resultado} enviado={enviado} problemas={diag.lista} modelo={diag.modelo} tab={tab} setTab={setTab} onIrA={irA} onCorregir={corregir} />
 
           <div className="barra-juez">
-            <span className="atajos">Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Ctrl+Enter ejecuta</span>
+            <span className="atajos">Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Shift+Alt+F ordena · Ctrl+Enter ejecuta</span>
             <button type="button" className="btn-sec" onClick={() => ejecutar(false)}>▶ Ejecutar código</button>
             <button type="button" className="btn-pri" disabled={!!vista} title={vista ? 'En la vista de estudiante solo puedes ejecutar: enviar le corresponde al estudiante' : undefined} onClick={() => ejecutar(true)}>Enviar</button>
           </div>
