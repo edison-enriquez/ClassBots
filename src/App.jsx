@@ -204,7 +204,7 @@ export default function App() {
     volcarEscritura();
     medir(m => registrarResultado(m, nivel.id, r, enviar));
     if (enviar) {
-      const senales = analizarEstilo(cod.files, esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i));
+      const senales = analizarEstilo(cod.files, esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i), nivel.mundo >= 7 ? ['excepciones'] : []);
       if (senales.length) medir(m => registrarSenales(m, nivel.id, senales));
     }
     if (r.animacion && izq.current && izq.current.scrollTop > 120) izq.current.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });

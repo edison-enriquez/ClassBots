@@ -59,7 +59,7 @@ Ambos contenedores van endurecidos: usuarios sin privilegios dentro de la imagen
 
 ## 4. Conectar el juego
 
-En GitHub: *Settings → Secrets and variables → Actions → Variables*, crea `VITE_AULA_URL` = `wss://aula.eehub.ing/aula` y vuelve a publicar. Las clases **nuevas** traerán esa dirección; también se puede escribir a mano al crear la clase. Las clases creadas antes de esta versión no tienen llave de firma: crea una nueva para usar el aula en vivo.
+El juego publicado en `classbots.eehub.ing` ya usa `wss://aula.eehub.ing/aula` por defecto. Para otra dirección, en GitHub ve a *Settings → Secrets and variables → Actions → Variables*, crea `VITE_AULA_URL` y vuelve a publicar. Las clases **nuevas** traerán esa dirección; también se puede escribir a mano al crear la clase. Las clases creadas antes de esta versión no tienen llave de firma: crea una nueva para usar el aula en vivo.
 
 ## Sin Cloudflare: con tu propio proxy
 

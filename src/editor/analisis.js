@@ -26,17 +26,27 @@ export const DOCS = {
   long: 'Entero de 64 bits.', float: 'Decimal de menor precisión que double.',
   System: 'Clase del sistema. System.out es la consola.', Math: 'Funciones matemáticas: Math.max, Math.min, Math.abs.',
   ArrayList: 'Lista que crece: add, get y size.', import: 'Trae una clase de otro paquete.',
+  try: 'Bloque que puede fallar. Va seguido de catch (atender una excepción) y/o finally (lo que se hace siempre).',
+  catch: 'Atiende un tipo de excepción lanzada dentro del try: catch (TipoException e) { ... }.',
+  finally: 'Bloque que se ejecuta siempre al salir del try, falle o no.',
+  throw: 'Lanza una excepción: throw new IllegalArgumentException("motivo");',
+  throws: 'En la firma de un método: avisa qué excepciones comprobadas puede lanzar.',
+  Exception: 'Clase base de las excepciones. Las que no heredan de RuntimeException son comprobadas (checked).',
+  RuntimeException: 'Excepciones no comprobadas: el compilador no obliga a atraparlas.',
+  IllegalArgumentException: 'El argumento recibido no es válido.', IllegalStateException: 'El objeto no está en un estado que permita la operación.',
 };
 const CLAVES = {
   top: ['public', 'class', 'interface', 'import', 'implements'],
   clase: ['public', 'private', 'protected', 'static', 'final', 'void', 'class', 'boolean', 'return'],
-  metodo: ['new', 'return', 'if', 'else', 'for', 'while', 'this', 'true', 'false', 'null', 'break', 'continue'],
+  metodo: ['new', 'return', 'if', 'else', 'for', 'while', 'this', 'true', 'false', 'null', 'break', 'continue', 'try', 'throw'],
 };
 const TIPOS = ['int', 'double', 'boolean', 'char', 'String', 'long', 'float'];
 export const SNIP_CLAVE = {
   if: 'if (${1:condición}) {\n\t${}\n}',
   for: 'for (int i = 0; i < ${1:10}; i++) {\n\t${}\n}',
   while: 'while (${1:condición}) {\n\t${}\n}',
+  try: 'try {\n\t${}\n} catch (${1:Exception} e) {\n\t\n}',
+  throw: 'throw new ${1:IllegalArgumentException}("${}");',
 };
 export const PLANTILLAS = [
   { label: 'sout', zona: 'metodo', detail: 'System.out.println(…);', doc: 'Imprime una línea en la consola.', plantilla: 'System.out.println(${});' },
@@ -59,6 +69,8 @@ const STD = {
   'Integer#': [['compare', 'm', 'compare(int a, int b) : int', 'Negativo si a < b, cero si son iguales, positivo si a > b.', 1], ['parseInt', 'm', 'parseInt(String s) : int', 'Convierte texto en entero.', 1], ['MAX_VALUE', 'a', 'int', 'El mayor int posible.']],
 };
 STD.List = STD.ArrayList;
+STD.Exception = [['getMessage', 'm', 'getMessage() : String', 'El mensaje con el que se lanzó la excepción.', 0], ['toString', 'm', 'toString() : String', 'Clase y mensaje: "IllegalArgumentException: …".', 0], ['printStackTrace', 'm', 'printStackTrace() : void', 'Imprime la excepción en la consola.', 0]];
+for (const n of ['Throwable', 'RuntimeException', 'IllegalArgumentException', 'IllegalStateException', 'ArithmeticException', 'NullPointerException', 'IndexOutOfBoundsException', 'ClassCastException', 'NumberFormatException', 'UnsupportedOperationException']) STD[n] = STD.Exception;
 const VIS = { private: 'privado', protected: 'protegido', public: 'público', package: 'de paquete' };
 
 const RE_CAB = /^((?:(?:public|private|protected|static|final|abstract|synchronized)\s+)*)(?:([A-Za-z_$][\w$]*(?:\s*<[^>]*>)?(?:\s*\[\s*\])*)\s+)?([A-Za-z_$][\w$]*)\s*\(([^()]*)\)/;
@@ -189,7 +201,8 @@ export function generales(ctx, C, soloClases) {
       plantilla: soloClases ? (c.ctors.some(x => x.params.length) ? `${c.nombre}(\${})` : `${c.nombre}()`) : undefined,
     };
   });
-  if (soloClases) return [...clases, { label: 'ArrayList', kind: 'clase', detail: 'ArrayList<>()', doc: DOCS.ArrayList, plantilla: 'ArrayList<>()' }];
+  if (soloClases) return [...clases, { label: 'ArrayList', kind: 'clase', detail: 'ArrayList<>()', doc: DOCS.ArrayList, plantilla: 'ArrayList<>()' },
+    ...['IllegalArgumentException', 'IllegalStateException'].map(n => ({ label: n, kind: 'clase', detail: `${n}(String mensaje)`, doc: DOCS[n], plantilla: `${n}("\${}")` }))];
   const z = ctx.zona, out = [];
   if (z === 'metodo') {
     const vistos = new Set();

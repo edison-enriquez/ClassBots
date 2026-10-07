@@ -1,5 +1,5 @@
 # Caddy obtiene y renueva el certificado HTTPS solo
-api.classbots.eehub.ing {
+aula.eehub.ing {
 	reverse_proxy /aula 127.0.0.1:8787
 	reverse_proxy /salud 127.0.0.1:8787
 	respond 404

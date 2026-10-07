@@ -20,8 +20,8 @@ y Cloudflare Tunnel, en su propio contenedor, es la única entrada.
      docker compose ps                      → aula «healthy», tunel «running»
      curl -s https://aula.eehub.ing/salud   → {"ok":true,"salas":0}
 
-4. En GitHub crea la variable VITE_AULA_URL = wss://aula.eehub.ing/aula
-   y crea una clase nueva en el juego.
+4. Crea una clase nueva en el juego: ya usa wss://aula.eehub.ing/aula por defecto.
+   (Para otra dirección: variable VITE_AULA_URL en GitHub y volver a publicar.)
 
 ¿Sin Cloudflare? Con tu propio proxy (Caddy/Nginx): ver README.md, «Sin Cloudflare».
 Si un agente (Claude Code u otro) va a hacer la instalación, pídele que siga AGENTS.md.

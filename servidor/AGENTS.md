@@ -175,7 +175,7 @@ Arranque automático: con `linger` y `restart: unless-stopped`, ambos contenedor
 
 Díselo al terminar:
 
-1. En GitHub, en *Settings → Secrets and variables → Actions → Variables*, crear `VITE_AULA_URL` con el valor `wss://<DOMINIO>/aula` y volver a publicar el juego.
+1. Si `DOMINIO` no es `aula.eehub.ing` (la dirección por defecto del juego), crear en GitHub, en *Settings → Secrets and variables → Actions → Variables*, la variable `VITE_AULA_URL` con el valor `wss://<DOMINIO>/aula` y volver a publicar el juego.
 2. Crear una clase **nueva** en el juego: las anteriores no tienen llave de firma.
 
 ## Informe final

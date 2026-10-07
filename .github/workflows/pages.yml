@@ -31,7 +31,7 @@ jobs:
         env:
           VITE_AI_URL: ${{ vars.VITE_AI_URL }}
           VITE_LLAVE_PROFESOR: ${{ vars.VITE_LLAVE_PROFESOR }}
-          VITE_AULA_URL: ${{ vars.VITE_AULA_URL }}
+          VITE_AULA_URL: ${{ vars.VITE_AULA_URL || 'wss://aula.eehub.ing/aula' }}
       - name: Empaquetar el servidor del aula (descarga en /classbots-aula.zip)
         run: |
           mkdir -p /tmp/aula && cp -r servidor /tmp/aula/classbots-aula

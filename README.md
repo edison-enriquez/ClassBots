@@ -2,7 +2,7 @@
 
 Juego web para aprender programación orientada a objetos en Java. El estudiante escribe clases reales y un robot en pixel art se construye y se mueve según lo que hace su código.
 
-Mundos jugables (34 capítulos):
+Mundos jugables (40 capítulos):
 
 | Mundo | Tema | Capítulos | Escena |
 |---|---|---|---|
@@ -12,8 +12,9 @@ Mundos jugables (34 capítulos):
 | 4 · Contratos | Interfaces, programar contra la interfaz, varias interfaces, `Comparable`, abierto/cerrado | 5 | Estación de carga universal |
 | 5 · El Árbol | Herencia con `extends`, redefinición, clases abstractas y jerarquías multinivel | 5 | Diagrama de herencia UML |
 | 6 · La Arena | Polimorfismo: listas de la clase base, tipo declarado frente a tipo real, `instanceof` y casting, sobrecarga frente a redefinición, `toString()`, polimorfismo con interfaces y torneo abierto/cerrado | 6 | Coliseo: cada luchador muestra qué versión del método se ejecutó |
+| 7 · La Sala de Averías | Manejo de errores: `throw`, `try/catch`, varios `catch` y la jerarquía de excepciones, excepciones propias comprobadas (`throws`), `finally` y un protocolo que atrapa por la clase base | 6 | Sala de reparación: la baliza se enciende con cada `throw`, la red verde del `catch` la apaga y `finally` deja su marca |
 
-Los mundos 7 a 9 (patrones de diseño) aparecen bloqueados en el mapa. Las **misiones especiales** son ramales opcionales del mapa que refuerzan, con un patrón de diseño, el concepto del mundo del que salen:
+Los mundos 8 a 10 (patrones de diseño) aparecen bloqueados en el mapa. Las **misiones especiales** son ramales opcionales del mapa que refuerzan, con un patrón de diseño, el concepto del mundo del que salen:
 
 | Misión | Sale de | Pasos | Recompensa |
 |---|---|---|---|
@@ -75,7 +76,7 @@ El workflow `.github/workflows/pages.yml` prueba, compila y publica en GitHub Pa
 
 Si la clase tiene **servidor del aula**, el profesor ve en vivo a cada estudiante y le puede escribir. Sin servidor, todo funciona igual con los archivos.
 
-- **Al crear la clase**, el campo «📡 Aula en vivo» trae la dirección del servidor (variable `VITE_AULA_URL` al compilar, o la que escriba el profesor). La clase genera además una llave de firma **ECDSA P-256** protegida con la misma contraseña, y su id se deriva de sus llaves públicas.
+- **Al crear la clase**, el campo «📡 Aula en vivo» trae la dirección del servidor (por defecto `wss://aula.eehub.ing/aula`; se cambia con la variable `VITE_AULA_URL` al compilar, o el profesor escribe otra). La clase genera además una llave de firma **ECDSA P-256** protegida con la misma contraseña, y su id se deriva de sus llaves públicas.
 - **El estudiante** que entra con el enlace se conecta solo y envía, **cifrado para la clase**:
   - cada 3 s, si algo cambió: capítulo, código abierto, errores, resultado de las pruebas, si está fuera de la ventana o inactivo;
   - cada minuto y al superar un capítulo: su archivo de avance completo (el mismo `.json`, comprimido).
@@ -155,6 +156,6 @@ Entre asociación y agregación la frontera es de intención; el taller usa esta
 
 ## Límites actuales
 
-- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 6 y la misión Strategy (clases, interfaces, herencia con `super`, métodos abstractos, sobrecarga, constructores, métodos, `static`, `final`, casting con `ClassCastException`, `if`, `for`, `while`, `ArrayList`, `Comparable`, `Collections.sort`, `System.out.println`).
+- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 7 y las misiones (clases, interfaces, herencia con `super`, métodos abstractos, sobrecarga, constructores, métodos, `static`, `final`, casting con `ClassCastException`, excepciones con `throw`, `try/catch/finally`, multi-catch, `throws` y comprobadas, `if`, `for`, `while`, `ArrayList`, `Comparable`, `Collections.sort`, `System.out.println`).
 - El formato del registro de eventos (`crear`, `set`, `llamada`, `print`) es el contrato con el escenario: un backend con Java o Kotlin real (Piston, Judge0) puede devolver ese mismo registro y el juego no cambia.
 - El progreso se guarda en el navegador (`localStorage`).

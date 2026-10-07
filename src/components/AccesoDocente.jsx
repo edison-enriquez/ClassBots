@@ -74,7 +74,7 @@ export default function AccesoDocente({ claseActual, onListo, onFallo, onCerrar 
             <label className="campo">Contraseña de la clase<input type="password" required minLength={8} value={form.contrasena} onChange={e => setForm({ ...form, contrasena: e.target.value })} autoComplete="new-password" /></label>
             <label className="campo">Repite la contraseña<input type="password" required minLength={8} value={form.repetir} onChange={e => setForm({ ...form, repetir: e.target.value })} autoComplete="new-password" /></label>
             <details className="campo-aula"><summary>📡 Aula en vivo: {form.aula ? 'activada' : 'sin servidor'}</summary>
-              <label className="campo">Servidor del aula<input value={form.aula} onChange={e => setForm({ ...form, aula: e.target.value })} placeholder="wss://api.tu-dominio/aula" maxLength={200} /></label>
+              <label className="campo">Servidor del aula<input value={form.aula} onChange={e => setForm({ ...form, aula: e.target.value })} placeholder="wss://aula.tu-dominio.com/aula" maxLength={200} /></label>
               <p className="bienv-nota">Con servidor, verás en vivo el avance y el código de cada estudiante y les podrás enviar mensajes. Vacío: la clase funciona solo con los archivos que entregan.</p>
             </details>
             <p className="bienv-nota">Con esta contraseña entrarás al modo profesor y leerás las métricas de la clase en cualquier computador. No se puede recuperar: usa una frase larga que no compartas.</p>
