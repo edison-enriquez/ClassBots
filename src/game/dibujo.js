@@ -17,6 +17,8 @@ export function dibujarRobot(ctx, cx, piso, r, now, { caminando = false, fantasm
     // Manual de ensamblaje: remache dorado en el pecho
     if (EQUIPO.has('manual') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x + 7, y + 10, 3, 3); ctx.fillStyle = P.gold; ctx.fillRect(x + 8, y + 11, 1, 1); }
     // Módulo táctico: gema que cambia de color en la antena
+    // Raíz de Object: un brote verde en la cabeza (todo cuelga de la misma raíz)
+    if (EQUIPO.has('raiz') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x + 1, y - 2, 5, 4); ctx.fillStyle = '#4ade80'; ctx.fillRect(x + 2, y - 1, 1, 2); ctx.fillRect(x + 4, y - 1, 1, 2); ctx.fillRect(x + 3, y, 1, 2); }
     if (EQUIPO.has('tactico')) { ctx.fillStyle = P.ink; ctx.fillRect(x + 11, y - 1, 4, 4); ctx.fillStyle = Math.floor(now / 400) % 2 ? '#3fe0e0' : '#ff8fc7'; ctx.fillRect(x + 12, y, 2, 2); }
   }
   if (!sinBarra && typeof r.energia === 'number') barra(ctx, x + 2, y - 5, 12, r.energia);

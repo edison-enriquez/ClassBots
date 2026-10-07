@@ -6,6 +6,7 @@
    4. Si el patrón reaparece en la ruta principal, la misión es una vista previa: nada la da por hecha. */
 import { caso, corrMain, exigir, previoMain, casoRelacion, sinTexto } from './util.js';
 import { parsePrograma, ejecutar } from '../engine/motor.js';
+import { OBJECT } from './mision-object.js';
 
 const NORMAL = s => (s || '').replace(/\/\/.*$/gm, '').replace(/\s+/g, ' ').trim();
 const salidaDe = rt => rt.salida.join('\n').trim();
@@ -772,7 +773,7 @@ const STRATEGY = {
   ],
 };
 
-export const MISIONES = [PLANTILLA, STRATEGY];
+export const MISIONES = [PLANTILLA, STRATEGY, OBJECT];
 
 /* Cada paso es un capítulo jugable con los datos de su misión */
 export const PASOS = MISIONES.flatMap(m => m.pasos.map((p, k) => ({

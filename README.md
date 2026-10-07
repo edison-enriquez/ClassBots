@@ -20,6 +20,7 @@ Los mundos 8 a 10 (patrones de diseño) aparecen bloqueados en el mapa. Las **mi
 |---|---|---|---|
 | El manual de ensamblaje · Template Method | Mundo 5 (herencia) | 3: refactorizar dos recetas copiadas, gancho opcional y `final`, mini-jefe con un modelo desconocido | Manual de ensamblaje |
 | Estilos de combate · Strategy | Mundo 6 (polimorfismo) | 3: quitar los `if` sobre un texto, cambiar de estilo en ejecución, mini-jefe «¿herencia o composición?» | Módulo táctico |
+| La raíz de todo · Object | Mundo 6 (tras 6.4, `toString`) | 3: un solo `describir(Object o)` con `for (Object o : cosas)` y `getClass()`; `equals(Object)` y `hashCode()` (y por qué `equals(Caja)` no redefine); mini-jefe con clases envoltorio (`ArrayList<Integer>`, `instanceof Number`) y arreglos como objetos (`[I@…`, `Arrays.toString`, `Arrays.equals`) | Raíz de Object (brote verde) |
 
 Cada misión empieza con código que huele mal, cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente) y su recompensa tiene efecto: registra el patrón en el **Códice de patrones** de la Guía y queda visible en los robots de todas las escenas. Las misiones no alteran el avance ni la experiencia de la ruta principal, y los mundos 7 a 9 no dan por hecho que se jugaron. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
 
@@ -156,6 +157,6 @@ Entre asociación y agregación la frontera es de intención; el taller usa esta
 
 ## Límites actuales
 
-- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 7 y las misiones (clases, interfaces, herencia con `super`, métodos abstractos, sobrecarga, constructores, métodos, `static`, `final`, casting con `ClassCastException`, excepciones con `throw`, `try/catch/finally`, multi-catch, `throws` y comprobadas, `if`, `for`, `while`, `ArrayList`, `Comparable`, `Collections.sort`, `System.out.println`).
+- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 7 y las misiones (clases, interfaces, herencia con `super`, métodos abstractos, sobrecarga, constructores, métodos, `static`, `final`, casting con `ClassCastException`, excepciones con `throw`, `try/catch/finally`, multi-catch, `throws` y comprobadas, `Object` implícito (`equals`, `hashCode`, `getClass`), clases envoltorio, arreglos y `Arrays`, `if`, `for`, `while`, `ArrayList`, `Comparable`, `Collections.sort`, `System.out.println`).
 - El formato del registro de eventos (`crear`, `set`, `llamada`, `print`) es el contrato con el escenario: un backend con Java o Kotlin real (Piston, Judge0) puede devolver ese mismo registro y el juego no cambia.
 - El progreso se guarda en el navegador (`localStorage`).

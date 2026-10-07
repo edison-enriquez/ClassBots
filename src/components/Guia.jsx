@@ -55,6 +55,28 @@ public void cambiarEstilo(Estilo nuevo) {
     cuando: 'Cuando hay varias formas de hacer lo mismo y quieres agregar otras sin tocar el contexto, o cambiarlas en ejecución.',
     cuidado: 'Si solo hay dos variantes que nunca cambiarán, un if puede ser más simple. Lo que el objeto es se hereda; lo que hace y puede cambiar, se compone.',
   },
+  object: {
+    nombre: 'Object, la raíz', familia: 'Fundamento de Java', mision: 'mision-object',
+    intencion: 'Toda clase hereda de Object, aunque no escriba extends: de ahí vienen toString(), equals(), hashCode() y getClass().',
+    problema: 'Código que repite un método por cada tipo, compara objetos con == o imprime arreglos y obtiene cosas como [I@1b6d…',
+    estructura: ['Object en la raíz: String, Number (Integer, Double), Boolean, ArrayList, los arreglos y tus clases cuelgan de ella', 'Una variable o un for-each de tipo Object recibe cualquier objeto, y responde el objeto real', 'equals(Object) y hashCode() se redefinen juntos para comparar por contenido', 'Los primitivos no son objetos: sus clases envoltorio sí (ArrayList<Integer>, no ArrayList<int>)', 'Los arreglos no redefinen toString() ni equals(): usa Arrays.toString y Arrays.equals'],
+    uml: `            Object
+   ┌────────┬────┴─────┬─────────┐
+ String   Number   ArrayList   Caja
+          △    △
+    Integer    Double`,
+    codigo: `for (Object o : cosas) {
+    System.out.println(o.getClass().getSimpleName() + " → " + o);
+}
+
+@Override
+public boolean equals(Object otro) {
+    if (!(otro instanceof Caja)) return false;
+    return contenido.equals(((Caja) otro).contenido);
+}`,
+    cuando: 'Siempre que imprimas, compares o guardes objetos en colecciones: toString, equals y hashCode deciden cómo se ven y cuándo dos objetos son «el mismo».',
+    cuidado: 'Con una variable Object solo puedes llamar los métodos de Object: para lo específico, instanceof y cast. Y == compara referencias, no contenido.',
+  },
 };
 
 export default function Guia({ tema, onTema, onCerrar, patrones = [], misiones = [] }) {
@@ -157,7 +179,7 @@ function Interfaces() {
 function Codice({ abiertos, misiones }) {
   return (
     <>
-      <p className="guia-lead">El <strong>Códice de patrones</strong> registra cada patrón de diseño que dominas. Las misiones especiales del mapa (los ramales ✦) los desbloquean; los mundos 7 a 9 completarán el resto.</p>
+      <p className="guia-lead">El <strong>Códice</strong> registra los patrones de diseño y los fundamentos de Java que dominas. Las misiones especiales del mapa (los ramales ✦) los desbloquean; los mundos 8 a 10 completarán los patrones.</p>
       <div className="codice">
         {Object.entries(CODICE).map(([clave, p]) => {
           const m = misiones.find(x => x.id === p.mision);
