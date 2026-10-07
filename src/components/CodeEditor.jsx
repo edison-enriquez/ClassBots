@@ -15,7 +15,7 @@ export function extensionesColab(colab, archivo) {
    historial de deshacer) y expone irALinea / pedirIA al resto de la app.
    Con «colab» (programación en pareja), cada archivo queda ligado a su Y.Text compartido. */
 const CodeEditor = forwardRef(function CodeEditor(props, ref) {
-  const { nivel, archivos, activo, revision, modo, colab } = props;
+  const { nivel, archivos, activo, revision, modo, colab, soloLectura } = props;
   const host = useRef(null);
   const view = useRef(null);
   const estados = useRef(new Map());
@@ -50,8 +50,24 @@ const CodeEditor = forwardRef(function CodeEditor(props, ref) {
   function crearEstado(doc, archivo) {
     const c = latest.current.colab;
     if (c) return EditorState.create({ doc: c.doc.getText(archivo).toString(), extensions: [herramientas.current.extensiones, extensionesColab(c, archivo)] });
-    return EditorState.create({ doc, extensions: herramientas.current.extensiones });
+    return EditorState.create({ doc, extensions: [herramientas.current.extensiones, latest.current.soloLectura ? EditorState.readOnly.of(true) : []] });
   }
+
+  // Solo lectura (vista del profesor): el contenido sigue al de las props sin rehacer el editor
+  useEffect(() => {
+    const v = view.current;
+    if (!v || !soloLectura || colab) return;
+    const t = archivos[activo] ?? '';
+    if (v.state.doc.toString() !== t) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: t } });
+  }, [archivos, activo, soloLectura, colab]);
+  const lecturaAnterior = useRef(soloLectura);
+  useEffect(() => {
+    const v = view.current;
+    if (!v || lecturaAnterior.current === soloLectura) return;
+    lecturaAnterior.current = soloLectura;
+    estados.current = new Map();
+    v.setState(crearEstado(latest.current.archivos[latest.current.activo] ?? '', latest.current.activo));
+  }, [soloLectura]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Empezar o terminar la edición compartida: los estados se rehacen ligados (o no) al documento compartido
   const colabAnterior = useRef(colab);
@@ -69,7 +85,7 @@ const CodeEditor = forwardRef(function CodeEditor(props, ref) {
     if (!v || anterior.current === activo) { anterior.current = activo; return; }
     estados.current.set(anterior.current, v.state);
     // En pareja, el archivo pudo cambiar mientras no se veía: se rehace desde el documento compartido
-    v.setState((!latest.current.colab && estados.current.get(activo)) || crearEstado(latest.current.archivos[activo] ?? '', activo));
+    v.setState((!latest.current.colab && !latest.current.soloLectura && estados.current.get(activo)) || crearEstado(latest.current.archivos[activo] ?? '', activo));
     anterior.current = activo;
     v.focus();
   }, [activo]);

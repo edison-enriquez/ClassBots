@@ -14,7 +14,7 @@ function dispositivo() {
     return d;
   } catch { return null; }
 }
-const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], codigo: {}, asistente: 'basico', perfil: null, metricas: metricasVacias(), segmentos: [], clase: null, pendientes: [] };
+const VACIO = { nivelId: NIVELES[0].id, hechos: [], misionesHechas: [], pasosHechos: [], habilitados: [], codigo: {}, asistente: 'basico', perfil: null, metricas: metricasVacias(), segmentos: [], clase: null, pendientes: [] };
 
 /* El segmento cifrado de la sesión anterior pasa a la lista de segmentos cerrados */
 function conSegmentoAnterior(segmentos) {
@@ -34,6 +34,7 @@ function leer() {
       hechos: Array.isArray(g.hechos) ? g.hechos.filter(id => NIVELES.some(n => n.id === id)) : [],
       misionesHechas: Array.isArray(g.misionesHechas) ? g.misionesHechas.filter(id => MISIONES.some(m => m.id === id)) : [],
       pasosHechos: Array.isArray(g.pasosHechos) ? g.pasosHechos.filter(id => PASOS.some(x => x.id === id)) : [],
+      habilitados: Array.isArray(g.habilitados) ? g.habilitados.filter(id => NIVELES.some(n => n.id === id) || PASOS.some(x => x.id === id)) : [],
       // Las métricas nunca se guardan legibles: cada sesión empieza en memoria y se sella cifrada.
       metricas: metricasVacias(),
       segmentos: conSegmentoAnterior(Array.isArray(g.segmentos) ? g.segmentos : []),

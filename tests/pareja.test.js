@@ -46,3 +46,15 @@ test('el código se sincroniza en ambos sentidos, cifrado, y Reiniciar se propag
   assert.ok(!canalE.doc.getText('Robot.java').toString().includes('HACK'));
   canalE.cerrar(); canalP.cerrar();
 });
+
+test('habilitar un capítulo: solo vale la orden firmada por el profesor, para ese estudiante y ese capítulo', async () => {
+  const { textoHabilitar } = await import('../src/aula/docente.js');
+  const { firmarTexto, verificarTexto } = await import('../src/metricas/cifrado.js');
+  const clase = clasePublica(await crearClase({ nombre: 'POO', contrasena: 'clave larga 1', aula: 'x' }));
+  const priv = await abrirClase(clase, 'clave larga 1');
+  const t = Date.now();
+  const firma = await firmarTexto(priv, textoHabilitar(clase.id, 'ana1', 'piezas', t));
+  assert.ok(await verificarTexto(clase, textoHabilitar(clase.id, 'ana1', 'piezas', t), firma));
+  assert.ok(!(await verificarTexto(clase, textoHabilitar(clase.id, 'beto2', 'piezas', t), firma)), 'otro estudiante');
+  assert.ok(!(await verificarTexto(clase, textoHabilitar(clase.id, 'ana1', 'jefe', t), firma)), 'otro capítulo');
+});
