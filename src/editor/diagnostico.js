@@ -1,6 +1,7 @@
 /* Diagnóstico: errores del "compilador" del taller + advertencias de buenas prácticas.
    Cada problema puede traer una corrección rápida (fix) que transforma la línea. */
 import { parsePrograma, blankComments, blankStrings } from '../engine/motor.js';
+import { problemasSangria } from './formato.js';
 
 export function arreglo(msg) {
   let m;
@@ -62,6 +63,8 @@ export function diagnosticar(files) {
   const errores = [];
   modelo.errores.forEach(e => { put(e.archivo, e.linea, { sev: 'err', msg: e.msg, fix: arreglo(e.msg) }); errores.push(e); });
   advertencias(files, modelo).forEach(w => { put(w.archivo, w.linea, w); if (w.sev === 'err') errores.push(w); });
+  // La sangría va al final: si la línea ya tiene otro problema, se muestra ese
+  for (const [a, src] of Object.entries(files)) problemasSangria(a, src).forEach(w => put(a, w.linea, w));
   errores.sort((a, b) => (a.archivo === b.archivo ? a.linea - b.linea : a.archivo < b.archivo ? -1 : 1));
   const lista = Object.values(porArchivo).flatMap(m => [...m.values()]).sort((a, b) => (a.archivo === b.archivo ? a.linea - b.linea : a.archivo < b.archivo ? -1 : 1));
   return { modelo, errores, porArchivo, lista };

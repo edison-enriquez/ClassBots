@@ -109,6 +109,7 @@ const CodeEditor = forwardRef(function CodeEditor(props, ref) {
       return true;
     },
     pedirIA() { const v = view.current; if (v) { v.focus(); herramientas.current.pedirIA(v); } },
+    ordenar() { const v = view.current; if (!v) return 0; v.focus(); return herramientas.current.ordenar(v); },
     foco() { view.current?.focus(); },
   }), []);
 

@@ -12,6 +12,7 @@ import { java } from '@codemirror/lang-java';
 import { tags as t } from '@lezer/highlight';
 import { contexto, sugerencias, sugerenciaLocal, firmaEn, dinamica, PLANTILLAS, SNIP_CLAVE } from './analisis.js';
 import { diagnosticar, clasesPorArchivo } from './diagnostico.js';
+import { ordenarVista } from './formato.js';
 import { obtenerProveedorIA, promptIA, limpiarIA, MENSAJES_IA, IA_PERMANENTE } from './ia.js';
 import { recordarCopia, esInterno } from '../metricas/portapapeles.js';
 
@@ -284,11 +285,18 @@ export function crearExtensiones(cfg) {
     provide: f => showTooltip.from(f),
   });
 
+  const ordenar = view => {
+    const n = ordenarVista(view);
+    cfg.aviso(n ? `Código ordenado: ${n} ${n === 1 ? 'línea' : 'líneas'} con la sangría corregida.` : 'El código ya estaba ordenado.');
+    return n;
+  };
+
   const miKeymap = Prec.highest(keymap.of([
     { key: 'Tab', run: v => aceptarGhost(v, false) || (hasNextSnippetField(v.state) && nextSnippetField(v)) || (completionStatus(v.state) === 'active' && acceptCompletion(v)) || expandirPlantilla(v) || indentMore(v), shift: indentLess },
     { key: 'Mod-ArrowRight', run: v => aceptarGhost(v, true) },
     { key: 'Escape', run: v => { if (v.state.field(ghostField)) { v.dispatch({ effects: setGhost.of(null) }); return true; } return false; } },
     { key: 'Mod-.', run: corregirLinea, preventDefault: true },
+    { key: 'Shift-Alt-f', run: v => { ordenar(v); return true; }, preventDefault: true },
     { key: 'Alt-\\', run: v => { pedirIA(v); return true; }, preventDefault: true },
     { key: 'Mod-Enter', run: () => { cfg.onEjecutar(); return true; }, preventDefault: true },
     { key: 'Mod-Space', run: startCompletion },
@@ -333,5 +341,5 @@ export function crearExtensiones(cfg) {
     EditorView.contentAttributes.of({ 'aria-label': 'Editor de código Java', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off' }),
     tema, escritura,
   ];
-  return { extensiones, pedirIA, aceptarGhost };
+  return { extensiones, pedirIA, aceptarGhost, ordenar };
 }

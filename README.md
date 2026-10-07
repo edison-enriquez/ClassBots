@@ -107,6 +107,7 @@ Basado en CodeMirror 6, con un asistente propio que entiende las clases del proy
 | Plantillas | `sout`, `fori`, `psvm`, `metodo`, `ctor` (constructor con todos los atributos), `getters` e `interfaz`, seguidas de `Tab`. |
 | Diagnóstico en vivo | Subrayado y mensaje al final de la línea. Además de los errores de compilación detecta `=` dentro de un `if`, textos comparados con `==`, `nombre = nombre;` sin `this`, métodos llamados sin paréntesis y convenciones de nombres. |
 | Corrección rápida | `Ctrl+.` en la línea, o el botón **Corregir** en la pestaña Problemas. |
+| Ordenar el código | `Shift+Alt+F` o el botón **Ordenar** pone la sangría de 4 espacios según las llaves, convierte tabuladores en espacios y quita espacios al final. Las líneas mal sangradas salen como advertencia (máximo 3 por archivo) y `Ctrl+.` corrige cada una. |
 | Interfaces | Después de `implements` sugiere las interfaces del proyecto; en una línea vacía de la clase propone el método que falta para cumplir el contrato. |
 | Ayuda de parámetros | Al escribir `new Robot(` o `r.metodo(` muestra la firma y resalta el parámetro actual. |
 | Modo del asistente | **Apagado** (solo diagnóstico, útil en evaluaciones), **Básico** (reglas locales, sin costo) o **IA ✦** (`Alt+\` pide la sugerencia a un modelo). |
