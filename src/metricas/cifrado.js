@@ -123,7 +123,18 @@ export async function verificarTexto(clase, texto, firma) {
   } catch { return false; }
 }
 /* Solo lo público de la clase (lo que viaja en el enlace y en los archivos) */
-export const clasePublica = c => (c ? { v: c.v, id: c.id, nombre: c.nombre, docente: c.docente, creada: c.creada, pub: c.pub, ...(c.firma ? { firma: c.firma } : {}), llave: c.llave, ...(c.aula ? { aula: c.aula } : {}) } : null);
+export const clasePublica = c => (c ? { v: c.v, id: c.id, nombre: c.nombre, docente: c.docente, creada: c.creada, pub: c.pub, ...(c.firma ? { firma: c.firma } : {}), llave: c.llave, ...(c.aula ? { aula: c.aula } : {}), ...(c.reemplaza ? { reemplaza: c.reemplaza } : {}) } : null);
+/* Actualiza una clase al aula en vivo con la misma contraseña.
+   - Si ya tiene llave de firma, es la misma clase (mismo id): solo se le pone el servidor.
+   - Si es anterior (sin llave de firma), se crea una nueva con el mismo nombre que la reemplaza:
+     el panel abre las dos con la contraseña, así los archivos viejos se siguen leyendo. */
+export async function actualizarClase(vieja, contrasena, aula = aulaPorDefecto()) {
+  await abrirClase(vieja, contrasena);
+  if (!aula) throw new Error('Falta la dirección del servidor del aula.');
+  if (vieja.firma && vieja.llave?.f) return { ...clasePublica(vieja), aula: String(aula).trim().slice(0, 200) };
+  const nueva = await crearClase({ nombre: vieja.nombre, docente: vieja.docente, contrasena, aula });
+  return { ...nueva, reemplaza: vieja.id };
+}
 /* La clase puede usar el aula en vivo si tiene servidor y llave de firma */
 export const tieneAula = c => !!(c?.aula && c.firma && c.llave?.f);
 export const codificarClase = c => b64u(new TextEncoder().encode(JSON.stringify(clasePublica(c))));

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { crearClase, abrirClase, decodificarClase, aulaPorDefecto } from '../metricas/cifrado.js';
-import { misClases, guardarMiClase, abrirEnSesion } from '../metricas/clasesLocales.js';
+import { misClases, guardarMiClase, abrirEnSesion, abrirConAnteriores } from '../metricas/clasesLocales.js';
 
 /* Acceso docente (se abre con el gesto secreto). Sin la contraseña de una clase no se activa nada:
    o se abre una clase existente o se crea una nueva. */
@@ -20,8 +20,9 @@ export default function AccesoDocente({ claseActual, onListo, onFallo, onCerrar 
     if (!clase) { setError(codigo.trim() ? 'Ese enlace o código no es de una clase.' : 'Elige una clase o pega su enlace.'); return; }
     setOcupado(true);
     try {
-      const priv = await abrirClase(clase, pass);
-      guardarMiClase(clase); abrirEnSesion(clase.id, priv);
+      const llaves = await abrirConAnteriores(clase, pass);
+      guardarMiClase(clase);
+      for (const [id, priv] of Object.entries(llaves)) abrirEnSesion(id, priv);
       onListo(clase, 'entrar');
     } catch (err) { setError(err.message); onFallo(clase); }
     setOcupado(false);

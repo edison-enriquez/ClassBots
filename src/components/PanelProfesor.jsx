@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar, cruzarArchivos } from '../metricas/metricas.js';
-import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase, aulaPorDefecto, tieneAula } from '../metricas/cifrado.js';
+import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase, aulaPorDefecto, tieneAula, actualizarClase } from '../metricas/cifrado.js';
 import { useDocente } from '../aula/docente.js';
 
 import { resaltar } from '../util/resaltar.js';
-import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON, misClases } from '../metricas/clasesLocales.js';
+import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON, misClases, abrirConAnteriores, guardarActualizada } from '../metricas/clasesLocales.js';
 
 const CLAVE_SESION = 'classbots-llave-privada';
 const leerLlave = () => leerJSON(sessionStorage, CLAVE_SESION, null);
@@ -13,7 +13,7 @@ const EVENTO = {
   alta: e => `Se registró como «${e.nombre}»${e.grupo ? ` (${e.grupo})` : ''}`,
   perfil: e => (e.de !== e.a ? `Cambió su nombre: «${e.de}» → «${e.a}»` : `Cambió su grupo: «${e.grupoDe || '—'}» → «${e.grupoA || '—'}»`),
   carga: e => `Cargó un avance de «${e.nombre}»${e.desde && e.desde !== e.nombre ? ` estando como «${e.desde}»` : ''} (exportado ${e.exportado ? new Date(e.exportado).toLocaleString() : '?'})`,
-  clase: e => `Se unió a la clase «${e.a}»${e.de ? ` (antes «${e.de}»)` : ''}`,
+  clase: e => (e.actualizada ? `Actualizó su clase «${e.a}» al aula en vivo` : `Se unió a la clase «${e.a}»${e.de ? ` (antes «${e.de}»)` : ''}`),
   profesor: e => `Activó el modo profesor (${e.accion === 'crear' ? 'creó' : 'abrió'} la clase «${e.clase}»)`,
   'acceso-fallido': e => `Intentó entrar al modo profesor con una contraseña incorrecta (clase «${e.clase}»)`,
   habilitado: e => `El profesor le habilitó «${e.titulo}» sin haber superado el anterior`,
@@ -343,6 +343,10 @@ function Clases({ enArchivos, abiertas, onAbrir }) {
   const [ocupado, setOcupado] = useState(false);
   const [copiado, setCopiado] = useState('');
   const todas = [...mias, ...enArchivos.filter(c => !mias.some(m => m.id === c.id))];
+  const [actualizando, setActualizando] = useState(null);
+  const [recien, setRecien] = useState(null);
+  // Abrir una clase también abre, con la misma contraseña, las clases anteriores que reemplazó
+  const abrirTodas = async (clase, pass) => { const llaves = await abrirConAnteriores(clase, pass, todas); for (const [id, priv] of Object.entries(llaves)) onAbrir(id, priv); };
   const crear = async ev => {
     ev.preventDefault(); setError('');
     if (form.contrasena !== form.repetir) { setError('Las contraseñas no coinciden.'); return; }
@@ -380,17 +384,24 @@ function Clases({ enArchivos, abiertas, onAbrir }) {
         </form>
       )}
       {todas.length === 0 && !form && <p className="bienv-nota">Crea una clase y comparte su enlace con tus estudiantes: sus métricas se cifrarán para ella y solo tú podrás leerlas con la contraseña. No necesitas acceso al repositorio.</p>}
-      {todas.map(c => (
-        <div key={c.id} className={'profe-clase' + (abiertas[c.id] ? ' abierta' : '')}>
-          <div>
-            <strong>🏫 {c.nombre}</strong> <small>{c.docente}{c.n ? ` · ${c.n} archivo(s) cargado(s)` : ''}</small>
+      {todas.map(c => {
+        const nueva = c.reemplazadaPor && todas.find(x => x.id === c.reemplazadaPor);
+        return (
+          <div key={c.id} className={'profe-clase' + (abiertas[c.id] ? ' abierta' : '') + (nueva ? ' reemplazada' : '')}>
+            <div>
+              <strong>🏫 {c.nombre}</strong> <small>{c.docente}{c.n ? ` · ${c.n} archivo(s) cargado(s)` : ''}{tieneAula(c) ? ' · 📡 aula en vivo' : ''}</small>
+              {nueva && <small className="profe-clase-nota">Actualizada: el enlace nuevo es el de «{nueva.nombre}» con 📡. Esta se conserva para leer los archivos anteriores.</small>}
+            </div>
+            <div className="profe-clase-acc">
+              {!nueva && <button type="button" className="btn-sec" onClick={() => copiar(c)}>{copiado === c.id ? '✔ Enlace copiado' : 'Copiar enlace'}</button>}
+              {!tieneAula(c) && !nueva && <button type="button" className="btn-sec" onClick={() => setActualizando(actualizando === c.id ? null : c.id)}>⬆ Actualizar al aula en vivo</button>}
+              {abiertas[c.id] ? <span className="avance-ok">🔓 abierta</span> : <AbrirClase clase={c} onAbrir={abrirTodas} />}
+            </div>
+            {actualizando === c.id && <ActualizarClase clase={c} onListo={(n, llaves) => { guardarActualizada(c, n); setMias(misClases()); for (const [id, priv] of Object.entries(llaves)) onAbrir(id, priv); setActualizando(null); setRecien(n); }} onCancelar={() => setActualizando(null)} />}
           </div>
-          <div className="profe-clase-acc">
-            <button type="button" className="btn-sec" onClick={() => copiar(c)}>{copiado === c.id ? '✔ Enlace copiado' : 'Copiar enlace'}</button>
-            {abiertas[c.id] ? <span className="avance-ok">🔓 abierta</span> : <AbrirClase clase={c} onAbrir={onAbrir} />}
-          </div>
-        </div>
-      ))}
+        );
+      })}
+      {recien && <ClaseActualizada clase={recien} onCerrar={() => setRecien(null)} />}
     </section>
   );
 }
@@ -400,7 +411,7 @@ function AbrirClase({ clase, onAbrir }) {
   const [ocupado, setOcupado] = useState(false);
   const ir = async e => {
     e.preventDefault(); setOcupado(true); setError('');
-    try { onAbrir(clase.id, await abrirClase(clase, pass)); } catch (err) { setError(err.message); }
+    try { await onAbrir(clase, pass); } catch (err) { setError(err.message); }
     setOcupado(false);
   };
   return (
@@ -409,6 +420,51 @@ function AbrirClase({ clase, onAbrir }) {
       <button type="submit" className="btn-pri" disabled={!pass || ocupado}>{ocupado ? '…' : 'Abrir'}</button>
       {error && <span className="avance-alerta">{error}</span>}
     </form>
+  );
+}
+
+/* Actualizar una clase anterior al aula en vivo (misma contraseña) */
+function ActualizarClase({ clase, onListo, onCancelar }) {
+  const [pass, setPass] = useState('');
+  const [aula, setAula] = useState(aulaPorDefecto());
+  const [error, setError] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const ir = async e => {
+    e.preventDefault(); setOcupado(true); setError('');
+    try {
+      const n = await actualizarClase(clase, pass, aula);
+      const llaves = { [n.id]: await abrirClase(n, pass) };
+      if (n.id !== clase.id) llaves[clase.id] = await abrirClase(clase, pass);
+      onListo(n, llaves);
+    } catch (err) { setError(err.message); }
+    setOcupado(false);
+  };
+  return (
+    <form className="profe-form profe-actualizar" onSubmit={ir}>
+      <p className="bienv-nota">{clase.firma ? 'Esta clase ya tiene llave de firma: solo se le agrega el servidor y el enlace cambia.' : 'Esta clase es de antes del aula en vivo. Se creará su versión nueva con el mismo nombre y la misma contraseña; la anterior se conserva para leer sus archivos, y con la contraseña se abren las dos.'}</p>
+      <label className="campo">Contraseña de la clase<input type="password" required autoFocus value={pass} onChange={e => setPass(e.target.value)} autoComplete="current-password" /></label>
+      <label className="campo">Servidor del aula<input value={aula} onChange={e => setAula(e.target.value)} placeholder="wss://aula.tu-dominio.com/aula" maxLength={200} required /></label>
+      {error && <p className="avance-alerta">{error}</p>}
+      <div className="modal-acc"><button type="button" className="btn-sec" onClick={onCancelar}>Cancelar</button><button type="submit" className="btn-pri" disabled={!pass || !aula || ocupado}>{ocupado ? 'Actualizando…' : 'Actualizar'}</button></div>
+    </form>
+  );
+}
+/* Después de actualizar: el enlace nuevo y un mensaje listo para los estudiantes */
+function ClaseActualizada({ clase, onCerrar }) {
+  const enlace = enlaceDeClase(clase);
+  const mensaje = `Hola. Actualicé nuestra clase de ClassBots «${clase.nombre}». Abre este enlace en el computador y el navegador donde juegas, y pulsa «Actualizar»: ${enlace}\nTu avance se conserva.`;
+  const [copiado, setCopiado] = useState('');
+  const copiar = async (txt, k) => { try { await navigator.clipboard.writeText(txt); setCopiado(k); setTimeout(() => setCopiado(''), 2000); } catch { window.prompt('Copia:', txt); } };
+  return (
+    <div className="profe-nueva" role="status">
+      <p>✔ «{clase.nombre}» ya usa el aula en vivo. Comparte el <strong>enlace nuevo</strong> con tus estudiantes: al abrirlo verán «Tu profesor actualizó la clase» y conservarán su avance.</p>
+      <textarea readOnly rows={4} value={mensaje} onFocus={e => e.target.select()} />
+      <div className="modal-acc">
+        <button type="button" className="btn-sec" onClick={() => copiar(enlace, 'e')}>{copiado === 'e' ? '✔ Enlace copiado' : 'Copiar solo el enlace'}</button>
+        <button type="button" className="btn-pri" onClick={() => copiar(mensaje, 'm')}>{copiado === 'm' ? '✔ Mensaje copiado' : 'Copiar el mensaje'}</button>
+        <button type="button" className="btn-sec" onClick={onCerrar}>Listo</button>
+      </div>
+    </div>
   );
 }
 
