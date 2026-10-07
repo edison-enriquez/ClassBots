@@ -1,12 +1,21 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { EditorView } from '@codemirror/view';
-import { EditorState, EditorSelection } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
+import { EditorState, EditorSelection, Prec } from '@codemirror/state';
+import * as Y from 'yjs';
+import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import { crearExtensiones } from '../editor/extensiones.js';
 
+/* Extensiones de edición compartida (programación en pareja) para un archivo */
+export function extensionesColab(colab, archivo) {
+  const ytext = colab.doc.getText(archivo);
+  return [yCollab(ytext, colab.awareness, { undoManager: new Y.UndoManager(ytext) }), Prec.highest(keymap.of(yUndoManagerKeymap))];
+}
+
 /* Envuelve CodeMirror. Mantiene un EditorState por archivo (cada uno con su
-   historial de deshacer) y expone irALinea / pedirIA al resto de la app. */
+   historial de deshacer) y expone irALinea / pedirIA al resto de la app.
+   Con «colab» (programación en pareja), cada archivo queda ligado a su Y.Text compartido. */
 const CodeEditor = forwardRef(function CodeEditor(props, ref) {
-  const { nivel, archivos, activo, revision, modo } = props;
+  const { nivel, archivos, activo, revision, modo, colab } = props;
   const host = useRef(null);
   const view = useRef(null);
   const estados = useRef(new Map());
@@ -31,23 +40,36 @@ const CodeEditor = forwardRef(function CodeEditor(props, ref) {
     };
     herramientas.current = crearExtensiones(cfg);
     estados.current = new Map();
-    const v = new EditorView({ parent: host.current, state: crearEstado(archivos[activo] ?? '') });
+    const v = new EditorView({ parent: host.current, state: crearEstado(archivos[activo] ?? '', activo) });
     view.current = v;
     anterior.current = latest.current.activo;
     return () => { v.destroy(); view.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nivel.id, revision]);
 
-  function crearEstado(doc) {
+  function crearEstado(doc, archivo) {
+    const c = latest.current.colab;
+    if (c) return EditorState.create({ doc: c.doc.getText(archivo).toString(), extensions: [herramientas.current.extensiones, extensionesColab(c, archivo)] });
     return EditorState.create({ doc, extensions: herramientas.current.extensiones });
   }
+
+  // Empezar o terminar la edición compartida: los estados se rehacen ligados (o no) al documento compartido
+  const colabAnterior = useRef(colab);
+  useEffect(() => {
+    const v = view.current;
+    if (!v || colabAnterior.current === colab) return;
+    colabAnterior.current = colab;
+    estados.current = new Map();
+    v.setState(crearEstado(latest.current.archivos[latest.current.activo] ?? '', latest.current.activo));
+  }, [colab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cambiar de archivo conservando el estado de cada uno
   useEffect(() => {
     const v = view.current;
     if (!v || anterior.current === activo) { anterior.current = activo; return; }
     estados.current.set(anterior.current, v.state);
-    v.setState(estados.current.get(activo) || crearEstado(latest.current.archivos[activo] ?? ''));
+    // En pareja, el archivo pudo cambiar mientras no se veía: se rehace desde el documento compartido
+    v.setState((!latest.current.colab && estados.current.get(activo)) || crearEstado(latest.current.archivos[activo] ?? '', activo));
     anterior.current = activo;
     v.focus();
   }, [activo]);

@@ -81,7 +81,11 @@ Si la clase tiene **servidor del aula**, el profesor ve en vivo a cada estudiant
   - cada 3 s, si algo cambió: capítulo, código abierto, errores, resultado de las pruebas, si está fuera de la ventana o inactivo;
   - cada minuto y al superar un capítulo: su archivo de avance completo (el mismo `.json`, comprimido).
   El juego le avisa en la bienvenida y en «Mi avance» que la clase usa el aula en vivo, y muestra el estado de la conexión.
-- **El profesor**, en el Panel con la clase abierta, ve las tarjetas de la clase (🟢 trabajando, 🟡 inactivo, 🟠 fuera de la ventana, ⚫ desconectado), el código de cualquier estudiante en tiempo real, y puede enviar mensajes a uno o a todos. Los archivos que llegan del aula entran en las mismas tablas, indicadores y alertas que los archivos arrastrados.
+- **El profesor**, en el Panel con la clase abierta, ve las tarjetas de la clase (🟢 trabajando, 🟡 inactivo, 🟠 fuera de la ventana, ⚫ desconectado), el código de cualquier estudiante en tiempo real, y puede enviar mensajes a uno o a todos.
+- **Programar en pareja:** desde el detalle de un estudiante, «👥 Programar en pareja» le envía una invitación. Si la acepta, ambos editan los mismos archivos en tiempo real (Yjs) y cada uno ve el cursor del otro. Cualquiera de los dos puede terminar la sesión, y también termina si el estudiante cambia de capítulo.
+  - La invitación va firmada con la llave de la clase, así que solo el profesor puede iniciarla.
+  - La sesión se cifra de punta a punta con una llave efímera (ECDH + AES-GCM); el servidor solo reenvía y no guarda nada.
+  - Lo que escribe el profesor no cuenta como tecleado del estudiante, y la sesión queda en su historial. Los archivos que llegan del aula entran en las mismas tablas, indicadores y alertas que los archivos arrastrados.
 - **Seguridad:** el servidor solo guarda y reenvía sobres cerrados; no puede leer métricas ni código. Para recibir datos, el profesor firma un reto con la llave de la clase, así que adivinar el id de una sala no sirve. Un estudiante no puede enviar mensajes ni recibir los datos de otros.
 - **Servidor:** carpeta [`servidor/`](servidor/README.md) (Node.js, WebSocket y SQLite, sin dependencias nativas), con `Dockerfile` y `compose.yaml` endurecidos para **Docker rootless**. Por defecto se publica con Cloudflare Tunnel en su propio contenedor, sin puertos abiertos; también trae configuración para Nginx o Caddy. Incluye `AGENTS.md` para que un agente haga la instalación, y el despliegue publica el paquete en `/classbots-aula.zip`.
 

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar, cruzarArchivos } from '../metricas/metricas.js';
 import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase, aulaPorDefecto, tieneAula } from '../metricas/cifrado.js';
 import { useAulaProfesor } from '../aula/useAula.js';
+import { crearInvitacion, llaveSesion, crearCanal, COLORES } from '../aula/pareja.js';
+import EditorPareja from './EditorPareja.jsx';
 import { resaltar } from '../util/resaltar.js';
 import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON, misClases } from '../metricas/clasesLocales.js';
 
@@ -15,6 +17,7 @@ const EVENTO = {
   clase: e => `Se unió a la clase «${e.a}»${e.de ? ` (antes «${e.de}»)` : ''}`,
   profesor: e => `Activó el modo profesor (${e.accion === 'crear' ? 'creó' : 'abrió'} la clase «${e.clase}»)`,
   'acceso-fallido': e => `Intentó entrar al modo profesor con una contraseña incorrecta (clase «${e.clase}»)`,
+  pareja: e => (e.fase === 'inicio' ? `Programó en pareja con el profesor (capítulo ${e.nivel})` : 'Terminó la sesión en pareja'),
 };
 
 /* Panel del profesor: reúne los archivos de avance de la clase (sin servidor), los descifra con la
@@ -430,7 +433,47 @@ function resultadoCorto(r) {
   return `${r.aprobados}/${r.evaluados} pruebas`;
 }
 function AulaEnVivo({ clase, priv, onArchivo }) {
-  const { estado, detalle, alumnos, mensaje } = useAulaProfesor({ clase, priv, onArchivo });
+  // Programación en pareja: { alumno, nombre, s, par, estado: 'invitando' | 'activa', canal, archivos, activo, nivel }
+  const [pareja, setPareja] = useState(null);
+  const pRef = useRef(null);
+  pRef.current = pareja;
+  const [avisoPareja, setAvisoPareja] = useState('');
+  const avisarP = m => { setAvisoPareja(m); setTimeout(() => setAvisoPareja(''), 6000); };
+  const cerrarPareja = (motivo, avisarAlOtro) => {
+    const p = pRef.current;
+    if (!p) return;
+    if (avisarAlOtro) enviarPareja(p.alumno, { tipo: 'fin', s: p.s });
+    p.canal?.cerrar();
+    setPareja(null);
+    if (motivo) avisarP(motivo);
+  };
+  const alPareja = async (alumno, d) => {
+    const p = pRef.current;
+    if (!d) return;
+    if (d.tipo === 'reconectado') { if (p?.canal) p.canal.enviarTodo(); return; }
+    if (!p || d.s !== p.s || (alumno && alumno !== p.alumno)) return;
+    if (d.tipo === 'acepta' && p.estado === 'invitando') {
+      const llave = await llaveSesion(p.par.priv, d.pub, p.s);
+      const canal = crearCanal({ llave, sesion: p.s, enviar: x => enviarPareja(p.alumno, x), usuario: { name: clase.docente ? clase.docente.split(' ')[0] : 'Profe', color: COLORES.profe } });
+      setAvisoPareja('');
+      setPareja({ ...p, estado: 'activa', canal, archivos: Array.isArray(d.archivos) ? d.archivos : [], activo: d.activo, nivel: d.nivel });
+      canal.enviarTodo();
+      return;
+    }
+    if (d.tipo === 'rechaza') cerrarPareja(`${p.nombre} prefirió no programar en pareja ahora.`);
+    else if (d.tipo === 'ocupado') cerrarPareja(`${p.nombre} ya está en otra sesión en pareja.`);
+    else if (d.tipo === 'ausente') cerrarPareja(`${p.nombre} no está conectado en este momento.`);
+    else if (d.tipo === 'fin') cerrarPareja(d.razon === 'capitulo' ? `${p.nombre} cambió de capítulo: la sesión en pareja terminó.` : d.razon === 'salio' ? `${p.nombre} cerró la página: la sesión en pareja terminó.` : `${p.nombre} terminó la sesión en pareja.`);
+    else if (p.canal) p.canal.recibir(d);
+  };
+  const { estado, detalle, alumnos, mensaje, enviarPareja } = useAulaProfesor({ clase, priv, onArchivo, onPareja: alPareja });
+  const invitar = async a => {
+    if (pRef.current) cerrarPareja('', true);
+    const { par, mensaje: m } = await crearInvitacion(clase, priv, a.id);
+    setPareja({ alumno: a.id, nombre: a.vivo.perfil.nombre, s: m.s, par, estado: 'invitando' });
+    if (!enviarPareja(a.id, m)) cerrarPareja('Sin conexión con el aula: no se envió la invitación.');
+  };
+  useEffect(() => () => pRef.current?.canal?.cerrar(), []);
   const [sel, setSel] = useState(null);
   const [archivo, setArchivo] = useState(null);
   const [texto, setTexto] = useState('');
@@ -475,10 +518,24 @@ function AulaEnVivo({ clase, priv, onArchivo }) {
       {elegido && (
         <div className="aula-detalle">
           <h4>{v.perfil.nombre} <small>· {v.nivel.etiqueta} {v.nivel.titulo} ({v.nivel.concepto}) · actualizado {hace(elegido.vivoT)}{v.linea ? ` · línea ${v.linea}` : ''}</small></h4>
-          <div className="tabs-guia" role="tablist">{nombres.map(n => <button key={n} type="button" role="tab" aria-selected={n === actual} onClick={() => setArchivo(n)}>{n}{n === v.activo ? ' ✎' : ''}</button>)}</div>
-          <pre className="ejemplo"><code dangerouslySetInnerHTML={{ __html: resaltar(v.archivos?.[actual] || '') }} /></pre>
+          <div className="pareja-barra">
+            {pareja?.alumno === elegido.id && pareja.estado === 'activa'
+              ? <><span className="pareja-on">👥 En pareja con {elegido.vivo.perfil.nombre.split(' ')[0]} · {pareja.nivel?.etiqueta} {pareja.nivel?.titulo} · tu cursor es el amarillo</span><button type="button" className="btn-sec" onClick={() => cerrarPareja('Terminaste la sesión en pareja.', true)}>Terminar</button></>
+              : pareja?.alumno === elegido.id
+                ? <><span className="bienv-nota">Esperando que {elegido.vivo.perfil.nombre.split(' ')[0]} acepte…</span><button type="button" className="btn-sec" onClick={() => cerrarPareja('', true)}>Cancelar</button></>
+                : <button type="button" className="btn-pri" disabled={!elegido.conectado || estado !== 'conectado'} title={elegido.conectado ? 'Editar su código con él en tiempo real (debe aceptar)' : 'El estudiante no está conectado'} onClick={() => invitar(elegido)}>👥 Programar en pareja</button>}
+            {avisoPareja && <span className="avance-alerta">{avisoPareja}</span>}
+          </div>
+          {pareja?.alumno === elegido.id && pareja.estado === 'activa'
+            ? <EditorPareja key={pareja.s} canal={pareja.canal} archivos={pareja.archivos} activoInicial={pareja.activo} nombre={elegido.vivo.perfil.nombre} />
+            : <>
+                <div className="tabs-guia" role="tablist">{nombres.map(n => <button key={n} type="button" role="tab" aria-selected={n === actual} onClick={() => setArchivo(n)}>{n}{n === v.activo ? ' ✎' : ''}</button>)}</div>
+                <pre className="ejemplo"><code dangerouslySetInnerHTML={{ __html: resaltar(v.archivos?.[actual] || '') }} /></pre>
+              </>}
         </div>
       )}
+      {pareja?.estado === 'activa' && pareja.alumno !== elegido?.id && <p className="pareja-on">👥 Sigues en pareja con {pareja.nombre}. <button type="button" className="enlace" onClick={() => setSel(pareja.alumno)}>Volver</button> · <button type="button" className="enlace" onClick={() => cerrarPareja('Terminaste la sesión en pareja.', true)}>Terminar</button></p>}
+      {avisoPareja && !elegido && <p className="avance-alerta">{avisoPareja}</p>}
       <form className="aula-mensaje" onSubmit={enviar}>
         <input value={texto} onChange={e => setTexto(e.target.value)} maxLength={500} placeholder={elegido ? `Mensaje para ${elegido.vivo.perfil.nombre}…` : 'Mensaje para toda la clase…'} aria-label="Mensaje" />
         <button type="submit" className="btn-pri" disabled={!texto.trim() || estado !== 'conectado'}>{elegido ? 'Enviar' : 'Enviar a todos'}</button>

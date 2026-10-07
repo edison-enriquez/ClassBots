@@ -24,6 +24,7 @@ import { registrarApertura, registrarResultado, registrarPista, registrarSolucio
 import { decodificarClase, clasePublica } from './metricas/cifrado.js';
 import { useSellado } from './metricas/sellado.js';
 import { useAulaEstudiante } from './aula/useAula.js';
+import { useParejaEstudiante } from './aula/useParejaEstudiante.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
 
@@ -234,7 +235,8 @@ export default function App() {
     const hacer = () => { if (editor.current?.reemplazarLinea(linea, fix)) avisar('Corregido. Ctrl+Z lo deshace.'); };
     if (archivo !== cod.activo) { setCod(c => ({ ...c, activo: archivo })); setTimeout(hacer, 30); } else hacer();
   };
-  const reemplazarTodo = files => { setCod({ files, activo: nivel.archivoInicial || nivel.archivos[0] }); setRevision(r => r + 1); setResultado(null); };
+  const reemplazarTodo = files => { parejaRef.current?.reemplazar(files); setCod({ files, activo: nivel.archivoInicial || nivel.archivos[0] }); setRevision(r => r + 1); setResultado(null); };
+  const parejaRef = useRef(null);
 
   const [confirmarReset, setConfirmarReset] = useState(false);
   const xp = prog.hechos.length * 100;
@@ -267,7 +269,14 @@ export default function App() {
     }),
     archivoActual: async () => { const sobre = await sellar(); return exportar(prog, [...(prog.segmentos || []), sobre]); },
     onMensaje: m => setMensajeProfe(m),
+    onPareja: d => parejaRef.current?.recibir(d),
   });
+  // Programación en pareja con el profesor (solo si el estudiante acepta)
+  const pareja = useParejaEstudiante({
+    clase: prog.clase, perfil: prog.perfil, nivel, cod, setCod, enviar: aula.enviarPareja,
+    onEvento: ev => medir(m => registrarEvento(m, ev)), onAviso: avisar,
+  });
+  parejaRef.current = pareja;
 
   return (
     <div className="app">
@@ -346,6 +355,12 @@ export default function App() {
 
         <section className="der">
           <div className="ed-bar">
+            {pareja.sesion && (
+              <span className="pareja-banda" role="status" title="Tu profesor ve y edita este código contigo. Su cursor es el amarillo.">
+                👥 En pareja con tu profesor
+                <button type="button" className="btn-mini" onClick={() => pareja.terminar(true, 'Terminaste la sesión en pareja.')}>Terminar</button>
+              </span>
+            )}
             <PestanasArchivos archivos={nivel.archivos} activo={cod.activo} onElegir={a => setCod(c => ({ ...c, activo: a }))}
               marcas={a => { const m = diag.porArchivo[a]; return m && [...m.values()].some(x => x.sev === 'err') ? 'err' : m?.size ? 'warn' : ''; }} />
             <div className="seg" role="radiogroup" aria-label="Asistente de código">
@@ -365,7 +380,7 @@ export default function App() {
 
           <div className="ed">
             <CodeEditor
-              ref={editor} nivel={nivel} archivos={cod.files} activo={cod.activo} revision={revision} modo={modo}
+              ref={editor} nivel={nivel} archivos={cod.files} activo={cod.activo} revision={revision} modo={modo} colab={pareja.colab}
               onCambio={(a, txt) => setCod(c => (c.files[a] === txt ? c : { ...c, files: { ...c.files, [a]: txt } }))}
               onCursor={(l, c) => setCursor([l, c])} onEscritura={alEscribir} onAviso={avisar} onEjecutar={() => ejecutarRef.current(false)}
               onIaNoDisponible={() => { setIaDisp(false); setProg(p => ({ ...p, asistente: 'basico' })); }}
@@ -418,6 +433,19 @@ export default function App() {
         onFallo={c => medir(m => registrarEvento(m, { tipo: 'acceso-fallido', clase: c.nombre, claseId: c.id }))}
         onListo={(c, accion) => { setProfe(true); setAcceso(false); medir(m => registrarEvento(m, { tipo: 'profesor', accion, clase: c.nombre, claseId: c.id })); avisar(`Modo profesor activado · clase «${c.nombre}».`); }} />}
 
+      {pareja.invitacion && (
+        <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="pareja-t">
+          <div className="modal rpg-ventana pareja-invita">
+            <p className="mapa-kicker">PROGRAMAR EN PAREJA</p>
+            <h2 id="pareja-t">👥 Tu profesor quiere programar contigo</h2>
+            <p>Si aceptas, compartirán el código de <strong>{nivel.titulo}</strong>: verá lo que escribes, podrá escribir en tus archivos y verás su cursor en amarillo. Lo que él escriba no cuenta como tecleado tuyo. Puedes terminar la sesión cuando quieras.</p>
+            <div className="modal-acc">
+              <button type="button" className="btn-sec" onClick={pareja.rechazar}>Ahora no</button>
+              <button type="button" className="btn-pri" autoFocus onClick={pareja.aceptar}>Aceptar</button>
+            </div>
+          </div>
+        </div>
+      )}
       {mensajeProfe && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="msj-t">
           <div className="modal rpg-ventana mensaje-profe">

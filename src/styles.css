@@ -642,3 +642,12 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
   .uml-expandido { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
   .uml-lateral { max-height: 30vh; }
 }
+
+/* ---------- Programación en pareja ---------- */
+.pareja-banda { display: inline-flex; align-items: center; gap: 8px; align-self: center; margin-bottom: 6px; padding: 3px 4px 3px 10px; font-size: 13px; color: var(--negro); background: var(--gold); border: 2px solid var(--negro); }
+.pareja-banda .btn-mini { padding: 2px 8px; color: var(--negro); background: #ffe9a8; border-color: var(--negro); }
+.pareja-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.pareja-on { color: var(--gold); font-size: 13px; }
+.pareja-editor .cm-host { height: 380px; border: 2px solid var(--gold); }
+.pareja-editor .cm-editor { height: 100%; }
+.cm-ySelectionInfo { font: 600 11px var(--f-body) !important; padding: 1px 4px !important; color: var(--negro) !important; opacity: 1 !important; }
