@@ -1,22 +1,27 @@
 ClassBots · Servidor del aula en vivo
 =====================================
 
-1. Copia esta carpeta a la VPS (por ejemplo con scp) y entra con el usuario sin privilegios:
-     scp classbots-aula.zip usuario@tu-vps:
-     sudo machinectl shell classbots@
+Modo recomendado: dos contenedores con Docker rootless. El aula no publica ningún puerto
+y Cloudflare Tunnel, en su propio contenedor, es la única entrada.
+
+1. Docker rootless con el usuario classbots (ver README.md, sección 1).
+
+2. En Cloudflare: Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared → Docker.
+   Copia solo el token. En Public hostnames:
+     Subdomain: aula · Domain: eehub.ing · Path: ^/(aula|salud)$
+     Service: HTTP · URL: aula:8787        (el contenedor, no localhost)
+   Usa un subdominio de un solo nivel (aula.eehub.ing), no api.classbots.eehub.ing.
+
+3. En la VPS, como classbots:
      unzip classbots-aula.zip && cd classbots-aula
-
-2. Revisa compose.yaml: ORIGENES debe ser la dirección del juego (https://classbots.eehub.ing).
-
-3. Arranca el servidor con Docker rootless:
+     cp .env.ejemplo .env && chmod 600 .env
+     nano .env                              → pega el token en TUNNEL_TOKEN=
      docker compose up -d --build
-     curl -s http://127.0.0.1:8787/salud        → {"ok":true,"salas":0}
+     docker compose ps                      → aula «healthy», tunel «running»
+     curl -s https://aula.eehub.ing/salud   → {"ok":true,"salas":0}
 
-4. Publica el aula con HTTPS: proxy/Caddyfile, proxy/nginx.conf o, si usas Cloudflare Tunnel,
-   proxy/cloudflared.yml (usa un subdominio de un nivel, p. ej. aula.eehub.ing; ver README.md).
-
-5. En GitHub crea la variable VITE_AULA_URL = wss://<tu subdominio>/aula
+4. En GitHub crea la variable VITE_AULA_URL = wss://aula.eehub.ing/aula
    y crea una clase nueva en el juego.
 
+¿Sin Cloudflare? Con tu propio proxy (Caddy/Nginx): ver README.md, «Sin Cloudflare».
 Si un agente (Claude Code u otro) va a hacer la instalación, pídele que siga AGENTS.md.
-El README.md explica cada paso con detalle (instalar Docker rootless, respaldos, variables).
