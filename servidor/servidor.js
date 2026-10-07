@@ -90,9 +90,9 @@ export function crearServidor(op = {}) {
     enviar(ws, { t: 'reto', reto: ws.reto });
 
     ws.on('message', (bruto, binario) => {
-      // Límite de frecuencia: 40 mensajes de ráfaga, 4 por segundo sostenidos
+      // Límite de frecuencia: 60 mensajes de ráfaga, 12 por segundo sostenidos (la edición en pareja manda lotes cada ~120 ms)
       const ahora = Date.now();
-      ws.fichas = Math.min(40, ws.fichas + ((ahora - ws.ultimaRecarga) / 1000) * 4); ws.ultimaRecarga = ahora;
+      ws.fichas = Math.min(60, ws.fichas + ((ahora - ws.ultimaRecarga) / 1000) * 12); ws.ultimaRecarga = ahora;
       if (ws.fichas < 1) { if (++ws.excesos > 20) ws.close(1008, 'demasiados mensajes'); return; }
       ws.fichas -= 1;
       if (binario) return;
@@ -135,6 +135,18 @@ export function crearServidor(op = {}) {
         bd.guardar.run(ws.clase, ws.alumno, m.clave, ahora, JSON.stringify(m.sobre));
         enviar(ws, { t: 'ack', clave: m.clave, n: m.n });
         aProfes(ws.clase, { t: 'sobre', alumno: ws.alumno, clave: m.clave, recibido: ahora, sobre: m.sobre });
+        return;
+      }
+
+      // Programación en pareja: el servidor solo reenvía (cifrado de punta a punta; no se guarda)
+      if (m.t === 'pareja' && m.d && typeof m.d === 'object') {
+        const s = salas.get(ws.clase);
+        if (ws.rol === 'profesor' && typeof m.para === 'string') {
+          let n = 0;
+          for (const x of s.alumnos.get(m.para) || []) { enviar(x, { t: 'pareja', d: m.d }); n++; }
+          if (!n) enviar(ws, { t: 'pareja', alumno: m.para, d: { tipo: 'ausente', s: m.d.s } });
+        }
+        if (ws.rol === 'estudiante') aProfes(ws.clase, { t: 'pareja', alumno: ws.alumno, d: m.d });
         return;
       }
 

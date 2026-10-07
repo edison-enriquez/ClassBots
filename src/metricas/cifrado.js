@@ -109,10 +109,18 @@ export async function abrirClase(clase, contrasena) {
 }
 /* El profesor prueba ante el servidor del aula que tiene la contraseña: firma el reto que este le envía */
 export const textoReto = (claseId, reto) => `classbots-aula|${claseId}|${reto}`;
-export async function firmarReto(priv, claseId, reto) {
+export async function firmarTexto(priv, texto) {
   if (!priv?.firma) throw new Error('Esta clase no tiene llave de firma (créala de nuevo para usar el aula en vivo).');
   const k = await sutil().importKey('jwk', { kty: 'EC', crv: 'P-256', ...priv.firma, ext: true }, ECDSA, false, ['sign']);
-  return b64u(await sutil().sign({ name: 'ECDSA', hash: 'SHA-256' }, k, new TextEncoder().encode(textoReto(claseId, reto))));
+  return b64u(await sutil().sign({ name: 'ECDSA', hash: 'SHA-256' }, k, new TextEncoder().encode(texto)));
+}
+export const firmarReto = (priv, claseId, reto) => firmarTexto(priv, textoReto(claseId, reto));
+/* Cualquiera con la clase (estudiantes incluidos) puede comprobar que algo lo firmó su profesor */
+export async function verificarTexto(clase, texto, firma) {
+  try {
+    const k = await sutil().importKey('jwk', { kty: 'EC', crv: 'P-256', x: clase.firma.x, y: clase.firma.y, ext: true }, ECDSA, false, ['verify']);
+    return await sutil().verify({ name: 'ECDSA', hash: 'SHA-256' }, k, deB64u(firma), new TextEncoder().encode(texto));
+  } catch { return false; }
 }
 /* Solo lo público de la clase (lo que viaja en el enlace y en los archivos) */
 export const clasePublica = c => (c ? { v: c.v, id: c.id, nombre: c.nombre, docente: c.docente, creada: c.creada, pub: c.pub, ...(c.firma ? { firma: c.firma } : {}), llave: c.llave, ...(c.aula ? { aula: c.aula } : {}) } : null);

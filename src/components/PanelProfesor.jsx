@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar, cruzarArchivos } from '../metricas/metricas.js';
 import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase, aulaPorDefecto, tieneAula } from '../metricas/cifrado.js';
-import { useAulaProfesor } from '../aula/useAula.js';
+import { useDocente } from '../aula/docente.js';
+
 import { resaltar } from '../util/resaltar.js';
 import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON, misClases } from '../metricas/clasesLocales.js';
 
@@ -15,11 +16,25 @@ const EVENTO = {
   clase: e => `Se unió a la clase «${e.a}»${e.de ? ` (antes «${e.de}»)` : ''}`,
   profesor: e => `Activó el modo profesor (${e.accion === 'crear' ? 'creó' : 'abrió'} la clase «${e.clase}»)`,
   'acceso-fallido': e => `Intentó entrar al modo profesor con una contraseña incorrecta (clase «${e.clase}»)`,
+  habilitado: e => `El profesor le habilitó «${e.titulo}» sin haber superado el anterior`,
+  pareja: e => (e.fase === 'inicio' ? `Programó en pareja con el profesor (capítulo ${e.nivel})` : 'Terminó la sesión en pareja'),
 };
+
+/* Un estudiante por perfil y nombre: se queda el archivo exportado más recientemente
+   (el mismo perfil con otro nombre se conserva para alertarlo) */
+function juntarArchivos(prev, nuevos) {
+  const clave = e => `${e.perfil.id || ''}|${e.perfil.nombre}`;
+  const m = new Map(prev.map(e => [clave(e), e]));
+  for (const e of nuevos) {
+    const k = clave(e), viejo = m.get(k);
+    if (!viejo || viejo.exportado < e.exportado) m.set(k, e);
+  }
+  return [...m.values()];
+}
 
 /* Panel del profesor: reúne los archivos de avance de la clase (sin servidor), los descifra con la
    llave privada del profesor y los resume */
-export default function PanelProfesor({ onCerrar }) {
+export default function PanelProfesor({ onCerrar, docente, onVer }) {
   const [crudos, setCrudos] = useState([]);
   const [estudiantes, setEstudiantes] = useState([]);
   const [errores, setErrores] = useState([]);
@@ -29,6 +44,9 @@ export default function PanelProfesor({ onCerrar }) {
   const [llave, setLlave] = useState(leerLlave);
   const [abiertas, setAbiertas] = useState(() => leerJSON(sessionStorage, CLAVE_CLASES_ABIERTAS, {}));
   const abrir = (id, priv) => setAbiertas(a => { const n = { ...a, [id]: priv }; guardarJSON(sessionStorage, CLAVE_CLASES_ABIERTAS, n); return n; });
+  // Las aulas en vivo de las clases abiertas (la conexión vive en la app y sigue al cerrar el panel)
+  useDocente(docente);
+  useEffect(() => { docente?.sincronizar(misClases().filter(c => abiertas[c.id]).map(c => ({ clase: c, priv: abiertas[c.id] }))); }, [abiertas, docente]);
   const input = useRef(null);
   // Clases que aparecen en los archivos cargados
   const clasesEnArchivos = useMemo(() => {
@@ -45,26 +63,10 @@ export default function PanelProfesor({ onCerrar }) {
     setErrores(errs);
     juntar(nuevos);
   };
-  // Archivos que llegan del aula en vivo: se agrupan para no recalcular el panel con cada uno
-  const cola = useRef([]), tCola = useRef(null);
-  const delAula = arch => {
-    try { cola.current.push({ ...leerArchivo(JSON.stringify(arch)), archivo: 'aula en vivo' }); } catch { return; }
-    if (!tCola.current) tCola.current = setTimeout(() => { tCola.current = null; const l = cola.current; cola.current = []; juntar(l); }, 800);
-  };
-  useEffect(() => () => clearTimeout(tCola.current), []);
-  const juntar = nuevos => {
-    setCrudos(prev => {
-      // Un estudiante por id: se queda el archivo exportado más recientemente
-      // Un archivo por perfil y nombre: el mismo perfil con otro nombre se conserva para alertarlo
-      const clave = e => `${e.perfil.id || ''}|${e.perfil.nombre}`;
-      const m = new Map(prev.map(e => [clave(e), e]));
-      for (const e of nuevos) {
-        const k = clave(e), viejo = m.get(k);
-        if (!viejo || viejo.exportado < e.exportado) m.set(k, e);
-      }
-      return [...m.values()];
-    });
-  };
+  const juntar = nuevos => setCrudos(prev => juntarArchivos(prev, nuevos));
+  // Archivos que llegaron por el aula en vivo, junto con los que se arrastraron
+  const vAula = docente?.instantanea().v;
+  const todos = useMemo(() => juntarArchivos(crudos, docente ? docente.archivos() : []), [crudos, vAula]); // eslint-disable-line react-hooks/exhaustive-deps
   const vivas = misClases().filter(c => abiertas[c.id] && tieneAula(c));
 
   // Descifrar y resumir cada vez que cambian los archivos o la llave
@@ -75,7 +77,7 @@ export default function PanelProfesor({ onCerrar }) {
       const lista = [];
       const llaves = { clases: abiertas, rsa: llave?.privada };
       if (cache.current.llaves !== llaves.clases || cache.current.rsa !== llaves.rsa) cache.current = { llaves: llaves.clases, rsa: llaves.rsa, m: new WeakMap() };
-      for (const d of crudos) {
+      for (const d of todos) {
         let x = cache.current.m.get(d);
         if (!x) { x = await abrirConLlave(d, llaves); cache.current.m.set(d, x); }
         const cifrado = d.segmentos.length > 0 && x.leidos === 0;
@@ -86,7 +88,7 @@ export default function PanelProfesor({ onCerrar }) {
       if (vivo) setEstudiantes(lista);
     })();
     return () => { vivo = false; };
-  }, [crudos, llave, abiertas]);
+  }, [todos, llave, abiertas]);
 
   const clase = useMemo(() => {
     if (!estudiantes.length) return null;
@@ -148,7 +150,7 @@ export default function PanelProfesor({ onCerrar }) {
         </header>
 
         <Clases enArchivos={clasesEnArchivos} abiertas={abiertas} onAbrir={abrir} />
-        {vivas.map(c => <AulaEnVivo key={c.id} clase={c} priv={abiertas[c.id]} onArchivo={delAula} />)}
+        {vivas.map(c => <AulaEnVivo key={c.id} clase={c} docente={docente} onVer={onVer} />)}
         <details className="profe-avanzado">
           <summary>Avanzado: archivos sin clase (llave del despliegue)</summary>
           <Llave llave={llave} onLlave={l => { setLlave(l); try { if (l) sessionStorage.setItem(CLAVE_SESION, JSON.stringify(l)); else sessionStorage.removeItem(CLAVE_SESION); } catch { /* nada */ } }} />
@@ -429,8 +431,9 @@ function resultadoCorto(r) {
   if (r.todosOk && r.enviado) return '✔ superado';
   return `${r.aprobados}/${r.evaluados} pruebas`;
 }
-function AulaEnVivo({ clase, priv, onArchivo }) {
-  const { estado, detalle, alumnos, mensaje } = useAulaProfesor({ clase, priv, onArchivo });
+function AulaEnVivo({ clase, docente, onVer }) {
+  const sala = docente?.sala(clase.id);
+  const estado = sala?.estado || 'conectando', detalle = sala?.detalle || '', alumnos = sala?.alumnos || {};
   const [sel, setSel] = useState(null);
   const [archivo, setArchivo] = useState(null);
   const [texto, setTexto] = useState('');
@@ -448,7 +451,7 @@ function AulaEnVivo({ clase, priv, onArchivo }) {
     e.preventDefault();
     if (!texto.trim()) return;
     const para = sel || '*';
-    if (mensaje(para, texto.trim())) { setAviso(`✔ Enviado a ${elegido ? elegido.vivo.perfil.nombre : 'toda la clase'}`); setTexto(''); } else setAviso('Sin conexión con el aula: no se envió.');
+    if (docente.mensaje(clase.id, para, texto.trim())) { setAviso(`✔ Enviado a ${elegido ? elegido.vivo.perfil.nombre : 'toda la clase'}`); setTexto(''); } else setAviso('Sin conexión con el aula: no se envió.');
     setTimeout(() => setAviso(''), 4000);
   };
   return (
@@ -463,18 +466,25 @@ function AulaEnVivo({ clase, priv, onArchivo }) {
         : <div className="aula-grilla">{lista.map(a => {
             const [cls, txt] = situacion(a);
             return (
-              <button key={a.id} type="button" className={`aula-tarjeta ${cls}${sel === a.id ? ' sel' : ''}`} onClick={() => { setSel(sel === a.id ? null : a.id); setArchivo(null); }} aria-pressed={sel === a.id}>
-                <strong>{a.vivo.perfil.nombre}</strong>
-                <small>{a.vivo.perfil.grupo}</small>
-                <span className="aula-cap">{a.vivo.nivel.etiqueta} · {a.vivo.nivel.titulo}</span>
-                <span className="aula-linea"><span>{txt}</span></span>
-                <span className="aula-linea"><span className={a.vivo.errores ? 'on-err' : ''}>● {a.vivo.errores}</span> <span>{resultadoCorto(a.vivo.resultado)}</span> <span>{a.vivo.capitulos} cap.</span></span>
-              </button>
+              <div key={a.id} className={`aula-tarjeta ${cls}${sel === a.id ? ' sel' : ''}`}>
+                <button type="button" className="aula-tarjeta-sel" onClick={() => { setSel(sel === a.id ? null : a.id); setArchivo(null); }} aria-pressed={sel === a.id}>
+                  <strong>{a.vivo.perfil.nombre}</strong>
+                  <small>{a.vivo.perfil.grupo}</small>
+                  <span className="aula-cap">{a.vivo.nivel.etiqueta} · {a.vivo.nivel.titulo}</span>
+                  <span className="aula-linea"><span>{txt}</span></span>
+                  <span className="aula-linea"><span className={a.vivo.errores ? 'on-err' : ''}>● {a.vivo.errores}</span> <span>{resultadoCorto(a.vivo.resultado)}</span> <span>{a.vivo.capitulos} cap.</span></span>
+                </button>
+                <button type="button" className="btn-mini aula-ver" onClick={() => onVer?.(clase.id, a.id)} title="Ver la plataforma como la ve este estudiante">👁 Ver</button>
+              </div>
             );
           })}</div>}
       {elegido && (
         <div className="aula-detalle">
           <h4>{v.perfil.nombre} <small>· {v.nivel.etiqueta} {v.nivel.titulo} ({v.nivel.concepto}) · actualizado {hace(elegido.vivoT)}{v.linea ? ` · línea ${v.linea}` : ''}</small></h4>
+          <div className="pareja-barra">
+            <button type="button" className="btn-pri" onClick={() => onVer?.(clase.id, elegido.id)}>👁 Ver como {v.perfil.nombre.split(' ')[0]} en la plataforma</button>
+            <span className="bienv-nota">Desde ahí puedes ejecutar su código, programar en pareja y habilitarle el siguiente capítulo.</span>
+          </div>
           <div className="tabs-guia" role="tablist">{nombres.map(n => <button key={n} type="button" role="tab" aria-selected={n === actual} onClick={() => setArchivo(n)}>{n}{n === v.activo ? ' ✎' : ''}</button>)}</div>
           <pre className="ejemplo"><code dangerouslySetInnerHTML={{ __html: resaltar(v.archivos?.[actual] || '') }} /></pre>
         </div>

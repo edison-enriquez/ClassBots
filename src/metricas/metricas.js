@@ -270,7 +270,7 @@ export const contenidoSegmento = (prog, seg) => ({
 export function exportar(prog, segmentos) {
   const cuerpo = {
     perfil: prog.perfil || null,
-    progreso: { nivelId: prog.nivelId, hechos: prog.hechos, pasosHechos: prog.pasosHechos || [], misionesHechas: prog.misionesHechas || [], codigo: prog.codigo },
+    progreso: { nivelId: prog.nivelId, hechos: prog.hechos, pasosHechos: prog.pasosHechos || [], misionesHechas: prog.misionesHechas || [], ...(prog.habilitados?.length ? { habilitados: prog.habilitados } : {}), codigo: prog.codigo },
     segmentos,
     clase: clasePublica(prog.clase) || null,
   };
@@ -301,6 +301,7 @@ export function aProgreso(d, base) {
     hechos: (d.progreso.hechos || []).filter(id => ids.has(id)),
     pasosHechos: (d.progreso.pasosHechos || []).filter(id => pids.has(id)),
     misionesHechas: (d.progreso.misionesHechas || []).filter(id => MISIONES.some(m => m.id === id)),
+    habilitados: (d.progreso.habilitados || []).filter(id => ids.has(id) || pids.has(id)),
     codigo: d.progreso.codigo || {},
     segmentos: d.segmentos || [],
     clase: d.clase || base.clase || null,

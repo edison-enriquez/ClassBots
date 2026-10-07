@@ -115,3 +115,21 @@ test('un estudiante no puede hacerse pasar por profesor ni enviar mensajes', asy
   assert.ok(!e.msgs.some(m => m.t === 'sobre'));
   [p, e, e2].forEach(x => x.ws.close());
 });
+
+test('pareja: el servidor reenvía en ambos sentidos y avisa si el estudiante no está', async () => {
+  const p = await profesor();
+  const e = await estudiante('dani42');
+  p.mandar({ t: 'pareja', para: 'dani42', d: { tipo: 'invita', s: 'S1' } });
+  assert.equal((await e.esperar(m => m.t === 'pareja')).d.tipo, 'invita');
+  e.mandar({ t: 'pareja', d: { tipo: 'acepta', s: 'S1' } });
+  const r = await p.esperar(m => m.t === 'pareja' && m.d.tipo === 'acepta');
+  assert.equal(r.alumno, 'dani42');
+  p.mandar({ t: 'pareja', para: 'nadie', d: { tipo: 'invita', s: 'S2' } });
+  assert.equal((await p.esperar(m => m.t === 'pareja' && m.d.tipo === 'ausente')).d.s, 'S2');
+  // Un estudiante no puede mandarle a otro estudiante
+  const f = await estudiante('fede11');
+  e.mandar({ t: 'pareja', para: 'fede11', d: { tipo: 'y', s: 'S1' } });
+  await new Promise(x => setTimeout(x, 200));
+  assert.ok(!f.msgs.some(m => m.t === 'pareja'));
+  [p, e, f].forEach(x => x.ws.close());
+});

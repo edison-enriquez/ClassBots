@@ -24,6 +24,11 @@ import { registrarApertura, registrarResultado, registrarPista, registrarSolucio
 import { decodificarClase, clasePublica } from './metricas/cifrado.js';
 import { useSellado } from './metricas/sellado.js';
 import { useAulaEstudiante } from './aula/useAula.js';
+import { useParejaEstudiante } from './aula/useParejaEstudiante.js';
+import { AulaDocente, useDocente, textoHabilitar } from './aula/docente.js';
+import { archivosDeDoc } from './aula/pareja.js';
+import { verificarTexto } from './metricas/cifrado.js';
+import { clasesAbiertas, misClases } from './metricas/clasesLocales.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
 
@@ -32,7 +37,24 @@ export default function App() {
   const i = indiceDe(prog.nivelId);
   const [pasoId, setPasoId] = useState(null);
   const nivelRuta = NIVELES[i];
-  const nivel = PASOS.find(p => p.id === pasoId) || nivelRuta;
+  const nivelPropio = PASOS.find(p => p.id === pasoId) || nivelRuta;
+
+  /* ---- Profesor: aulas en vivo y vista de estudiante ---- */
+  const docenteRef = useRef(null);
+  if (!docenteRef.current) docenteRef.current = new AulaDocente();
+  const docente = docenteRef.current;
+  // { claseId, alumno, nivelSel }: el profesor ve la plataforma como la ve ese estudiante
+  const [vista, setVista] = useState(null);
+  useDocente(vista ? docente : null);
+  const alumnoV = vista ? docente.alumno(vista.claseId, vista.alumno) : null;
+  const vivoV = alumnoV?.vivo || null;
+  const archV = alumnoV?.archivo || null;
+  const parejaV = vista && docente.pareja?.alumno === vista.alumno && docente.pareja?.claseId === vista.claseId ? docente.pareja : null;
+  const colabV = parejaV?.estado === 'activa' ? parejaV.canal : null;
+  const nivelVivoV = vivoV ? (NIVELES.find(n => n.id === vivoV.nivel.id) || PASOS.find(p => p.id === vivoV.nivel.id)) : null;
+  const idVista = vista ? (colabV ? parejaV.nivel?.id : vista.nivelSel) || vivoV?.nivel.id : null;
+  const nivelVista = idVista ? (NIVELES.find(n => n.id === idVista) || PASOS.find(p => p.id === idVista)) : null;
+  const nivel = nivelVista || nivelPropio;
   const esMision = !!nivel.mision;
   const misionId = esMision ? nivel.misionId : null;
   const misionDeNivel = esMision ? MISIONES.find(m => m.id === misionId) : null;
@@ -48,7 +70,31 @@ export default function App() {
   const [acceso, setAcceso] = useState(false);
   const setProfe = v => { ponerProfeEnSesion(v); setProfeEstado(v); };
 
-  const [cod, setCod] = useState(() => codigoDe(prog, i));
+  const [codPropio, setCodPropio] = useState(() => codigoDe(prog, i));
+  // En la vista de estudiante, el código es el suyo: en vivo, el de la sesión en pareja o el guardado en su avance
+  const [vistaActivo, setVistaActivo] = useState(null);
+  const [, setVerColab] = useState(0);
+  useEffect(() => {
+    if (!colabV) return undefined;
+    const f = () => setVerColab(x => x + 1);
+    colabV.doc.on('update', f);
+    return () => colabV.doc.off('update', f);
+  }, [colabV]);
+  let codVista = null;
+  if (vista && nivelVista) {
+    let files;
+    if (colabV) files = archivosDeDoc(colabV.doc, parejaV.archivos);
+    else if (vivoV && nivelVista.id === vivoV.nivel.id) files = vivoV.archivos || {};
+    else {
+      const k = NIVELES.indexOf(nivelVista);
+      files = archV?.progreso?.codigo?.[nivelVista.id]?.files || (nivelVista.mision ? nivelVista.inicial() : nivelVista.inicial(k > 0 ? NIVELES[k - 1].solucion : undefined));
+    }
+    const nombres = nivelVista.archivos.filter(a => files[a] != null);
+    const pref = [vistaActivo, nivelVista.id === vivoV?.nivel.id ? vivoV.activo : null, nivelVista.archivoInicial, nombres[0]];
+    codVista = { files, activo: pref.find(a => a && files[a] != null) || nivelVista.archivos[0] };
+  }
+  const cod = codVista || codPropio;
+  const setCod = codVista ? f => { const n = typeof f === 'function' ? f(codVista) : f; if (n.activo !== codVista.activo) setVistaActivo(n.activo); } : setCodPropio;
   const [revision, setRevision] = useState(0);
   const [resultado, setResultado] = useState(null);
   const [enviado, setEnviado] = useState(false);
@@ -66,7 +112,7 @@ export default function App() {
   // Métricas de aprendizaje: se guardan con el progreso y viajan en el archivo de avance
   const medir = useCallback(f => setProg(p => ({ ...p, metricas: f(p.metricas) })), [setProg]);
   useEffect(() => { medir(registrarSesion); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (prog.perfil) medir(m => registrarApertura(m, nivel.id)); }, [nivel.id, !!prog.perfil]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (prog.perfil && !vista) medir(m => registrarApertura(m, nivel.id)); }, [nivel.id, !!prog.perfil]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tiempo activo: cuenta en bloques de 15 s si la pestaña está visible y hubo actividad en los últimos 2 minutos
   const actividad = useRef(Date.now());
   const nivelActual = useRef(nivel.id);
@@ -132,7 +178,7 @@ export default function App() {
   }, [volcarEscritura, medir]);
 
   // Guardar el código del nivel
-  useEffect(() => { setProg(p => ({ ...p, codigo: { ...p.codigo, [nivel.id]: cod } })); }, [cod]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setProg(p => ({ ...p, codigo: { ...p.codigo, [nivelPropio.id]: codPropio } })); }, [codPropio]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Diagnóstico en vivo, con un pequeño retraso mientras se escribe
   const [diferidos, setDiferidos] = useState(cod.files);
@@ -161,9 +207,13 @@ export default function App() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hecho = k => prog.hechos.includes(NIVELES[k].id);
-  const abierto = k => profe || k === 0 || hecho(k - 1) || hecho(k);
-  const pasosHechos = prog.pasosHechos || [];
+  const progV = archV?.progreso || null;
+  const hechos = vista ? (progV?.hechos || []) : prog.hechos;
+  const habilitados = vista ? (progV?.habilitados || []) : (prog.habilitados || []);
+  const hecho = k => hechos.includes(NIVELES[k].id);
+  const abierto = k => profe || k === 0 || hecho(k - 1) || hecho(k) || habilitados.includes(NIVELES[k].id);
+  const pasosHechos = (vista ? progV?.pasosHechos : prog.pasosHechos) || [];
+  const pasoOk = p => pasoAbierto(p, pasosHechos, profe) || habilitados.includes(p.id);
   const misionAbierta = m => misionDisponible(m, prog.hechos, profe);
   const misionCompleta = m => misionCompletada(m, pasosHechos, prog.misionesHechas || []);
   const completadas = MISIONES.filter(misionCompleta);
@@ -180,7 +230,7 @@ export default function App() {
   };
   const irPaso = paso => {
     const m = MISIONES.find(x => x.id === paso.misionId);
-    if (!misionAbierta(m) || !pasoAbierto(paso, pasosHechos, profe)) return;
+    if (!misionAbierta(m) || !pasoOk(paso)) return;
     setPasoId(paso.id);
     setVerMundo(paso.mundo);
     setCod(codigoPaso({ ...prog, codigo: { ...prog.codigo, [nivel.id]: cod } }, paso));
@@ -189,7 +239,7 @@ export default function App() {
   const iniciarMision = m => {
     if (!misionAbierta(m)) return;
     const pasos = PASOS.filter(p => p.misionId === m.id);
-    irPaso(pasos.find(p => !pasosHechos.includes(p.id) && pasoAbierto(p, pasosHechos, profe)) || pasos[0]);
+    irPaso(pasos.find(p => !pasosHechos.includes(p.id) && pasoOk(p)) || pasos[0]);
   };
   const volverARuta = () => {
     setPasoId(null);
@@ -200,7 +250,9 @@ export default function App() {
 
   const izq = useRef(null);
   const ejecutar = enviar => {
+    if (vista && enviar) return;
     const r = evaluarNivel(nivel, cod.files, { incluirOcultas: enviar });
+    if (vista) { setResultado(r); setEnviado(false); setToken(t => t + 1); setExito(null); setTab('pruebas'); return; }
     volcarEscritura();
     medir(m => registrarResultado(m, nivel.id, r, enviar));
     if (enviar) {
@@ -234,7 +286,8 @@ export default function App() {
     const hacer = () => { if (editor.current?.reemplazarLinea(linea, fix)) avisar('Corregido. Ctrl+Z lo deshace.'); };
     if (archivo !== cod.activo) { setCod(c => ({ ...c, activo: archivo })); setTimeout(hacer, 30); } else hacer();
   };
-  const reemplazarTodo = files => { setCod({ files, activo: nivel.archivoInicial || nivel.archivos[0] }); setRevision(r => r + 1); setResultado(null); };
+  const reemplazarTodo = files => { parejaRef.current?.reemplazar(files); setCod({ files, activo: nivel.archivoInicial || nivel.archivos[0] }); setRevision(r => r + 1); setResultado(null); };
+  const parejaRef = useRef(null);
 
   const [confirmarReset, setConfirmarReset] = useState(false);
   const xp = prog.hechos.length * 100;
@@ -250,6 +303,48 @@ export default function App() {
     if (esMision || k !== i) irNivel(k); else setVerMundo(m.id);
   };
   const nErr = diag.lista.filter(p => p.sev === 'err').length, nWarn = diag.lista.length - nErr;
+
+  /* ---- Vista de estudiante (profesor) ---- */
+  const colabVista = useMemo(() => (colabV ? { doc: colabV.doc, awareness: colabV.awareness } : null), [colabV]);
+  const [habilitadosVista, setHabilitadosVista] = useState([]);
+  const limpiarEscena = () => { setResultado(null); setEnviado(false); setCaption(''); setExito(null); setTab('pruebas'); setToken(t => t + 1); };
+  const entrarVista = (claseId, alumno) => { setPanelProfe(false); setVistaActivo(null); setHabilitadosVista([]); setVista({ claseId, alumno, nivelSel: null }); limpiarEscena(); };
+  const salirVista = () => { if (parejaV) docente.terminarPareja('', true); setVista(null); setVistaActivo(null); setVerMundo(nivelPropio.mundo); limpiarEscena(); };
+  const verNivelVista = id => { if (colabV) return; setVista(v => ({ ...v, nivelSel: id === vivoV?.nivel.id ? null : id })); setVistaActivo(null); limpiarEscena(); };
+  useEffect(() => { if (vista && nivelVista) setVerMundo(nivelVista.mundo); }, [idVista]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Siguiente capítulo (o paso de la misión) que el profesor le puede habilitar
+  const siguienteV = (() => {
+    if (!nivelVivoV) return null;
+    if (nivelVivoV.mision) { const k = PASOS.indexOf(nivelVivoV); const p = PASOS[k + 1]; return p && p.misionId === nivelVivoV.misionId ? p : null; }
+    return NIVELES[NIVELES.indexOf(nivelVivoV) + 1] || null;
+  })();
+  const yaAbiertoV = siguienteV && (hechos.includes(siguienteV.id) || pasosHechos.includes(siguienteV.id) || habilitados.includes(siguienteV.id) || habilitadosVista.includes(siguienteV.id) || (!siguienteV.mision && hechos.includes(nivelVivoV.id)));
+  const habilitarVista = async () => {
+    if (!siguienteV) return;
+    const ok = await docente.habilitar(vista.claseId, vista.alumno, siguienteV.id);
+    if (ok) { setHabilitadosVista(l => [...l, siguienteV.id]); docente.avisar(`✔ Le habilitaste «${siguienteV.titulo}» a ${vivoV.perfil.nombre.split(' ')[0]}.`); }
+    else docente.avisar('Sin conexión con el aula: no se pudo habilitar.');
+  };
+  const situacionV = !alumnoV ? '' : !alumnoV.conectado ? '⚫ desconectado' : vivoV?.fuera ? '🟠 fuera de la ventana' : vivoV?.inactivo ? '🟡 inactivo' : '🟢 trabajando';
+  const avisoDocente = docente.aviso && Date.now() - docente.aviso.t < 8000 ? docente.aviso.txt : '';
+  // El modo profesor abre las aulas de las clases abiertas en esta pestaña
+  useEffect(() => {
+    if (profe) { const ab = clasesAbiertas(); docente.sincronizar(misClases().filter(c => ab[c.id]).map(c => ({ clase: c, priv: ab[c.id] }))); }
+    else { docente.cerrarTodo(); setVista(null); }
+  }, [profe]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ---- Estudiante: el profesor le habilita un capítulo (orden firmada con la llave de la clase) ---- */
+  const [habilitado, setHabilitado] = useState(null);
+  const recibirHabilitar = async d => {
+    const c = prog.clase, yo = prog.perfil?.id;
+    if (!c || !yo || typeof d.nivel !== 'string' || Math.abs(Date.now() - d.t) > 10 * 60000) return;
+    if (!(await verificarTexto(c, textoHabilitar(c.id, yo, d.nivel, d.t), d.firma))) return;
+    const n = NIVELES.find(x => x.id === d.nivel) || PASOS.find(x => x.id === d.nivel);
+    if (!n) return;
+    setProg(p => ({ ...p, habilitados: [...new Set([...(p.habilitados || []), n.id])] }));
+    medir(m => registrarEvento(m, { tipo: 'habilitado', nivel: n.id, titulo: n.titulo }));
+    setHabilitado(n);
+  };
   const modo = prog.asistente || 'basico';
 
   // Aula en vivo: si la clase tiene servidor, el profesor ve el avance y el código mientras se trabaja
@@ -267,7 +362,14 @@ export default function App() {
     }),
     archivoActual: async () => { const sobre = await sellar(); return exportar(prog, [...(prog.segmentos || []), sobre]); },
     onMensaje: m => setMensajeProfe(m),
+    onPareja: d => (d?.tipo === 'habilitar' ? recibirHabilitar(d) : parejaRef.current?.recibir(d)),
   });
+  // Programación en pareja con el profesor (solo si el estudiante acepta)
+  const pareja = useParejaEstudiante({
+    clase: prog.clase, perfil: prog.perfil, nivel, cod, setCod, enviar: aula.enviarPareja,
+    onEvento: ev => medir(m => registrarEvento(m, ev)), onAviso: avisar,
+  });
+  parejaRef.current = pareja;
 
   return (
     <div className="app">
@@ -296,24 +398,24 @@ export default function App() {
               <span className="mapa-nombre">✦ {misionDeNivel.titulo}</span>
               <ol>
                 {misionDeNivel.pasos.map((p0, k) => {
-                  const p = PASOS.find(x => x.id === p0.id), ok = pasoAbierto(p, pasosHechos, profe);
+                  const p = PASOS.find(x => x.id === p0.id), ok = pasoOk(p);
                   return (
-                    <li key={p.id} className={pasosHechos.includes(p.id) ? 'hecho' : ''}>
-                      <button type="button" className={'nodo nodo-mision' + (p.jefe ? ' jefe' : '')} aria-current={p.id === nivel.id ? 'step' : undefined} disabled={!ok} onClick={() => irPaso(p)}
+                    <li key={p.id} className={(pasosHechos.includes(p.id) ? 'hecho' : '') + (vista && p.id === vivoV?.nivel.id ? ' alumno-aqui' : '')}>
+                      <button type="button" className={'nodo nodo-mision' + (p.jefe ? ' jefe' : '')} aria-current={p.id === nivel.id ? 'step' : undefined} disabled={!ok} onClick={() => (vista ? verNivelVista(p.id) : irPaso(p))}
                         title={ok ? `Paso ${k + 1}: ${p.titulo} · ${p.concepto}` : 'Supera el paso anterior para abrirlo'}>{p.jefe ? '★' : k + 1}</button>
                     </li>
                   );
                 })}
               </ol>
-              <button type="button" className="btn-sec volver-ruta" onClick={volverARuta}>← Volver a la ruta principal</button>
+              {!vista && <button type="button" className="btn-sec volver-ruta" onClick={volverARuta}>← Volver a la ruta principal</button>}
             </div>
           ) : (
           <div className="mapa-mundo">
             <span className="mapa-nombre">{MUNDOS.find(m => m.id === verMundo)?.nombre}</span>
             <ol>
               {NIVELES.map((n, k) => n.mundo !== verMundo ? null : (
-                <li key={n.id} className={hecho(k) ? 'hecho' : ''}>
-                  <button type="button" className={'nodo' + (n.jefe ? ' jefe' : '')} aria-current={k === i ? 'step' : undefined} disabled={!abierto(k)} onClick={() => irNivel(k)} title={abierto(k) ? `${n.mundo}.${n.enMundo + 1} ${n.titulo} · ${n.concepto}` : 'Supera el capítulo anterior para abrirlo'}>
+                <li key={n.id} className={(hecho(k) ? 'hecho' : '') + (vista && n.id === vivoV?.nivel.id ? ' alumno-aqui' : '')}>
+                  <button type="button" className={'nodo' + (n.jefe ? ' jefe' : '')} aria-current={(vista ? n.id === nivel.id : k === i) ? 'step' : undefined} disabled={!abierto(k)} onClick={() => (vista ? verNivelVista(n.id) : irNivel(k))} title={(vista && n.id === vivoV?.nivel.id ? `Aquí está ${vivoV.perfil.nombre} · ` : '') + (abierto(k) ? `${n.mundo}.${n.enMundo + 1} ${n.titulo} · ${n.concepto}` : 'Supera el capítulo anterior para abrirlo')}>
                     {n.jefe ? '★' : n.enMundo + 1}
                   </button>
                 </li>
@@ -330,6 +432,24 @@ export default function App() {
             onDescargar={async () => { const sobre = await sellar(); descargar(nombreArchivo(prog.perfil), JSON.stringify(exportar(prog, [...(prog.segmentos || []), sobre]), null, 2)); }}
             onSalirProfe={() => { setProfe(false); avisar('Modo profesor desactivado.'); }} />
         </div>
+        {vista && (
+          <div className="vista-banda" role="status" aria-live="polite">
+            <span className="vista-ojo">👁 VISTA DE ESTUDIANTE</span>
+            <span className="vista-quien"><strong>{vivoV?.perfil.nombre || 'Estudiante'}</strong>{vivoV?.perfil.grupo ? ` · ${vivoV.perfil.grupo}` : ''} · está en <strong>{vivoV ? `${vivoV.nivel.etiqueta} «${vivoV.nivel.titulo}»` : '…'}</strong> · {situacionV}</span>
+            {vivoV && nivel.id !== vivoV.nivel.id && <span className="vista-otro">Viendo «{nivel.titulo}» (código guardado) <button type="button" className="btn-mini" onClick={() => verNivelVista(vivoV.nivel.id)}>Ir a su capítulo</button></span>}
+            <span className="vista-acc">
+              {colabV
+                ? <><span className="pareja-on">👥 En pareja · tu cursor es el amarillo</span><button type="button" className="btn-mini" onClick={() => docente.terminarPareja('Terminaste la sesión en pareja.', true)}>Terminar pareja</button></>
+                : parejaV
+                  ? <><span className="bienv-nota">Esperando que acepte…</span><button type="button" className="btn-mini" onClick={() => docente.terminarPareja('', true)}>Cancelar</button></>
+                  : <button type="button" className="btn-mini" disabled={!alumnoV?.conectado} title={alumnoV?.conectado ? 'Editar su código con él en tiempo real (debe aceptar)' : 'El estudiante no está conectado'} onClick={() => { verNivelVista(vivoV.nivel.id); docente.invitar(vista.claseId, vista.alumno, vivoV.perfil.nombre); }}>👥 Programar en pareja</button>}
+              {siguienteV && <button type="button" className="btn-mini" disabled={!!yaAbiertoV || !alumnoV?.conectado} title={yaAbiertoV ? 'Ya lo tiene abierto' : 'Le desbloquea el siguiente capítulo aunque no haya superado el actual'} onClick={habilitarVista}>⏭ Habilitar «{siguienteV.titulo}»</button>}
+              <button type="button" className="btn-mini" onClick={() => setPanelProfe(true)}>Panel</button>
+              <button type="button" className="btn-mini peligro" onClick={salirVista}>Salir de la vista</button>
+            </span>
+            {avisoDocente && <span className={avisoDocente.startsWith('✔') ? 'avance-ok' : 'avance-alerta'}>{avisoDocente}</span>}
+          </div>
+        )}
       </header>
 
       <main className="cols">
@@ -339,13 +459,19 @@ export default function App() {
               <PixelStage nivel={nivel} modelo={diag.modelo} animacion={resultado?.animacion} token={token} onCaption={setCaption} />
               {exito && <div className="sello">{esMision ? '¡Paso superado!' : '¡Capítulo superado!'}</div>}
             </div>
-            <Dialogo caption={caption} reposo={resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : `${prog.perfil ? `¡Hola, ${prog.perfil.nombre.split(' ')[0]}! ` : ''}Escribe tu código y pulsa Ejecutar para ver la escena.`} />
+            <Dialogo caption={caption} reposo={resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : vista ? `Vista de ${vivoV?.perfil.nombre || 'el estudiante'}: pulsa Ejecutar para ver su escena (no cuenta como intento suyo).` : `${prog.perfil ? `¡Hola, ${prog.perfil.nombre.split(' ')[0]}! ` : ''}Escribe tu código y pulsa Ejecutar para ver la escena.`} />
           </div>
-          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : prog.hechos.includes(nivel.id)} onSolucion={() => { if (profe) { reemplazarTodo({ ...nivel.solucion }); medir(m => registrarSolucion(m, nivel.id)); } }} onGuia={setGuia} profe={!!profe} onPista={() => medir(m => registrarPista(m, nivel.id))} />
+          <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : hechos.includes(nivel.id)} onSolucion={() => { if (profe && !vista) { reemplazarTodo({ ...nivel.solucion }); medir(m => registrarSolucion(m, nivel.id)); } }} onGuia={setGuia} profe={!!profe && !vista} onPista={() => { if (!vista) medir(m => registrarPista(m, nivel.id)); }} />
         </aside>
 
         <section className="der">
           <div className="ed-bar">
+            {pareja.sesion && (
+              <span className="pareja-banda" role="status" title="Tu profesor ve y edita este código contigo. Su cursor es el amarillo.">
+                👥 En pareja con tu profesor
+                <button type="button" className="btn-mini" onClick={() => pareja.terminar(true, 'Terminaste la sesión en pareja.')}>Terminar</button>
+              </span>
+            )}
             <PestanasArchivos archivos={nivel.archivos} activo={cod.activo} onElegir={a => setCod(c => ({ ...c, activo: a }))}
               marcas={a => { const m = diag.porArchivo[a]; return m && [...m.values()].some(x => x.sev === 'err') ? 'err' : m?.size ? 'warn' : ''; }} />
             <div className="seg" role="radiogroup" aria-label="Asistente de código">
@@ -358,14 +484,14 @@ export default function App() {
                 </button>
               ))}
             </div>
-            {!confirmarReset
+            {vista ? null : !confirmarReset
               ? <button type="button" className="btn-mini" onClick={() => setConfirmarReset(true)}>Reiniciar</button>
               : <span className="confirmar">¿Borrar tu código de este capítulo? <button type="button" className="btn-mini peligro" onClick={() => { setConfirmarReset(false); reemplazarTodo(esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i)); }}>Sí, reiniciar</button><button type="button" className="btn-mini" onClick={() => setConfirmarReset(false)}>No</button></span>}
           </div>
 
           <div className="ed">
             <CodeEditor
-              ref={editor} nivel={nivel} archivos={cod.files} activo={cod.activo} revision={revision} modo={modo}
+              ref={editor} nivel={nivel} archivos={cod.files} activo={cod.activo} revision={revision} modo={modo} colab={vista ? colabVista : pareja.colab} soloLectura={!!vista && !colabVista}
               onCambio={(a, txt) => setCod(c => (c.files[a] === txt ? c : { ...c, files: { ...c.files, [a]: txt } }))}
               onCursor={(l, c) => setCursor([l, c])} onEscritura={alEscribir} onAviso={avisar} onEjecutar={() => ejecutarRef.current(false)}
               onIaNoDisponible={() => { setIaDisp(false); setProg(p => ({ ...p, asistente: 'basico' })); }}
@@ -386,7 +512,7 @@ export default function App() {
           <div className="barra-juez">
             <span className="atajos">Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Ctrl+Enter ejecuta</span>
             <button type="button" className="btn-sec" onClick={() => ejecutar(false)}>▶ Ejecutar código</button>
-            <button type="button" className="btn-pri" onClick={() => ejecutar(true)}>Enviar</button>
+            <button type="button" className="btn-pri" disabled={!!vista} title={vista ? 'En la vista de estudiante solo puedes ejecutar: enviar le corresponde al estudiante' : undefined} onClick={() => ejecutar(true)}>Enviar</button>
           </div>
         </section>
       </main>
@@ -413,11 +539,37 @@ export default function App() {
           </div>
         </div>
       )}
-      {panelProfe && profe && <PanelProfesor onCerrar={() => setPanelProfe(false)} />}
+      {panelProfe && profe && <PanelProfesor docente={docente} onVer={entrarVista} onCerrar={() => setPanelProfe(false)} />}
+      {habilitado && (
+        <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="habil-t">
+          <div className="modal rpg-ventana">
+            <p className="mapa-kicker">TU PROFESOR</p>
+            <h2 id="habil-t">🔓 Te habilitó «{habilitado.titulo}»</h2>
+            <p>Puedes seguir con ese {habilitado.mision ? 'paso' : 'capítulo'} aunque no hayas superado el anterior. Puedes volver cuando quieras.</p>
+            <div className="modal-acc">
+              <button type="button" className="btn-sec" onClick={() => setHabilitado(null)}>Seguir aquí</button>
+              <button type="button" className="btn-pri" autoFocus onClick={() => { const n = habilitado; setHabilitado(null); if (n.mision) irPaso(n); else irNivel(NIVELES.indexOf(n)); }}>Ir ahora →</button>
+            </div>
+          </div>
+        </div>
+      )}
       {acceso && <AccesoDocente claseActual={prog.clase} onCerrar={() => setAcceso(false)}
         onFallo={c => medir(m => registrarEvento(m, { tipo: 'acceso-fallido', clase: c.nombre, claseId: c.id }))}
-        onListo={(c, accion) => { setProfe(true); setAcceso(false); medir(m => registrarEvento(m, { tipo: 'profesor', accion, clase: c.nombre, claseId: c.id })); avisar(`Modo profesor activado · clase «${c.nombre}».`); }} />}
+        onListo={(c, accion) => { setProfe(true); setAcceso(false); { const ab = clasesAbiertas(); docente.sincronizar(misClases().filter(x => ab[x.id]).map(x => ({ clase: x, priv: ab[x.id] }))); } medir(m => registrarEvento(m, { tipo: 'profesor', accion, clase: c.nombre, claseId: c.id })); avisar(`Modo profesor activado · clase «${c.nombre}».`); }} />}
 
+      {pareja.invitacion && (
+        <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="pareja-t">
+          <div className="modal rpg-ventana pareja-invita">
+            <p className="mapa-kicker">PROGRAMAR EN PAREJA</p>
+            <h2 id="pareja-t">👥 Tu profesor quiere programar contigo</h2>
+            <p>Si aceptas, compartirán el código de <strong>{nivel.titulo}</strong>: verá lo que escribes, podrá escribir en tus archivos y verás su cursor en amarillo. Lo que él escriba no cuenta como tecleado tuyo. Puedes terminar la sesión cuando quieras.</p>
+            <div className="modal-acc">
+              <button type="button" className="btn-sec" onClick={pareja.rechazar}>Ahora no</button>
+              <button type="button" className="btn-pri" autoFocus onClick={pareja.aceptar}>Aceptar</button>
+            </div>
+          </div>
+        </div>
+      )}
       {mensajeProfe && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="msj-t">
           <div className="modal rpg-ventana mensaje-profe">

@@ -642,3 +642,31 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
   .uml-expandido { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
   .uml-lateral { max-height: 30vh; }
 }
+
+/* ---------- Programación en pareja ---------- */
+.pareja-banda { display: inline-flex; align-items: center; gap: 8px; align-self: center; margin-bottom: 6px; padding: 3px 4px 3px 10px; font-size: 13px; color: var(--negro); background: var(--gold); border: 2px solid var(--negro); }
+.pareja-banda .btn-mini { padding: 2px 8px; color: var(--negro); background: #ffe9a8; border-color: var(--negro); }
+.pareja-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.pareja-on { color: var(--gold); font-size: 13px; }
+.pareja-editor .cm-host { height: 380px; border: 2px solid var(--gold); }
+.pareja-editor .cm-editor { height: 100%; }
+.cm-ySelectionInfo { font: 600 11px var(--f-body) !important; padding: 1px 4px !important; color: var(--negro) !important; opacity: 1 !important; }
+
+/* ---------- Vista de estudiante (profesor) ---------- */
+.vista-banda { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 10px; font-size: 13px; color: var(--ink); background: repeating-linear-gradient(135deg, rgba(124,212,255,.16) 0 10px, rgba(124,212,255,.08) 10px 20px); border: 2px solid var(--info); }
+.vista-ojo { font: 9px var(--f-pixel); color: var(--negro); background: var(--info); padding: 4px 6px; }
+.vista-quien strong { color: var(--info); }
+.vista-otro { color: var(--warn); }
+.vista-acc { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+.mapa-mundo li.alumno-aqui { position: relative; }
+.mapa-mundo li.alumno-aqui .nodo { outline: 3px solid var(--info); outline-offset: 2px; animation: aquiPulso 1.2s steps(2) infinite; }
+.mapa-mundo li.alumno-aqui::after { content: "👤"; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 11px; line-height: 1; pointer-events: none; }
+@keyframes aquiPulso { 50% { outline-color: var(--gold); } }
+@media (prefers-reduced-motion: reduce) { .mapa-mundo li.alumno-aqui .nodo { animation: none; } }
+/* Tarjetas del aula: la tarjeta selecciona y el botón «Ver» entra a la vista */
+.aula-tarjeta { position: relative; padding: 0; cursor: default; }
+.aula-tarjeta-sel { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; text-align: left; padding: 8px 10px; color: inherit; font: inherit; background: none; border: 0; cursor: pointer; }
+.aula-tarjeta-sel:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.aula-ver { position: absolute; top: 6px; right: 6px; }
+
+@media (max-width: 1100px) { .vista-banda { grid-row: 3; } }
