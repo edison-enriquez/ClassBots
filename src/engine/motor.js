@@ -3,7 +3,10 @@ const PRIM=new Set(['int','double','float','long','short','byte','boolean','char
 const INTS=new Set(['int','long','short','byte']);
 /* Excepciones de Java que el taller conoce (hijo → padre) */
 const EXC_PADRE={Throwable:null,Exception:'Throwable',RuntimeException:'Exception',IllegalArgumentException:'RuntimeException',IllegalStateException:'RuntimeException',ArithmeticException:'RuntimeException',NullPointerException:'RuntimeException',IndexOutOfBoundsException:'RuntimeException',ClassCastException:'RuntimeException',NumberFormatException:'IllegalArgumentException',UnsupportedOperationException:'RuntimeException'};
-const CONOCIDOS=new Set(['ArrayList','List','Object','Integer','Double','Boolean','Math','Comparable','Collections',...Object.keys(EXC_PADRE)]);
+const CONOCIDOS=new Set(['ArrayList','List','Object','Integer','Double','Boolean','Character','Long','Float','Short','Byte','Number','Math','Comparable','Collections','Arrays',...Object.keys(EXC_PADRE)]);
+/* Métodos que toda clase hereda de Object (firma → tipo de retorno) */
+const DE_OBJECT={'toString()':'String','equals(Object)':'boolean','hashCode()':'int'};
+const ENVOLTORIO={int:'Integer',double:'Double',boolean:'Boolean',char:'Character',long:'Long',float:'Float',short:'Short',byte:'Byte'};
 /* Cadena de ancestros de una clase, pasando de las clases del estudiante a las de Java */
 function ancestros(clases,n){const r=[];let x=n,k=0;while(x&&k++<40&&!r.includes(x)){r.push(x);x=clases[x]?(clases[x].__padre||(clases[x].hereda&&tipoBase(clases[x].hereda) in EXC_PADRE?tipoBase(clases[x].hereda):null)):(EXC_PADRE[x]??null);}return r;}
 const esLanzable=(clases,n)=>ancestros(clases,n).includes('Throwable');
@@ -140,7 +143,17 @@ function parsePrograma(files){
       const sup=padre?.__metodos?.find(x=>firmaMetodo(x)===firmaMetodo(mt)&&x.vis!=='private');
       const contratos=c.__interfaces.flatMap(n=>clases[n]?.metodos||[]);
       const contrato=contratos.find(x=>firmaMetodo(x)===firmaMetodo(mt));
-      if(mt.override&&!sup&&!contrato)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() tiene @Override, pero no redefine un método heredado ni implementa uno de una interfaz.`));
+      const deObject=DE_OBJECT[firmaMetodo(mt)];
+      const deExcepcion=c.__padre in EXC_PADRE&&['getMessage','toString','printStackTrace'].includes(mt.nombre);
+      const deInterfazJava=c.__interfaces.some(n=>!clases[n]);// Comparable<T> y otras de Java
+      if(mt.override&&!sup&&!contrato&&!deObject&&!deExcepcion&&!deInterfazJava){
+        if(mt.nombre==='equals')errores.push(E(c.archivo,mt.linea,`equals de Object recibe un Object: escribe public boolean equals(Object otro) y dentro comprueba con instanceof y haz el cast. Con equals(${mt.params.map(p=>p.tipo).join(', ')}) estarías sobrecargando, no redefiniendo.`));
+        else errores.push(E(c.archivo,mt.linea,`${mt.nombre}() tiene @Override, pero no redefine un método heredado ni implementa uno de una interfaz.`));
+      }
+      if(deObject&&!sup&&!mt.estatico){
+        if(mt.ret!==deObject)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() viene de Object y debe devolver ${deObject}.`));
+        else if(mt.vis!=='public')errores.push(E(c.archivo,mt.linea,`${mt.nombre}() viene de Object, donde es public: al redefinirlo no puede tener menos visibilidad. Escribe public ${deObject} ${firmaMetodo(mt).replace('(Object)','(Object otro)')}.`));
+      }
       if(sup){
         if(sup.final)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() es final en ${padre.nombre}: no se puede redefinir.`));
         if(sup.estatico!==mt.estatico)errores.push(E(c.archivo,mt.linea,`${mt.nombre}() debe conservar si es static al redefinirlo.`));
@@ -255,7 +268,9 @@ function parsePrograma(files){
         const tipoVar=n=>{if(n==='this')return c.nombre;if(choque.has(n))return null;if(tipos.has(n))return tipos.get(n);const f=(c.__campos||c.campos).find(x=>x.nombre===n);return f?tipoBase(f.tipo):null;};
         const reL=/(?<![\w$.)\]])([a-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
         while((q=reL.exec(b.cuerpoBlank))){
-          const t=tipoVar(q[1]);if(!t||!clases[t]||UNIVERSALES.has(q[2]))continue;
+          const t=tipoVar(q[1]);
+          if(t==='Object'&&!UNIVERSALES.has(q[2])){errores.push(E(c.archivo,lineaDe(b,q.index),`${q[1]} es de tipo Object, y Object solo tiene toString(), equals(), hashCode() y getClass(). Si sabes qué es en realidad, compruébalo con instanceof y haz un cast: ((Clase) ${q[1]}).${q[2]}(...)`));continue;}
+          if(!t||!clases[t]||UNIVERSALES.has(q[2]))continue;
           if(esLanzable(clases,t)&&['getMessage','printStackTrace','getCause'].includes(q[2]))continue;
           const ms=metodosDeTipo(t);if(ms.has(q[2]))continue;
           const conElMetodo=Object.values(clases).filter(x=>x!==clases[t]&&metodosDeTipo(x.nombre).has(q[2])&&(x.tipo==='interface'?false:(()=>{let y=x;while(y){if(y.nombre===t||(y.__interfaces||[]).includes(t))return true;y=y.__padre&&clases[y.__padre];}return false;})()));
@@ -289,6 +304,11 @@ function parsePrograma(files){
     }
   }
   revisarExcepciones(clases,errores,conocido);
+  // Las colecciones guardan objetos: ArrayList<int> no existe
+  for(const [archivo,src] of Object.entries(files)){
+    const b=blankStrings(blankComments(src));const re=/<\s*(int|double|boolean|char|long|float|short|byte)\s*>/g;let q;
+    while((q=re.exec(b)))errores.push(E(archivo,lineaEn(b,q.index),`<${q[1]}> no existe: las colecciones guardan objetos, no tipos primitivos. Usa la clase envoltorio ${ENVOLTORIO[q[1]]}, por ejemplo ArrayList<${ENVOLTORIO[q[1]]}>.`));
+  }
   errores.sort((a,b)=>a.archivo===b.archivo?a.linea-b.linea:a.archivo<b.archivo?-1:1);
   return {clases,errores};
 }
@@ -397,6 +417,11 @@ function miembros(c,clean,blank,ini,fin,archivo,L,errores){
     const sinAnot=t=>t.replace(/^(?:\s*@[A-Za-z_$][\w$]*(?:\([^)]*\))?)+/,'');
     const hb=sinAnot(crudo.replace(/\s+/g,' ').trim()).trim(),hc=sinAnot(clean.slice(i,j).replace(/\s+/g,' ').trim()).trim();
     const linea=L(i);
+    // Atributo con inicializador de arreglo: int[] medidas = {4, 8};
+    if(blank[j]==='{'&&/=\s*$/.test(blank.slice(i,j))){
+      const cierre=llaveFinal(blank,j);let k=cierre+1;while(k<fin&&/\s/.test(blank[k]))k++;
+      if(cierre>0&&blank[k]===';'){const crudo2=blank.slice(i,k),hc2=sinAnot(clean.slice(i,k).replace(/\s+/g,' ').trim()).trim();campo(c,hc2,crudo2,linea,errores);i=k+1;continue;}
+    }
     if(blank[j]===';'){campo(c,hc,crudo,linea,errores);i=j+1;}
     else if(blank[j]==='{'){const close=llaveFinal(blank,j);metodo(c,hb,crudo,clean.slice(j,close+1),blank.slice(j,close+1),L(j),linea,errores);i=close+1;}
     else{errores.push(E(archivo,L(j),'Sobra una llave } en esta línea.'));i=j+1;}
@@ -451,7 +476,7 @@ function metodo(c,h,crudo,cuerpo,cuerpoBlank,lineaCuerpo,linea,errores){
     return;
   }
   if(nombre===c.nombre){errores.push(E(A,linea,`¿Querías un constructor? Los constructores no llevan tipo de retorno: quita «${tipo}».`));return;}
-  c.metodos.push({...base,nombre,ret:tipo,estatico:/\bstatic\b/.test(mods),final:/\bfinal\b/.test(mods)});
+  c.metodos.push({...base,nombre,ret:tipo,estatico:/\bstatic\b/.test(mods),final:/\bfinal\b/.test(mods),override:/@Override\b/.test(crudo)});
 }
 
 /* ---------- Traducción a JavaScript ---------- */
@@ -482,6 +507,15 @@ function envolverEnteros(code,enteros,retEntero){
     out+=code.slice(i,ini)+` __rt.entero(${expr})`;i=fin;re.lastIndex=fin;
   }
   return out+code.slice(i);
+}
+/* Arreglos: new T[n], new T[]{...} y T[] x = {...}  →  __rt.arreglo("T", valores, n) */
+const TIPO_ARR='(int|double|float|long|short|byte|boolean|char|String|[A-Z][\\w$]*)';
+function traducirArreglos(code){
+  const cierra=(t,i)=>{let d=0;for(let j=i;j<t.length;j++){if(t[j]==='{')d++;else if(t[j]==='}'&&--d===0)return j;}return -1;};
+  const conLlaves=(re,arma)=>{let m;while((m=re.exec(code))){const ini=m.index+m[0].length-1,fin=cierra(code,ini);if(fin<0)break;code=code.slice(0,m.index)+arma(m,code.slice(ini+1,fin))+code.slice(fin+1);re.lastIndex=0;}};
+  conLlaves(new RegExp(`\\bnew\\s+${TIPO_ARR}\\s*\\[\\s*\\]\\s*\\{`,'g'),(m,dentro)=>`__rt.arreglo(${JSON.stringify(m[1])}, [${dentro}])`);
+  conLlaves(new RegExp(`(\\b${TIPO_ARR}\\s*\\[\\s*\\]\\s+[A-Za-z_$][\\w$]*\\s*=\\s*)\\{`,'g'),(m,dentro)=>`${m[1]}__rt.arreglo(${JSON.stringify(m[2])}, [${dentro}])`);
+  return code.replace(new RegExp(`\\bnew\\s+${TIPO_ARR}\\s*\\[([^\\[\\]]+)\\](?!\\s*\\[)`,'g'),(m,t,n)=>`__rt.arreglo(${JSON.stringify(t)}, null, ${n})`);
 }
 /* throw x;  →  throw __rt.lanzado(x);  (registra el evento para la escena) */
 function traducirThrow(code){
@@ -521,6 +555,9 @@ function traducirTry(code){
 function traducir(code,c,locales,self,retTipo){
   const lits=[];
   code=code.replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g,m=>{lits.push(m);return `__S${lits.length-1}__`;});
+  code=traducirArreglos(code);
+  code=code.replace(/\binstanceof\s+(Object|String|Integer|Double|Number|Boolean|Character|Long|Float)\b/g,'instanceof __rt.J.$1');
+  code=code.replace(/\bString\s*\.\s*valueOf\s*\(/g,'__rt.valorTexto(');
   if(/\bthrow\b/.test(code))code=traducirThrow(code);
   if(/\btry\b/.test(code))code=traducirTry(code).replace(/__TRY__/g,'try');
   const loc=new Set(locales);const enteros=new Set();
@@ -588,12 +625,13 @@ function genClase(c,modelo){
     return s+'}\n';
   }
   let s=`class ${c.nombre} {\nstatic [Symbol.hasInstance](o){ return __rt.esInstancia(o,${JSON.stringify(c.nombre)}); }\n`;
-  for(const f of est)s+=`static ${f.nombre} = ${f.init!=null?traducir(f.init,c,[],c.nombre):defVal(f.tipo)};\n`;
+  for(const f of est)s+=`static ${f.nombre} = ${f.init!=null?traducir(/\[\]$/.test(f.tipo)&&/^\s*\{/.test(f.init)?`new ${tipoBase(f.tipo)}[]${f.init}`:f.init,c,[],c.nombre):defVal(f.tipo)};\n`;
   // Orden de Java: valores por defecto, constructor del padre (super), inicializadores propios y cuerpo del constructor.
   const lanzable=esLanzable(modelo.clases,c.nombre);
   s+=`constructor(...__a){\n${lanzable?'this.__msg=null;':''}${inst.map(f=>`this.${f.nombre}=${defVal(f.tipo)};`).join('')}\nconst __self=__rt.track(this,${JSON.stringify(c.nombre)});\n${c.nombre}.__ctor(__self,...__a);\nreturn __self;\n}\n`;
   const ctors=c.ctors.length?c.ctors:[{params:[],cuerpo:'{}',cuerpoBlank:'{}'}];
-  const inits=c.campos.filter(f=>!f.estatico&&f.init!=null).map(f=>`__self.${f.nombre}=(${traducir(f.init,c,[],'__self')});\n`).join('');
+  const iniDe=f=>(/\[\]$/.test(f.tipo)&&/^\s*\{/.test(f.init)?`new ${tipoBase(f.tipo)}[]${f.init}`:f.init);
+  const inits=c.campos.filter(f=>!f.estatico&&f.init!=null).map(f=>`__self.${f.nombre}=(${traducir(iniDe(f),c,[],'__self')});\n`).join('');
   s+='static __ctor(__self,...__a){ switch(__a.length){\n';
   const genCtor=k=>{
     const ns=k.params.map(p=>p.nombre);
@@ -622,6 +660,9 @@ function genClase(c,modelo){
     if(!grupos.has('toString'))s+=`toString(){ const m=this.getMessage(); return ${JSON.stringify(c.nombre)}+(m!=null?': '+m:''); }\n`;
   }
   else if(!grupos.has('toString'))s+='toString(){ return __rt.ref(this); }\n';
+  // Lo que toda clase hereda de Object: equals compara identidad y hashCode sale de la identidad
+  if(!grupos.has('equals'))s+='equals(o){ return this===o; }\n';
+  if(!grupos.has('hashCode'))s+='hashCode(){ return __rt.hash(this); }\n';
   s+=`getClass(){ return ${c.nombre}; }\nstatic getSimpleName(){ return ${JSON.stringify(c.nombre)}; }\nstatic getName(){ return ${JSON.stringify(c.nombre)}; }\n`;
   return s+'}\n';
 }
@@ -629,25 +670,70 @@ const PRELUDIO=`class Throwable{constructor(m=null){this.__exc=new.target.name;t
 ${Object.entries(EXC_PADRE).filter(([,p])=>p).map(([n,p])=>`class ${n} extends ${p}{}`).join('\n')}
 __rt.EXC={${Object.keys(EXC_PADRE).join(',')}};
 class ArrayList extends Array{constructor(){super();} add(x){__rt.tick();this.push(x);__rt.agregado(this,x);return true;} get(i){if(i<0||i>=this.length)throw new __rt.JavaError('IndexOutOfBoundsException: la posición '+i+' no existe; la lista tiene '+this.length+' elemento(s).');return this[i];} size(){return this.length;} isEmpty(){return this.length===0;} remove(i){const x=this.splice(typeof i==='number'?i:this.indexOf(i),1)[0];__rt.agregado(this,null);return x;} contains(x){return this.includes(x);} clear(){this.length=0;}}
+ArrayList.prototype.toString=function(){return '['+Array.from(this,x=>__rt.fmt(x)).join(', ')+']';};
+ArrayList.prototype.indexOf=function(x){for(let i=0;i<this.length;i++)if(__rt.iguales(this[i],x))return i;return -1;};
+ArrayList.prototype.contains=function(x){return this.indexOf(x)>=0;};
+ArrayList.prototype.equals=function(o){return Array.isArray(o)&&o.length===this.length&&this.every((x,i)=>__rt.iguales(x,o[i]));};
+ArrayList.prototype.hashCode=function(){let h=1;for(const x of this)h=(31*h+(x==null?0:__rt.hashDe(x)))|0;return h;};
+ArrayList.prototype.getClass=function(){return ArrayList;};
+ArrayList.getSimpleName=()=>'ArrayList';ArrayList.getName=()=>'java.util.ArrayList';
 const List=ArrayList;
+const Arrays={toString(a){return a==null?'null':'['+Array.from(a,x=>__rt.fmt(x)).join(', ')+']';},equals(a,b){if(a===b)return true;if(a==null||b==null||a.length!==b.length)return false;return a.every((x,i)=>__rt.iguales(x,b[i]));},sort(a){a.sort((x,y)=>(typeof x==='string'||typeof x==='number')?(x<y?-1:x>y?1:0):x.compareTo(y));},fill(a,v){a.fill(v);}};
+const Double={parseDouble:s=>{const t=s==null?'':String(s).trim();if(!/^[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?$/.test(t))throw __rt.lanzado(new NumberFormatException('For input string: "'+s+'"'));return parseFloat(t);},valueOf:x=>typeof x==='string'?Double.parseDouble(x):x,compare:(a,b)=>a<b?-1:a>b?1:0,MAX_VALUE:Number.MAX_VALUE,MIN_VALUE:Number.MIN_VALUE};
 const Collections={sort(l,c){l.sort((a,b)=>c?c.compare(a,b):a.compareTo(b));__rt.agregado(l,null);}};
-const Integer={parseInt:s=>{const t=s==null?'':String(s).trim();if(!/^[+-]?\\d+$/.test(t))throw __rt.lanzado(new NumberFormatException('For input string: "'+s+'"'));return parseInt(t,10);},compare:(a,b)=>a<b?-1:a>b?1:0,MAX_VALUE:2147483647,MIN_VALUE:-2147483648};\n`;
+const Integer={parseInt:s=>{const t=s==null?'':String(s).trim();if(!/^[+-]?\\d+$/.test(t))throw __rt.lanzado(new NumberFormatException('For input string: "'+s+'"'));return parseInt(t,10);},compare:(a,b)=>a<b?-1:a>b?1:0,valueOf:x=>typeof x==='string'?Integer.parseInt(x):x,toString:x=>String(x),MAX_VALUE:2147483647,MIN_VALUE:-2147483648};\n`;
 for(const [k,f] of Object.entries({
   equals(o){return this.valueOf()===o;},
   equalsIgnoreCase(o){return o!=null&&this.toLowerCase()===String(o).toLowerCase();},
   isEmpty(){return this.length===0;},
   contains(o){return this.includes(o);},
   compareTo(o){const a=this.valueOf();return a<o?-1:a>o?1:0;},
+  hashCode(){let h=0;for(const ch of this.valueOf())h=(31*h+ch.charCodeAt(0))|0;return h;},
+  getClass(){return CLASE_BASE.String;},
 }))if(!String.prototype[k])Object.defineProperty(String.prototype,k,{value:f,configurable:true});
+/* Integer, Double y Boolean son clases envoltorio: también heredan de Object */
+const claseBase=(simple,nombre)=>Object.freeze({getSimpleName:()=>simple,getName:()=>nombre,toString:()=>'class '+nombre});
+const CLASE_BASE={String:claseBase('String','java.lang.String'),Integer:claseBase('Integer','java.lang.Integer'),Double:claseBase('Double','java.lang.Double'),Boolean:claseBase('Boolean','java.lang.Boolean')};
+for(const [k,f] of Object.entries({
+  equals(o){return typeof o==='number'&&this.valueOf()===o&&Number.isInteger(o)===Number.isInteger(this.valueOf());},
+  hashCode(){const v=this.valueOf();return Number.isInteger(v)?v|0:Math.floor(v*1000)|0;},
+  intValue(){return Math.trunc(this.valueOf());},
+  doubleValue(){return this.valueOf();},
+  compareTo(o){const a=this.valueOf();return a<o?-1:a>o?1:0;},
+  getClass(){return Number.isInteger(this.valueOf())?CLASE_BASE.Integer:CLASE_BASE.Double;},
+}))if(!Number.prototype[k])Object.defineProperty(Number.prototype,k,{value:f,configurable:true});
+for(const [k,f] of Object.entries({
+  equals(o){return this.valueOf()===o;},
+  hashCode(){return this.valueOf()?1231:1237;},
+  getClass(){return CLASE_BASE.Boolean;},
+}))if(!Boolean.prototype[k])Object.defineProperty(Boolean.prototype,k,{value:f,configurable:true});
+/* Nombre de un arreglo de Java al imprimirlo con el toString de Object: [I@1b3a, [Ljava.lang.String;@… */
+const CODIGO_ARR={int:'I',double:'D',boolean:'Z',char:'C',long:'J',float:'F',short:'S',byte:'B'};
+const nombreArreglo=t=>'['+(CODIGO_ARR[t]||`L${t==='String'||t==='Object'||t==='Integer'||t==='Double'?'java.lang.'+t:t};`);
 
 function tipoJava(v,rt){if(v===null||v===undefined)return 'null';if(typeof v==='string')return 'String';if(typeof v==='number')return Number.isInteger(v)?'int':'double';if(typeof v==='boolean')return 'boolean';const r=rt.registro[(rt.idDe(v)||0)-1];return r?r.cls:'Object';}
 function crearRuntime(modelo){
-  const log=[],salida=[],registro=[],ids=new WeakMap();let pasos=0;
+  const log=[],salida=[],registro=[],ids=new WeakMap(),extra=new WeakMap();let pasos=0,nExtra=0;
   const ser=v=>{if(v===null||v===undefined)return null;if(Array.isArray(v))return {lista:Array.from(v,ser)};if(typeof v==='object'){const id=ids.get(v);return id?{ref:id}:null;}return v;};
   const foto=()=>registro.map(r=>{const f={};for(const k of Object.keys(r.raw))if(!k.startsWith('__'))f[k]=ser(r.raw[k]);return {id:r.id,cls:r.cls,f};});
   const rt={JavaError,log,salida,registro,idDe:o=>ids.get(o),foto,
     entero(v){if(typeof v!=='number')return v;if(!Number.isFinite(v))throw rt.lanzado(new rt.EXC.ArithmeticException('/ by zero'));return Math.trunc(v);},
     EXC:null,actual:null,
+    /* Object: identidad, hashCode y arreglos */
+    hash(o){if(o==null)return 0;let id=ids.get(o);if(!id){id=extra.get(o);if(!id){id=1000+(++nExtra)*7;extra.set(o,id);}}return (0x1b3a+id*0x2f7)|0;},
+    hashDe(x){return x==null?0:typeof x.hashCode==='function'?x.hashCode():rt.hash(x);},
+    iguales(a,b){if(a===b)return true;if(a==null||b==null)return false;return typeof a.equals==='function'?!!a.equals(b):false;},
+    valorTexto(x){return rt.fmt(x);},
+    arreglo(t,valores,n){
+      let a;
+      if(valores)a=[...valores];
+      else{const k=Math.trunc(Number(n));if(!(k>=0))throw rt.lanzado(new rt.EXC.RuntimeException('NegativeArraySizeException: '+n));a=Array.from({length:k},()=>INTS.has(t)||t==='double'||t==='float'?0:t==='boolean'?false:t==='char'?'\0':null);}
+      const ref=()=>nombreArreglo(t)+'@'+(rt.hash(a)>>>0).toString(16);
+      Object.defineProperties(a,{__tipo:{value:t},toString:{value:ref},equals:{value:o=>o===a},hashCode:{value:()=>rt.hash(a)},getClass:{value:()=>claseBase(t+'[]',nombreArreglo(t))}});
+      return a;
+    },
+    J:{Object:{[Symbol.hasInstance]:o=>o!=null},String:{[Symbol.hasInstance]:o=>typeof o==='string'},Integer:{[Symbol.hasInstance]:o=>typeof o==='number'&&Number.isInteger(o)},Long:{[Symbol.hasInstance]:o=>typeof o==='number'&&Number.isInteger(o)},
+      Double:{[Symbol.hasInstance]:o=>typeof o==='number'},Float:{[Symbol.hasInstance]:o=>typeof o==='number'},Number:{[Symbol.hasInstance]:o=>typeof o==='number'},Boolean:{[Symbol.hasInstance]:o=>typeof o==='boolean'},Character:{[Symbol.hasInstance]:o=>typeof o==='string'&&o.length===1}},
     /* Excepciones: nombre de la clase de un objeto lanzable (de Java o del estudiante) */
     nombreExc(o){if(o==null||typeof o!=='object')return null;if(typeof o.__exc==='string')return o.__exc;const id=ids.get(o);const r=registro[(id||0)-1];return r&&esLanzable(modelo.clases,r.cls)?r.cls:null;},
     esExcepcion(o,nom){const n=rt.nombreExc(o);return !!n&&ancestros(modelo.clases,n).includes(nom);},
@@ -685,7 +771,7 @@ function crearRuntime(modelo){
     fmtCorto(v){const id=ids.get(v);if(id){const r=registro[id-1];return `${r.cls}#${id}`;}return typeof v==='string'?JSON.stringify(v):String(v);},
     tick(){if(++pasos>20000)throw new JavaError('El programa dio demasiados pasos. ¿Hay un bucle que nunca termina?');},
     ref(o){const id=ids.get(o);const r=registro[(id||0)-1];return `${r?r.cls:'Object'}@${(0x1b3a+(id||0)*0x2f7).toString(16)}`;},
-    fmt(v){if(v===null||v===undefined)return 'null';if(typeof v==='object')return String(v);if(typeof v==='number'&&!Number.isInteger(v))return String(Math.round(v*1e6)/1e6);return String(v);},
+    fmt(v){if(v===null||v===undefined)return 'null';if(typeof v==='object')return String(v);if(typeof v==='boolean')return String(v);if(typeof v==='number'&&!Number.isInteger(v))return String(Math.round(v*1e6)/1e6);return String(v);},
     print(...a){rt.tick();const t=a.map(rt.fmt).join('');salida.push(t);log.push({t:'print',texto:t,foto:foto()});},
     track(raw,cls){
       const c=modelo.clases[cls];const id=registro.length+1;
@@ -694,6 +780,7 @@ function crearRuntime(modelo){
       registro.push({id,cls,raw});
       log.push({t:'crear',id,cls,estado:{...raw},foto:foto()});
       const coercer=(t,v,k)=>{const b=tipoBase(t);const mal=()=>{throw new JavaError(`Tipos incompatibles: ${cls}.${k} es ${t} y le estás asignando un ${tipoJava(v,rt)}.`);};
+        if(/\[\]$/.test(t.replace(/\s+/g,''))){if(v!==null&&!Array.isArray(v))mal();return v;}
         if(INTS.has(b)){if(typeof v!=='number')mal();return Math.trunc(v);}
         if(b==='double'||b==='float'){if(typeof v!=='number')mal();return v;}
         if(b==='boolean'){if(typeof v!=='boolean')mal();return v;}
@@ -729,7 +816,7 @@ function traducirError(e,rt){
 function ejecutar(modelo,arnes){
   const rt=crearRuntime(modelo);
   const nombres=Object.keys(modelo.clases);
-  const js=PRELUDIO+Object.values(modelo.clases).map(c=>genClase(c,modelo)).join('\n')+`\nreturn {${nombres.join(',')}};`;
+  const js=PRELUDIO+Object.values(modelo.clases).map(c=>genClase(c,modelo)).join('\n')+`\nreturn {${[...nombres,'__lista:ArrayList'].join(',')}};`;
   let C;
   try{C=new Function('__rt',js)(rt);}catch(e){return {rt,error:traducirError(e,rt),js};}
   try{arnes(C,rt);}catch(e){return {rt,error:traducirError(e,rt),js};}

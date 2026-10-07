@@ -19,6 +19,7 @@ const LUGARES = [
 const RAMALES = {
   'mision-plantilla': { x: 318, y: 350, etiqueta: 'abajo' },
   'mision-strategy': { x: 360, y: 104, etiqueta: 'arriba' },
+  'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
 };
 const PUNTO_OTRO = { x: 330, y: 150, etiqueta: 'arriba' };
 const puntoRamal = id => RAMALES[id] || PUNTO_OTRO;
@@ -317,9 +318,9 @@ export default function MapaMundo({
       const ok = misionAbierta(m), hecho = misionCompleta(m), aqui = m.id === misionActual;
       return {
         num: '✦', titulo: m.titulo, sub: `Misión opcional · ${m.concepto}`,
-        lineas: [['Sale de', `Sector ${String(m.mundo).padStart(2, '0')} · ${mundos[m.mundo - 1].nombre}`], ['Pasos', pasosDe(m) ? `${pasosDe(m).hechos} de ${pasosDe(m).total} superados` : `${m.pasos?.length || 1}`], ['Requisito', `Completar el Mundo ${m.mundo}`], ['Recompensa', m.recompensa]],
+        lineas: [['Sale de', `Sector ${String(m.mundo).padStart(2, '0')} · ${mundos[m.mundo - 1].nombre}`], ['Pasos', pasosDe(m) ? `${pasosDe(m).hechos} de ${pasosDe(m).total} superados` : `${m.pasos?.length || 1}`], ['Requisito', m.requisito || `Completar el Mundo ${m.mundo}`], ['Recompensa', m.recompensa]],
         estado: aqui ? 'Estás aquí' : hecho ? 'Módulo obtenido' : ok ? 'Disponible' : 'Bloqueada',
-        boton: aqui ? 'Seguir en la misión' : ok ? (hecho ? 'Repetir misión ✦' : pasosDe(m)?.hechos ? 'Continuar misión ✦' : 'Iniciar misión ✦') : `Completa el Mundo ${m.mundo}`,
+        boton: aqui ? 'Seguir en la misión' : ok ? (hecho ? 'Repetir misión ✦' : pasosDe(m)?.hechos ? 'Continuar misión ✦' : 'Iniciar misión ✦') : (m.requisitoCorto || `Completa el Mundo ${m.mundo}`),
         ok: ok || aqui, mision: true,
       };
     }
@@ -430,7 +431,7 @@ export default function MapaMundo({
               <ol className="mapa-lista">
                 {misiones.map(m => {
                   const ok = misionAbierta(m), terminado = misionCompleta(m), d = { tipo: 'mision', id: m.id }, aqui = esAqui(d);
-                  const pd = pasosDe(m), etiqueta = aqui ? 'Estás aquí' : terminado ? 'Completada' : !ok ? `Completa el Mundo ${m.mundo}` : pd?.hechos ? `Paso ${pd.hechos + 1} de ${pd.total}` : 'Disponible';
+                  const pd = pasosDe(m), etiqueta = aqui ? 'Estás aquí' : terminado ? 'Completada' : !ok ? (m.requisitoCorto || `Completa el Mundo ${m.mundo}`) : pd?.hechos ? `Paso ${pd.hechos + 1} de ${pd.total}` : 'Disponible';
                   return <li key={m.id}>
                     <button type="button" className={`mapa-destino mapa-destino-mision${aqui ? ' actual' : ''}${terminado ? ' completo' : ''}${!ok ? ' bloqueado' : ''}${elegido(d) ? ' elegido' : ''}`}
                       aria-pressed={elegido(d)} aria-current={aqui ? 'location' : undefined} onClick={() => tocar(d)} onDoubleClick={() => ir(d)}>
