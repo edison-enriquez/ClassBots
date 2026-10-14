@@ -19,6 +19,8 @@ import { Bienvenida, MiAvance } from './components/Avance.jsx';
 import PanelProfesor from './components/PanelProfesor.jsx';
 import MenuUsuario from './components/MenuUsuario.jsx';
 import AccesoDocente from './components/AccesoDocente.jsx';
+import Divisor from './components/Divisor.jsx';
+import { useDisposicion } from './hooks/useDisposicion.js';
 import { profeEnSesion, ponerProfeEnSesion } from './metricas/clasesLocales.js';
 import { registrarApertura, registrarResultado, registrarPista, registrarSolucion, registrarIA, registrarTiempo, registrarSesion, registrarEscritura, registrarSalida, registrarRegreso, registrarSenales, analizarEstilo, exportar, descargar, nombreArchivo, registrarEvento } from './metricas/metricas.js';
 import { decodificarClase, clasePublica } from './metricas/cifrado.js';
@@ -106,6 +108,7 @@ export default function App() {
   const [iaDisp, setIaDisp] = useState(null);
   const [exito, setExito] = useState(null);
   const editor = useRef(null);
+  const disp = useDisposicion();
   const clicsMarca = useRef(0);
   const temporizadorMarca = useRef(null);
 
@@ -460,7 +463,7 @@ export default function App() {
         )}
       </header>
 
-      <main className="cols">
+      <main className={`cols${disp.ampliado ? ' ampliado' : ''}`} ref={disp.refs.cols} style={disp.estiloCols}>
         <aside className="izq" ref={izq}>
           <div className="monitor">
             <div className="monitor-bisel">
@@ -472,7 +475,9 @@ export default function App() {
           <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : hechos.includes(nivel.id)} onSolucion={() => { if (profe && !vista) { reemplazarTodo({ ...nivel.solucion }); medir(m => registrarSolucion(m, nivel.id)); } }} onGuia={setGuia} profe={!!profe && !vista} onPista={() => { if (!vista) medir(m => registrarPista(m, nivel.id)); }} />
         </aside>
 
-        <section className="der">
+        <Divisor orientacion="vertical" {...disp.divisorIzq} />
+
+        <section className="der" ref={disp.refs.der} style={disp.estiloDer} aria-label="Código">
           <div className="ed-bar">
             {pareja.sesion && (
               <span className="pareja-banda" role="status" title="Tu profesor ve y edita este código contigo. Su cursor es el amarillo.">
@@ -496,9 +501,13 @@ export default function App() {
             {vista ? null : !confirmarReset
               ? <button type="button" className="btn-mini" onClick={() => setConfirmarReset(true)}>Reiniciar</button>
               : <span className="confirmar">¿Borrar tu código de este capítulo? <button type="button" className="btn-mini peligro" onClick={() => { setConfirmarReset(false); reemplazarTodo(esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i)); }}>Sí, reiniciar</button><button type="button" className="btn-mini" onClick={() => setConfirmarReset(false)}>No</button></span>}
+            <button type="button" className="btn-mini ampliar" aria-pressed={disp.ampliado} onClick={() => { disp.setAmpliado(a => !a); requestAnimationFrame(() => editor.current?.enfocar?.()); }}
+              title={disp.ampliado ? 'Volver a la vista normal (Esc)' : 'Ver el código en pantalla completa'}>
+              {disp.ampliado ? '⤡ Reducir' : '⤢ Ampliar'}
+            </button>
           </div>
 
-          <div className="ed">
+          <div className="ed" ref={disp.refs.ed}>
             <CodeEditor
               ref={editor} nivel={nivel} archivos={cod.files} activo={cod.activo} revision={revision} modo={modo} colab={vista ? colabVista : pareja.colab} soloLectura={!!vista && !colabVista}
               onCambio={(a, txt) => setCod(c => (c.files[a] === txt ? c : { ...c, files: { ...c.files, [a]: txt } }))}
@@ -516,10 +525,12 @@ export default function App() {
             {modo === 'ia' && <button type="button" className="btn-mini ia" onMouseDown={e => e.preventDefault()} onClick={() => { editor.current?.pedirIA(); medir(m => registrarIA(m, nivel.id)); }}>✦ Sugerir <kbd>Alt+\</kbd></button>}
           </div>
 
+          <Divisor orientacion="horizontal" {...disp.divisorPanel} />
+
           <PanelInferior nivel={nivel} objetivo={nivel.objetivoUML} resultado={resultado} enviado={enviado} problemas={diag.lista} modelo={diag.modelo} tab={tab} setTab={setTab} onIrA={irA} onCorregir={corregir} />
 
-          <div className="barra-juez">
-            <span className="atajos">Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Shift+Alt+F ordena · Ctrl+Enter ejecuta</span>
+          <div className="barra-juez" ref={disp.refs.barra}>
+            <span className="atajos" title="Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Shift+Alt+F ordena · Ctrl+Enter ejecuta">Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Shift+Alt+F ordena · Ctrl+Enter ejecuta</span>
             <button type="button" className="btn-sec" onClick={() => ejecutar(false)}>▶ Ejecutar código</button>
             <button type="button" className="btn-pri" disabled={!!vista} title={vista ? 'En la vista de estudiante solo puedes ejecutar: enviar le corresponde al estudiante' : undefined} onClick={() => ejecutar(true)}>Enviar</button>
           </div>
