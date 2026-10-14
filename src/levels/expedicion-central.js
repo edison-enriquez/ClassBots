@@ -72,7 +72,7 @@ function previoRoles(m, archivos) {
    Implementa (o extiende) el tipo APARATO del estudiante. Sus métodos abstractos se leen del modelo
    y se rellenan: los que devuelven String devuelven el nombre del aparato; el resto, un valor neutro. */
 const NEUTRO = { void: null, String: 'nombreIntruso', int: '0', long: '0', short: '0', byte: '0', double: '0.0', float: '0.0f', boolean: 'false', char: "'x'" };
-function abstractosDe(modelo, tipo) {
+function abstractosDe(modelo, tipos) {
   const vistos = new Set(), concretos = new Set(), pendientes = [];
   const firma = x => `${x.nombre}/${x.params.length}`;
   const visitar = n => {
@@ -86,20 +86,27 @@ function abstractosDe(modelo, tipo) {
     if (c.__padre) visitar(c.__padre);
     for (const i of c.implementa || []) visitar(base(i));
   };
-  visitar(tipo);
+  for (const t of [].concat(tipos)) visitar(t);
   return pendientes.filter(x => !concretos.has(firma(x)));
 }
-export function claseIntrusa(modelo, tipo, nombreClase = 'PanelSolar') {
-  const t = modelo.clases[tipo];
-  if (!t) return null;
-  const cab = t.tipo === 'interface' ? `implements ${tipo}` : `extends ${tipo}`;
+/* tipos: el contrato APARATO y, si se quiere una intrusa con capacidades, también LAVABLE, etc.
+   Si un tipo ya desciende de otro de la lista, basta el más específico. Como Java no tiene herencia
+   múltiple de clases, si quedan dos clases (no interfaces) no se puede escribir la intrusa: null. */
+export function claseIntrusa(modelo, tipos, nombreClase = 'PanelSolar') {
+  let lista = [...new Set([].concat(tipos))];
+  if (lista.some(t => !modelo.clases[t])) return null;
+  lista = lista.filter(t => !lista.some(o => o !== t && esSubtipo(modelo, o, t)));
+  const clases = lista.filter(t => modelo.clases[t].tipo !== 'interface'), interfaces = lista.filter(t => modelo.clases[t].tipo === 'interface');
+  if (clases.length > 1) return null;
+  const cab = [clases.length ? `extends ${clases[0]}` : '', interfaces.length ? `implements ${interfaces.join(', ')}` : ''].filter(Boolean).join(' ');
   let llamadaSuper = '';
-  if (t.tipo !== 'interface' && t.ctors.length && !t.ctors.some(k => k.params.length === 0)) {
-    const k = t.ctors[0];
+  const padre = clases.length ? modelo.clases[clases[0]] : null;
+  if (padre && padre.ctors.length && !padre.ctors.some(k => k.params.length === 0)) {
+    const k = padre.ctors[0];
     const args = k.params.map(p => (base(p.tipo) === 'String' ? 'nombre' : NEUTRO[base(p.tipo)] ?? 'null'));
     llamadaSuper = `        super(${args.join(', ')});\n`;
   }
-  const metodos = abstractosDe(modelo, tipo).map(x => {
+  const metodos = abstractosDe(modelo, lista).map(x => {
     const r = base(x.ret), v = r in NEUTRO ? NEUTRO[r] : 'null';
     return `    public ${x.ret} ${x.nombre}(${x.params.map(p => `${p.tipo} ${p.nombre}`).join(', ')}) {${r === 'void' ? '' : ` return ${v}; `}}`;
   });
@@ -503,6 +510,22 @@ ${REGLAS_TALLER}`,
           if (r.error) return caso(false, 'balance 21 y dos faltas del aparato nuevo', r.error);
           const ok = r.v === 21 && r.salida.length === 2 && /: sin lavado$/.test(r.salida[0]) && /: sin actualización$/.test(r.salida[1]);
           return caso(ok, 'balance 21 y dos faltas del aparato nuevo', `balance ${r.v}, ${lineas(r.salida)}`);
+        } },
+        { nombre: 'Llega un aparato nuevo que también se lava', oculto: true, entrada: 'fila: un aparato nuevo, escrito por el juez, que firma tu APARATO y tu LAVABLE', prueba: ({ modelo, archivos }) => {
+          // Una intrusa con capacidades: delata a la central que decide por la clase concreta o por un código de tipo
+          const roles = leerRoles(archivos);
+          const fuente = claseIntrusa(modelo, [roles.APARATO, roles.LAVABLE], 'Aspiradora');
+          if (!fuente) return caso(false, 'un aparato nuevo y lavable entra a la fila', `no puedo escribir una clase que sea ${roles.APARATO} y ${roles.LAVABLE} a la vez`);
+          const r = conExtra(archivos, { 'Aspiradora.java': fuente }, C => {
+            const l = new C.__lista();
+            l.add(new C.Aspiradora('Polvo'));
+            const central = new C[roles.CENTRAL]();
+            central.atender(l);
+            return central.balance();
+          });
+          if (r.error) return caso(false, 'balance 8 y solo «sin actualización»', r.error);
+          const ok = r.v === 8 && r.salida.length === 1 && /: sin actualización$/.test(r.salida[0]);
+          return caso(ok, 'balance 8 y solo «sin actualización»', `balance ${r.v}, ${lineas(r.salida)}`);
         } },
       ],
       exito: '¡La central abrió! Atendió filas al azar y un aparato que nunca viste, sin cambiar una línea. Ese diseño es tuyo: Sello de arquitecto.',

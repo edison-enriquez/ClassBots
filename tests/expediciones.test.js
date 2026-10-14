@@ -208,3 +208,20 @@ test('las filas al azar son reproducibles y variadas', () => {
   assert.ok(a.some(f => f.length >= 5), 'incluye filas largas');
   assert.notDeepEqual(filasAlAzar(1, 60), a);
 });
+
+test('un código de tipo por texto esquiva las reglas de nombres, pero lo delata la intrusa lavable', () => {
+  const S = construir.solucion;
+  const tipo = (cls, t) => s => s.replace(new RegExp(`(class ${cls}[\\s\\S]*?public String getNombre\\(\\) \\{\\n        return nombre;\\n    \\})`), `$1\n\n    public String tipo() {\n        return "${t}";\n    }`);
+  const aparatos = [tipo('Robot', 'R'), tipo('Dron', 'D'), tipo('Linterna', 'L')].reduce((s, f) => f(s), S['Aparatos.java']);
+  const malo = {
+    ...S,
+    'Contratos.java': S['Contratos.java'].replace('    void recargar();', '    void recargar();\n    String tipo();'),
+    'Aparatos.java': aparatos,
+    'Central.java': S['Central.java']
+      .replace('if (a instanceof Lavable) {', 'if (a.tipo().equals("R")) {')
+      .replace('if (a instanceof Actualizable) {', 'if (a.tipo().equals("R") || a.tipo().equals("D")) {'),
+  };
+  const r = casosDe(evaluarNivel(construir, malo, { incluirOcultas: true }));
+  const fallan = Object.values(r).filter(c => c.estado !== 'ok').map(c => c.nombre);
+  assert.deepEqual(fallan, ['Llega un aparato nuevo que también se lava']);
+});
