@@ -70,9 +70,30 @@ kbd { font-family: var(--f-code); font-size: .72rem; border: 1px solid currentCo
 .modulo-badge { padding: 6px 9px; color: var(--gold); background: rgba(255,204,51,.1); border: 1px solid rgba(255,204,51,.48); font: 8px var(--f-pixel); }
 
 /* ---------- Columnas ---------- */
-.cols { display: grid; grid-template-columns: minmax(340px, .92fr) minmax(0, 1.25fr); min-height: 0; }
-.izq { min-width: 0; overflow: auto; background: var(--panel); border-right: 3px solid var(--negro); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-.der { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(180px, 1fr) auto minmax(220px, 42%) auto; background: var(--code); }
+.cols { display: grid; grid-template-columns: var(--ancho-leccion, minmax(340px, .92fr)) auto minmax(0, 1.25fr); min-height: 0; }
+.izq { min-width: 0; overflow: auto; background: var(--panel); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.der { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(140px, 1fr) auto auto var(--alto-resultados, minmax(200px, 36%)) auto; background: var(--code); }
+
+/* Divisores arrastrables entre lección/código y editor/resultados */
+.divisor { position: relative; display: grid; place-items: center; background: var(--negro); touch-action: none; user-select: none; }
+.divisor-v { width: 8px; cursor: col-resize; }
+.divisor-h { height: 8px; cursor: row-resize; }
+.divisor::before { content: ""; position: absolute; inset: -4px; }
+.divisor-agarre { background: var(--line); transition: background .15s; }
+.divisor-v .divisor-agarre { width: 2px; height: 36px; box-shadow: -3px 0 0 var(--line), 3px 0 0 var(--line); }
+.divisor-h .divisor-agarre { width: 36px; height: 2px; box-shadow: 0 -3px 0 var(--line), 0 3px 0 var(--line); }
+.divisor:hover .divisor-agarre, .divisor:focus-visible .divisor-agarre { background: var(--gold); box-shadow: none; }
+.divisor-v:hover .divisor-agarre, .divisor-v:focus-visible .divisor-agarre { width: 4px; height: 100%; }
+.divisor-h:hover .divisor-agarre, .divisor-h:focus-visible .divisor-agarre { height: 4px; width: 100%; }
+.divisor:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+body.arrastrando-divisor, body.arrastrando-divisor * { user-select: none !important; }
+body.arrastrando-v, body.arrastrando-v * { cursor: col-resize !important; }
+body.arrastrando-h, body.arrastrando-h * { cursor: row-resize !important; }
+
+/* Editor a pantalla completa */
+.ed-bar > .ampliar { margin-left: auto; }
+.cols.ampliado > .izq, .cols.ampliado > .divisor-v { display: none; }
+.cols.ampliado > .der { position: fixed; inset: 0; z-index: 45; height: 100dvh; }
 
 /* Monitor del juego */
 .monitor { display: flex; flex-direction: column; gap: 6px; }
@@ -249,7 +270,9 @@ kbd { font-family: var(--f-code); font-size: .72rem; border: 1px solid currentCo
 
 /* Barra de acciones del juez */
 .barra-juez { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 12px; padding: 10px 12px 14px; background: var(--bg2); border-top: 3px solid var(--negro); }
-.barra-juez .atajos { margin-right: auto; font-size: 12.5px; color: var(--dim); }
+.barra-juez { flex-wrap: nowrap; padding-top: 8px; padding-bottom: 10px; }
+.barra-juez .atajos { flex: 1 1 0; min-width: 0; margin-right: auto; font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barra-juez > button { flex: none; }
 
 /* Guía */
 .enlace { background: none; border: 0; padding: 0; color: var(--info); text-decoration: underline; font: inherit; }
@@ -292,9 +315,12 @@ ul.plano { margin: 0 0 10px; padding-left: 18px; font-size: 15px; display: flex;
   .app { height: auto; min-height: 100dvh; }
   .cols { grid-template-columns: minmax(0, 1fr); }
   .izq { overflow: visible; border-right: 0; border-bottom: 3px solid var(--negro); }
-  .der { grid-template-rows: auto 440px auto minmax(280px, auto) auto; }
+  .der { grid-template-rows: auto 440px auto auto minmax(280px, auto) auto; }
+  .cols > .divisor-v, .cols:not(.ampliado) .divisor-h { display: none; }
+  .cols.ampliado > .der { grid-template-rows: auto minmax(140px, 1fr) auto auto var(--alto-resultados, minmax(160px, 34%)) auto; }
 }
 @media (max-width: 520px) {
+  .barra-juez .atajos { display: none; }
   .marca h1 { font-size: 12px; }
   .lec-titulo { font-size: 14px; }
   .seg-lbl { display: none; }

@@ -94,6 +94,12 @@ const CodeEditor = forwardRef(function CodeEditor(props, ref) {
   useEffect(() => { view.current?.dispatch({}); }, [modo]);
 
   useImperativeHandle(ref, () => ({
+    enfocar() {
+      const v = view.current; if (!v) return;
+      v.requestMeasure();
+      v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head, { y: 'center' }) });
+      v.focus();
+    },
     irALinea(linea) {
       const v = view.current; if (!v) return;
       const l = v.state.doc.line(Math.max(1, Math.min(linea, v.state.doc.lines)));
