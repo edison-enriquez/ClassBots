@@ -8,7 +8,7 @@ export function evaluarNivel(nivel, files, { incluirOcultas = false } = {}) {
   const base = { modelo, errores, casos: [], previo: null, animacion: null, salida: [], errorEjecucion: null };
   if (errores.length) return { ...base, estado: 'compilacion' };
 
-  const previo = nivel.previo ? nivel.previo(modelo) : null;
+  const previo = nivel.previo ? nivel.previo(modelo, files) : null;
   if (previo) return { ...base, previo, estado: 'previo' };
 
   const cache = new Map();

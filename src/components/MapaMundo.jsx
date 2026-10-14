@@ -20,6 +20,7 @@ const RAMALES = {
   'mision-plantilla': { x: 318, y: 350, etiqueta: 'abajo' },
   'mision-strategy': { x: 360, y: 104, etiqueta: 'arriba' },
   'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
+  'expedicion-central': { x: 326, y: 286, etiqueta: 'abajo' },
 };
 const PUNTO_OTRO = { x: 330, y: 150, etiqueta: 'arriba' };
 const puntoRamal = id => RAMALES[id] || PUNTO_OTRO;
@@ -164,7 +165,28 @@ function dibujarMaquina(ctx, lugar, bloqueado, ahora) {
   ctx.textAlign = 'start';
 }
 
+/* Expedición oculta: una grieta violeta en el piso, no una estación */
+function dibujarExpedicion(ctx, mision, disponible, completada, ahora) {
+  const { x, y, etiqueta } = puntoRamal(mision.id), base = completada ? '#7ed6a0' : '#c9a7ff';
+  const brillo = disponible && ahora % 900 < 450;
+  sombra(ctx, x, y + 7, 40);
+  rect(ctx, '#140d24', x - 20, y - 14, 40, 26);
+  rect(ctx, brillo ? '#3a2763' : '#2a1d47', x - 17, y - 11, 34, 20);
+  // la grieta: un zigzag de bloques
+  for (const [dx, dy, w] of [[-12, -8, 6], [-8, -4, 6], [-4, -1, 6], [0, 2, 6], [4, 5, 6], [-2, 5, 4], [6, -6, 4]]) rect(ctx, brillo ? '#efe2ff' : base, x + dx, y + dy, w, 3);
+  const txt = `EXPEDICIÓN ✦ ${mision.corto.toUpperCase()}`;
+  ctx.font = 'bold 9px monospace';
+  const w = Math.ceil(ctx.measureText(txt).width) + 14, ty = etiqueta === 'abajo' ? y + 16 : y - 42;
+  rect(ctx, '#140d24', x - w / 2, ty, w, 17);
+  rect(ctx, '#3a2763', x - w / 2 + 2, ty + 2, w - 4, 13);
+  ctx.fillStyle = base;
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, x, ty + 12);
+  ctx.textAlign = 'start';
+}
+
 function dibujarMision(ctx, mision, disponible, completada, ahora) {
+  if (mision.expedicion) return dibujarExpedicion(ctx, mision, disponible, completada, ahora);
   const { x, y, etiqueta } = puntoRamal(mision.id), base = completada ? '#7ed6a0' : disponible ? '#f1c653' : '#788493';
   sombra(ctx, x, y + 7, 42);
   rect(ctx, '#101a25', x - 22, y - 17, 44, 30);
@@ -317,10 +339,10 @@ export default function MapaMundo({
       const m = misiones.find(x => x.id === sel.id) || mision;
       const ok = misionAbierta(m), hecho = misionCompleta(m), aqui = m.id === misionActual;
       return {
-        num: '✦', titulo: m.titulo, sub: `Misión opcional · ${m.concepto}`,
+        num: '✦', titulo: m.titulo, sub: m.expedicion ? `Expedición de diseño libre${m.oculta ? ' · oculta, solo la ves en modo profesor' : ''} · ${m.concepto}` : `Misión opcional · ${m.concepto}`,
         lineas: [['Sale de', `Sector ${String(m.mundo).padStart(2, '0')} · ${mundos[m.mundo - 1].nombre}`], ['Pasos', pasosDe(m) ? `${pasosDe(m).hechos} de ${pasosDe(m).total} superados` : `${m.pasos?.length || 1}`], ['Requisito', m.requisito || `Completar el Mundo ${m.mundo}`], ['Recompensa', m.recompensa]],
         estado: aqui ? 'Estás aquí' : hecho ? 'Módulo obtenido' : ok ? 'Disponible' : 'Bloqueada',
-        boton: aqui ? 'Seguir en la misión' : ok ? (hecho ? 'Repetir misión ✦' : pasosDe(m)?.hechos ? 'Continuar misión ✦' : 'Iniciar misión ✦') : (m.requisitoCorto || `Completa el Mundo ${m.mundo}`),
+        boton: aqui ? (m.expedicion ? 'Seguir en la expedición' : 'Seguir en la misión') : ok ? (hecho ? (m.expedicion ? 'Repetir expedición ✦' : 'Repetir misión ✦') : pasosDe(m)?.hechos ? (m.expedicion ? 'Continuar expedición ✦' : 'Continuar misión ✦') : (m.expedicion ? 'Entrar a la grieta ✦' : 'Iniciar misión ✦')) : (m.requisitoCorto || `Completa el Mundo ${m.mundo}`),
         ok: ok || aqui, mision: true,
       };
     }
@@ -375,10 +397,10 @@ export default function MapaMundo({
               })}
               {misiones.map((m, i) => {
                 const ok = misionAbierta(m), terminado = misionCompleta(m), d = { tipo: 'mision', id: m.id };
-                return <button key={m.id} type="button" className={`mapa-punto mapa-punto-mision${terminado ? ' completo' : ''}${!ok ? ' cerrado' : ''}${esAqui(d) ? ' aqui' : ''}${elegido(d) ? ' elegido' : ''}`}
+                return <button key={m.id} type="button" className={`mapa-punto mapa-punto-mision${m.expedicion ? ' mapa-punto-expedicion' : ''}${terminado ? ' completo' : ''}${!ok ? ' cerrado' : ''}${esAqui(d) ? ' aqui' : ''}${elegido(d) ? ' elegido' : ''}`}
                   style={{ left: `${(puntoRamal(m.id).x / W) * 100}%`, top: `${(puntoRamal(m.id).y / H) * 100}%` }} aria-pressed={elegido(d)}
-                  title={`Misión especial: ${m.titulo}`}
-                  aria-label={`Misión especial ${i + 1}: ${m.titulo}, ${m.concepto}${esAqui(d) ? ', estás aquí' : terminado ? ', completada' : ok ? ', disponible' : ', completa el Mundo ' + m.mundo + ' para desbloquearla'}`}
+                  title={`${m.expedicion ? 'Expedición' : 'Misión especial'}: ${m.titulo}`}
+                  aria-label={`${m.expedicion ? 'Expedición' : `Misión especial ${i + 1}`}: ${m.titulo}, ${m.concepto}${esAqui(d) ? ', estás aquí' : terminado ? ', completada' : ok ? ', disponible' : ', completa el Mundo ' + m.mundo + ' para desbloquearla'}`}
                   onClick={() => tocar(d)} onDoubleClick={() => ir(d)}>✦</button>;
               })}
             </div>
@@ -433,10 +455,10 @@ export default function MapaMundo({
                   const ok = misionAbierta(m), terminado = misionCompleta(m), d = { tipo: 'mision', id: m.id }, aqui = esAqui(d);
                   const pd = pasosDe(m), etiqueta = aqui ? 'Estás aquí' : terminado ? 'Completada' : !ok ? (m.requisitoCorto || `Completa el Mundo ${m.mundo}`) : pd?.hechos ? `Paso ${pd.hechos + 1} de ${pd.total}` : 'Disponible';
                   return <li key={m.id}>
-                    <button type="button" className={`mapa-destino mapa-destino-mision${aqui ? ' actual' : ''}${terminado ? ' completo' : ''}${!ok ? ' bloqueado' : ''}${elegido(d) ? ' elegido' : ''}`}
+                    <button type="button" className={`mapa-destino mapa-destino-mision${m.expedicion ? ' mapa-destino-expedicion' : ''}${aqui ? ' actual' : ''}${terminado ? ' completo' : ''}${!ok ? ' bloqueado' : ''}${elegido(d) ? ' elegido' : ''}`}
                       aria-pressed={elegido(d)} aria-current={aqui ? 'location' : undefined} onClick={() => tocar(d)} onDoubleClick={() => ir(d)}>
                       <span className="mapa-destino-num">✦</span>
-                      <span className="mapa-destino-info"><strong>{m.titulo}</strong><small>{m.concepto} · {m.recompensa}</small></span>
+                      <span className="mapa-destino-info"><strong>{m.titulo}</strong><small>{m.expedicion ? `Expedición${m.oculta ? ' · solo profesor' : ''} · ` : ''}{m.concepto} · {m.recompensa}</small></span>
                       <span className="mapa-estado">{etiqueta}</span>
                     </button>
                   </li>;

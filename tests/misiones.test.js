@@ -13,7 +13,7 @@ test('las misiones son ramales opcionales separados de la ruta principal', () =>
   for (const m of MISIONES) {
     assert.ok(m.requiere.every(r => NIVELES.some(n => n.id === r)), `${m.id} requiere un capítulo inexistente`);
     assert.equal(misionDisponible(m, []), false);
-    assert.equal(misionDisponible(m, m.requiere), true);
+    assert.equal(misionDisponible(m, m.requiere), !m.oculta);
     assert.equal(misionDisponible(m, [], true), true);
     assert.ok(m.pasos.at(-1).jefe, `${m.id} debe cerrar con un mini-jefe`);
     assert.ok(m.pasos.some(p => p.pruebas.some(c => c.oculto)), `${m.id} necesita un caso oculto de extensión`);

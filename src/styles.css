@@ -408,6 +408,14 @@ ul.plano { margin: 0 0 10px; padding-left: 18px; font-size: 15px; display: flex;
 .mapa-destino-mision:hover:not(:disabled) { background: rgba(255,204,51,.16); border-color: rgba(255,204,51,.68); }
 .mapa-destino-mision .mapa-destino-num { color: var(--gold); border-color: rgba(255,204,51,.38); }
 .mapa-destino-mision.completo .mapa-destino-num { color: var(--go); }
+/* Expediciones (diseño libre): violeta, para distinguirlas de las misiones guiadas */
+.mapa-punto-expedicion { color: #140d24; background: rgba(201,167,255,.18); border-color: var(--ia); }
+.mapa-punto-expedicion:not(:disabled) { border-color: var(--ia); box-shadow: 0 0 0 3px rgba(201,167,255,.28), 2px 2px 0 var(--negro); }
+.mapa-punto-expedicion.elegido { outline-color: var(--ia); }
+.mapa-punto-expedicion.aqui { color: #140d24; background: var(--ia); }
+.mapa-destino-expedicion { background: linear-gradient(100deg, rgba(201,167,255,.14), rgba(7,5,15,.2)); border-color: rgba(201,167,255,.32); }
+.mapa-destino-expedicion:hover:not(:disabled) { background: rgba(201,167,255,.18); border-color: rgba(201,167,255,.7); }
+.mapa-destino-expedicion .mapa-destino-num { color: var(--ia); border-color: rgba(201,167,255,.42); }
 @media (max-width: 820px) {
   .mapa-modal { overflow-y: auto; }
   .mapa-contenido { grid-template-columns: minmax(0, 1fr); }
