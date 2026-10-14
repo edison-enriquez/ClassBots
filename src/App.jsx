@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NIVELES, MUNDOS } from './levels/niveles.js';
-import { MISIONES, PASOS, misionDisponible, misionCompletada, pasoAbierto } from './levels/misiones.js';
+import { MISIONES, PASOS, misionDisponible, misionCompletada, pasoAbierto, misionVisible } from './levels/misiones.js';
 import { evaluarNivel } from './levels/evaluar.js';
 import { diagnosticar } from './editor/diagnostico.js';
 import { obtenerProveedorIA } from './editor/ia.js';
@@ -221,6 +221,8 @@ export default function App() {
   const misionAbierta = m => misionDisponible(m, prog.hechos, profe);
   const misionCompleta = m => misionCompletada(m, pasosHechos, prog.misionesHechas || []);
   const completadas = MISIONES.filter(misionCompleta);
+  // Las Expediciones ocultas (piloto) solo aparecen en el mapa en modo profesor
+  const misionesMapa = MISIONES.filter(m => misionVisible(m, profe));
   // Las recompensas de las misiones se ven en los robots de todas las escenas
   useEffect(() => { ponerEquipo(completadas.map(m => m.equipo)); }, [completadas.map(m => m.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -251,6 +253,8 @@ export default function App() {
     setCod(codigoDe({ ...prog, codigo: { ...prog.codigo, [nivel.id]: cod } }, i));
     setResultado(null); setEnviado(false); setCaption(''); setExito(null); setTab('pruebas'); setToken(t => t + 1);
   };
+  // Si el profesor sale del modo profesor dentro de una Expedición oculta, vuelve a la ruta: un estudiante no la ve
+  useEffect(() => { if (!profe && misionDeNivel?.oculta) volverARuta(); }, [profe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const izq = useRef(null);
   const ejecutar = enviar => {
@@ -382,7 +386,7 @@ export default function App() {
           <Avatar tamano={2} color="naranja" titulo="Logo de ClassBots" />
           <div>
             <h1 onClick={contarClicsMarca}>ClassBots</h1>
-            <p>{esMision ? `Misión especial · ${misionDeNivel.corto} · ramal del Mundo ${mundo.id}` : `POO en Java · Mundo ${mundo.id}: ${mundo.nombre}`}</p>
+            <p>{esMision ? `${misionDeNivel.expedicion ? 'Expedición' : 'Misión especial'} · ${misionDeNivel.corto} · ramal del Mundo ${mundo.id}` : `POO en Java · Mundo ${mundo.id}: ${mundo.nombre}`}</p>
           </div>
         </div>
         <nav className="mapa" aria-label="Mundos y capítulos">
@@ -523,7 +527,7 @@ export default function App() {
       </main>
 
       {mapa && <MapaMundo mundos={MUNDOS} actual={mundo.id} abierto={mundoAbierto} completo={mundoCompleto}
-        misiones={MISIONES} misionAbierta={misionAbierta} misionCompleta={misionCompleta}
+        misiones={misionesMapa} misionAbierta={misionAbierta} misionCompleta={misionCompleta}
         onIniciarMision={m => (m.id === misionId ? setMapa(false) : iniciarMision(m))} onViajar={viajar} onCerrar={() => setMapa(false)}
         pasosDe={m => ({ hechos: m.pasos.filter(p => pasosHechos.includes(p.id)).length, total: m.pasos.length })}
         misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)} />}
@@ -602,17 +606,17 @@ export default function App() {
           <div className="modal rpg-ventana exito">
             <p className="mision">¡MISIÓN CUMPLIDA!</p>
             <Avatar tamano={4} />
-            <h2 id="exito-t">{exito.esMision ? (exito.ultimo ? '¡Misión especial completada!' : `Paso ${nivel.enMundo + 1} de ${nivel.totalMundo} superado`) : nivel.jefe ? `¡Mundo ${mundo.id} completado!` : `Capítulo ${nivel.mundo}.${nivel.enMundo + 1} superado`}</h2>
+            <h2 id="exito-t">{exito.esMision ? (exito.ultimo ? (misionDeNivel?.expedicion ? '¡Expedición completada!' : '¡Misión especial completada!') : `Paso ${nivel.enMundo + 1} de ${nivel.totalMundo} superado`) : nivel.jefe ? `¡Mundo ${mundo.id} completado!` : `Capítulo ${nivel.mundo}.${nivel.enMundo + 1} superado`}</h2>
             <p>{nivel.exito}</p>
             {exito.esMision
-              ? exito.ultimo && <p className="xp-gana">✦ Recompensa: {nivel.recompensa}. Tus robots ya lo llevan puesto y el patrón quedó en el Códice.</p>
+              ? exito.ultimo && <p className="xp-gana">✦ Recompensa: {nivel.recompensa}.{misionDeNivel?.codice ? ' Tus robots ya lo llevan puesto y el patrón quedó en el Códice.' : ' Ese diseño es tuyo: nadie te dio los nombres.'}</p>
               : exito.nuevo && <p className="xp-gana">+100 EXP · ¡Subiste a NV {nv}!</p>}
             <div className="modal-acc">
               <button type="button" className="btn-sec" onClick={() => setExito(null)}>Seguir aquí</button>
               {exito.esMision
                 ? (exito.ultimo
                   ? <>
-                      <button type="button" className="btn-sec" onClick={() => { setExito(null); setGuia('patrones'); }}>Ver el Códice</button>
+                      {misionDeNivel?.codice && <button type="button" className="btn-sec" onClick={() => { setExito(null); setGuia('patrones'); }}>Ver el Códice</button>}
                       <button type="button" className="btn-pri" autoFocus onClick={volverARuta}>Volver a la ruta →</button>
                     </>
                   : <button type="button" className="btn-pri" autoFocus onClick={() => irPaso(PASOS[PASOS.findIndex(p => p.id === nivel.id) + 1])}>Siguiente paso: {PASOS[PASOS.findIndex(p => p.id === nivel.id) + 1].titulo} →</button>)
