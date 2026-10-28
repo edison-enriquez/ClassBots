@@ -98,6 +98,17 @@ Si la clase tiene **servidor del aula**, el profesor ve en vivo a cada estudiant
 - **Seguridad:** el servidor solo guarda y reenvía sobres cerrados; no puede leer métricas ni código. Para recibir datos, el profesor firma un reto con la llave de la clase, así que adivinar el id de una sala no sirve. Un estudiante no puede enviar mensajes ni recibir los datos de otros.
 - **Servidor:** carpeta [`servidor/`](servidor/README.md) (Node.js, WebSocket y SQLite, sin dependencias nativas), con `Dockerfile` y `compose.yaml` endurecidos para **Docker rootless**. Por defecto se publica con Cloudflare Tunnel en su propio contenedor, sin puertos abiertos; también trae configuración para Nginx o Caddy. Incluye `AGENTS.md` para que un agente haga la instalación, y el despliegue publica el paquete en `/classbots-aula.zip`.
 
+## Quiz en vivo de repaso (aula en vivo)
+
+En el Panel del profesor, la tarjeta del aula en vivo tiene **🎯 Quiz de repaso**: 11 preguntas de opción múltiple de los mundos 1 a 6 (`src/quiz/repaso.js`). Son gemelas de los temas del examen, con otro código y otro dominio, y sus salidas se verificaron con `javac`.
+
+- **Profesor:** se abre una pantalla para proyectar. Muestra la pregunta y cuántos respondieron, pero no quién votó qué. Por pregunta, al estilo *peer instruction*: ronda 1 → cerrar → (opcional) **ronda 2 en parejas** → revelar → siguiente. Al cerrar la votación puede ver en privado el acierto, con una recomendación: explicar de nuevo, abrir la ronda 2 o seguir. La distribución de votos solo aparece al revelar (azul, ronda 1; amarillo, ronda 2).
+- **Estudiante:** la pregunta aparece sobre el juego. Puede cambiar su voto mientras la votación esté abierta; al revelar ve si acertó y la explicación. Quien entra tarde, o recarga la página, recibe la pregunta en curso.
+- **Resumen:** acierto del primer voto por mundo (en rojo si queda por debajo de 60 %), por pregunta (ronda 1 → ronda 2) y por estudiante. Incluye **CSV de respuestas** separado por `;`.
+- **Métricas:** cada voto queda en el historial cifrado del estudiante (evento `quiz`) y aparece en el detalle del Panel.
+- **Seguridad:** no cambia el servidor. El estado del quiz viaja como un mensaje del profesor a toda la clase (un solo envío, dentro del límite de mensajes), **firmado** con la llave de la clase. Las respuestas viajan **cifradas para la clase** por el canal de reenvío, que no se guarda. Las respuestas correctas están dentro de la app, así que el quiz sirve para repasar y no para calificar.
+- **Prueba de punta a punta:** `e2e/quiz.cjs` (un profesor y tres estudiantes contra el servidor del aula).
+
 ## Editor
 
 Basado en CodeMirror 6, con un asistente propio que entiende las clases del proyecto:

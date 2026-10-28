@@ -8,6 +8,8 @@ import { conectarAula, urlAula, descomprimir } from './conexion.js';
 import { abrirSobre, firmarReto, firmarTexto, tieneAula } from '../metricas/cifrado.js';
 import { leerArchivo } from '../metricas/metricas.js';
 import { crearInvitacion, llaveSesion, crearCanal, COLORES } from './pareja.js';
+import { QUIZZES } from '../quiz/repaso.js';
+import { textoFirmaQuiz, codificarEstado, respuestaValida, anotar } from '../quiz/logica.js';
 
 export const textoHabilitar = (claseId, alumno, nivel, t) => `classbots-habilitar|${claseId}|${alumno}|${nivel}|${t}`;
 const identidad = c => ({ id: c.id, pub: c.pub, firma: c.firma });
@@ -17,6 +19,7 @@ export class AulaDocente {
     this.salas = new Map(); // claseId → { clase, priv, conn, estado, detalle, alumnos: { id: { conectado, vivo, vivoT, archivo, archivoT } } }
     this.pareja = null;      // { claseId, alumno, nombre, s, par, estado: 'invitando' | 'activa', canal, archivos, activo, nivel }
     this.aviso = null;       // { txt, t }
+    this.quiz = null;        // { claseId, q, n, f, r, t, inicio, abierta, respuestas } (quiz en vivo, uno a la vez)
     this.oyentes = new Set();
     this.foto = { v: 0 };
   }
@@ -59,11 +62,16 @@ export class AulaDocente {
         this.cambio();
       },
       alMensaje: m => {
-        if (m.t === 'listo') { for (const id of m.presentes || []) poner(id, a => ({ ...a, conectado: true })); if (this.pareja?.claseId === clase.id) this.pareja.canal?.enviarTodo(); }
+        if (m.t === 'listo') { for (const id of m.presentes || []) poner(id, a => ({ ...a, conectado: true })); if (this.pareja?.claseId === clase.id) this.pareja.canal?.enviarTodo(); if (this.quiz?.claseId === clase.id) this.difundirQuiz('*'); }
         if (m.t === 'historial') m.filas.forEach(abrirSobreDe);
         if (m.t === 'sobre') abrirSobreDe(m);
-        if (m.t === 'presencia') poner(m.alumno, a => ({ ...a, conectado: m.conectado, desde: m.t2 }));
-        if (m.t === 'pareja') this.alPareja(clase.id, m.alumno, m.d);
+        if (m.t === 'presencia') {
+          poner(m.alumno, a => ({ ...a, conectado: m.conectado, desde: m.t2 }));
+          // Quien llega tarde (o recarga la página) recibe la pregunta en curso
+          if (m.conectado && this.quiz?.claseId === clase.id) this.difundirQuiz(m.alumno);
+        }
+        if (m.t === 'pareja' && m.d?.tipo === 'quiz-resp') this.alRespuestaQuiz(clase.id, m.alumno, m.d);
+        else if (m.t === 'pareja') this.alPareja(clase.id, m.alumno, m.d);
       },
     });
   }
@@ -84,6 +92,55 @@ export class AulaDocente {
     const t = Date.now();
     const firma = await firmarTexto(s.priv, textoHabilitar(claseId, alumno, nivel, t));
     return this.enviarA(claseId, alumno, { tipo: 'habilitar', nivel, t, firma });
+  }
+
+  /* ---- Quiz en vivo ----
+     El estado se difunde con un solo mensaje firmado para toda la clase (no choca con el límite de
+     mensajes del servidor); las respuestas llegan cifradas para la clase por el canal de reenvío. */
+  iniciarQuiz(claseId, q) {
+    if (!this.salas.get(claseId) || !QUIZZES[q]) return false;
+    const ahora = Date.now();
+    this.quiz = { claseId, q, n: 0, f: 'votando', r: 1, t: ahora, inicio: ahora, abierta: ahora, respuestas: {} };
+    this.guardarQuiz(); this.difundirQuiz('*'); this.cambio();
+    return true;
+  }
+  /* Abrir una ronda (1 o 2) de la pregunta n, cerrar la votación, revelar o terminar */
+  moverQuiz(cambios) {
+    if (!this.quiz) return;
+    const ahora = Date.now(), abre = cambios.f === 'votando';
+    this.quiz = { ...this.quiz, ...cambios, t: ahora, ...(abre ? { abierta: ahora } : {}) };
+    this.guardarQuiz(); this.difundirQuiz('*'); this.cambio();
+  }
+  cerrarQuiz() { this.quiz = null; this.cambio(); }
+  async difundirQuiz(para) {
+    const z = this.quiz, s = z && this.salas.get(z.claseId);
+    if (!s) return false;
+    const p = z.f === 'fin' ? { q: z.q, f: 'fin', t: z.t } : { q: z.q, n: z.n, f: z.f, r: z.r, t: z.t };
+    const json = JSON.stringify(p);
+    try {
+      const firma = await firmarTexto(s.priv, textoFirmaQuiz(z.claseId, json));
+      return !!s.conn.enviar({ t: 'mensaje', para, texto: codificarEstado(json, firma) });
+    } catch { return false; }
+  }
+  async alRespuestaQuiz(claseId, alumno, d) {
+    const z = this.quiz, s = this.salas.get(claseId);
+    if (!z || z.claseId !== claseId || !s || !d.sobre) return;
+    let x; try { x = await abrirSobre(d.sobre, { clases: { [claseId]: s.priv } }); } catch { return; }
+    // Mientras se descifraba pudieron llegar otras respuestas: se anota sobre el estado actual.
+    // Solo cuenta si llega durante la votación de esa misma pregunta y ronda del mismo quiz.
+    const q = this.quiz;
+    if (!q || q.inicio !== z.inicio || !respuestaValida(x, QUIZZES[q.q]) || q.f !== 'votando' || x.n !== q.n || x.r !== q.r) return;
+    this.quiz = { ...q, respuestas: anotar(q.respuestas, alumno, x) };
+    this.guardarQuiz(); this.cambio();
+  }
+  /* Respaldo local por si se recarga la pestaña del profesor */
+  guardarQuiz() {
+    const z = this.quiz; if (!z) return;
+    try { localStorage.setItem(`classbots-quiz|${z.claseId}|${z.inicio}`, JSON.stringify(z)); } catch { /* sin almacenamiento */ }
+  }
+  nombreAlumno(claseId, id) {
+    const a = this.alumno(claseId, id);
+    return a?.vivo?.perfil?.nombre || a?.archivo?.perfil?.nombre || id;
   }
 
   async invitar(claseId, alumno, nombre) {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { leerArchivo, abrirConLlave, resumen, minutos, CATEGORIAS, SENALES, csvClase, csvDetalle, descargar, cruzarArchivos } from '../metricas/metricas.js';
 import { generarLlaves, huella, llavePublica, crearClase, abrirClase, codificarClase, aulaPorDefecto, tieneAula, actualizarClase } from '../metricas/cifrado.js';
 import { useDocente } from '../aula/docente.js';
+import { QUIZ_REPASO } from '../quiz/repaso.js';
 
 import { resaltar } from '../util/resaltar.js';
 import { CLAVE_CLASES_ABIERTAS, CLAVE_MIS_CLASES, leerJSON, guardarJSON, misClases, abrirConAnteriores, guardarActualizada } from '../metricas/clasesLocales.js';
@@ -18,6 +19,7 @@ const EVENTO = {
   'acceso-fallido': e => `Intentó entrar al modo profesor con una contraseña incorrecta (clase «${e.clase}»)`,
   habilitado: e => `El profesor le habilitó «${e.titulo}» sin haber superado el anterior`,
   pareja: e => (e.fase === 'inicio' ? `Programó en pareja con el profesor (capítulo ${e.nivel})` : 'Terminó la sesión en pareja'),
+  quiz: e => `Quiz de repaso · pregunta ${e.pregunta} (mundo ${e.mundo}), ronda ${e.ronda}: votó ${e.opcion} ${e.acierto ? '✔' : '✖'}`,
 };
 
 /* Un estudiante por perfil y nombre: se queda el archivo exportado más recientemente
@@ -516,6 +518,11 @@ function AulaEnVivo({ clase, docente, onVer }) {
         <h3>📡 Aula en vivo · {clase.nombre}</h3>
         <span className="aula-estado">{ESTADO_PROFE[estado]}{detalle ? `: ${detalle}` : ''}</span>
         <span className="bienv-nota">{enLinea} conectado{enLinea === 1 ? '' : 's'} · {lista.length} en total</span>
+        <button type="button" className="btn-sec quiz-iniciar" disabled={estado !== 'conectado' || !!docente.quiz}
+          title={docente.quiz ? 'Ya hay un quiz en curso' : 'Cada estudiante conectado vota desde su ClassBots; tú proyectas la pregunta'}
+          onClick={() => { if (!docente.iniciarQuiz(clase.id, QUIZ_REPASO.id)) setAviso('Sin conexión con el aula: no se inició el quiz.'); }}>
+          🎯 Quiz de repaso
+        </button>
       </div>
       {lista.length === 0
         ? <p className="bienv-nota">{estado === 'conectado' ? 'Aún no hay estudiantes. Cuando abran el enlace de la clase aparecerán aquí.' : 'Conectando con el servidor del aula…'}</p>
