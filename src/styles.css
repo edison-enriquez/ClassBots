@@ -708,3 +708,53 @@ button.modulo-badge:hover { background: rgba(255,204,51,.2); }
 .profe-clase-nota { display: block; color: var(--dim); }
 .profe-actualizar { flex-basis: 100%; }
 .profe-clase .profe-nueva, .profe-clases .profe-nueva textarea { width: 100%; }
+
+/* ---------- Quiz en vivo ---------- */
+.quiz-iniciar { margin-left: auto; }
+.quiz-fondo { z-index: 70; }
+.modal.quiz-est { width: min(760px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; align-items: stretch; text-align: left; }
+.modal.quiz-est h2 { color: #f4f1ff; font: 700 19px/1.4 var(--f-body); }
+.quiz-codigo { max-height: 42vh; text-align: left; }
+.quiz-opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 640px) { .quiz-opciones { grid-template-columns: 1fr; } }
+.quiz-op { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-align: left; color: var(--ink); background: var(--panel2); border: 3px solid var(--negro); box-shadow: inset -3px -4px 0 rgba(0,0,0,.35); font: 15px/1.4 var(--f-body); flex-wrap: wrap; }
+button.quiz-op { cursor: pointer; }
+button.quiz-op:hover:not(:disabled) { background: #312a5a; }
+button.quiz-op:disabled { cursor: default; }
+.quiz-op.elegida { outline: 3px solid var(--info); outline-offset: 1px; }
+.quiz-op.correcta { background: var(--go-d); outline: 3px solid var(--go); }
+.quiz-op.incorrecta { background: #5a1e2c; outline: 3px solid var(--err); }
+.quiz-letra { flex: none; display: grid; place-items: center; width: 30px; height: 30px; background: var(--gold); color: var(--gold-ink); font: 11px var(--f-pixel); border: 2px solid var(--negro); }
+.quiz-texto { flex: 1 1 0; min-width: 0; font-family: var(--f-code); font-size: 14px; overflow-wrap: anywhere; }
+.quiz-estado { color: var(--dim); }
+.quiz-explica { background: rgba(124,212,255,.08); border-left: 4px solid var(--info); padding: 10px 12px; margin: 0; line-height: 1.5; }
+.quiz-ronda2 { color: var(--gold); font-weight: 700; margin: 0; }
+/* Proyector del profesor */
+.quiz-proy { position: fixed; inset: 0; z-index: 70; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; padding: 18px clamp(12px, 3vw, 40px); background: var(--bg); color: var(--ink); }
+.quiz-proy-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.quiz-proy-cab h2 { margin: 0; font: 15px/1.5 var(--f-pixel); color: var(--gold); }
+.quiz-proy-meta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 17px; }
+.quiz-cuenta { font-weight: 700; }
+.quiz-reloj { color: var(--dim); font-family: var(--f-code); }
+.quiz-proy-cuerpo { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.quiz-proy-cuerpo > h2 { margin: 0; font: 700 clamp(20px, 2.4vw, 30px)/1.35 var(--f-body); }
+.quiz-proy-cuerpo h3 { margin: 6px 0 0; }
+.quiz-proy .quiz-codigo { font-size: clamp(14px, 1.5vw, 19px); max-height: none; }
+.quiz-opciones.grande .quiz-op { font-size: clamp(15px, 1.6vw, 20px); padding: 14px; }
+.quiz-opciones.grande .quiz-texto { font-size: inherit; }
+.quiz-dist { flex-basis: 100%; display: flex; flex-direction: column; gap: 4px; }
+.quiz-barra { display: block; height: 10px; background: rgba(0,0,0,.35); border: 1px solid var(--negro); flex: 1 1 auto; }
+.quiz-barra-in { display: block; height: 100%; background: var(--info); }
+.quiz-barra-in.r2 { background: var(--gold); }
+.quiz-barra-in.baja { background: var(--err); }
+.quiz-proy-acc { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 2px solid var(--line); padding-top: 12px; }
+.quiz-espacio { flex: 1 1 auto; }
+.quiz-privado { flex-basis: 100%; color: var(--dim); }
+.quiz-barras { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.quiz-barra-fila { display: grid; grid-template-columns: 90px minmax(0, 1fr) 56px; gap: 10px; align-items: center; }
+.quiz-barra-fila .quiz-barra { height: 16px; }
+.quiz-tabla td { white-space: normal; }
+.quiz-chip { position: fixed; right: 16px; bottom: 16px; z-index: 70; }
+.quiz-proy-cuerpo > *, .modal.quiz-est > * { flex-shrink: 0; }
+.quiz-leyenda { display: flex; gap: 16px; color: var(--dim); font-size: 14px; margin: 0; }
+.quiz-leyenda i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; border: 1px solid var(--negro); }

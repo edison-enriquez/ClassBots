@@ -31,6 +31,9 @@ import { AulaDocente, useDocente, textoHabilitar } from './aula/docente.js';
 import { archivosDeDoc } from './aula/pareja.js';
 import { verificarTexto, tieneAula } from './metricas/cifrado.js';
 import { clasesAbiertas, misClases } from './metricas/clasesLocales.js';
+import QuizProyector from './quiz/QuizProyector.jsx';
+import { useQuizEstudiante } from './quiz/QuizEstudiante.jsx';
+import { PREFIJO as PREFIJO_QUIZ } from './quiz/logica.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
 
@@ -360,6 +363,7 @@ export default function App() {
 
   // Aula en vivo: si la clase tiene servidor, el profesor ve el avance y el código mientras se trabaja
   const [mensajeProfe, setMensajeProfe] = useState(null);
+  const quizRef = useRef(null);
   const aula = useAulaEstudiante({
     clase: prog.clase, perfilId: prog.perfil?.id, activo: !!prog.perfil && !profe,
     estadoVivo: () => ({
@@ -372,7 +376,8 @@ export default function App() {
       fuera: salio.current != null, inactivo: Date.now() - actividad.current > 120000,
     }),
     archivoActual: async () => { const sobre = await sellar(); return exportar(prog, [...(prog.segmentos || []), sobre]); },
-    onMensaje: m => setMensajeProfe(m),
+    // El quiz en vivo llega como un mensaje firmado del profesor
+    onMensaje: m => (String(m.texto || '').startsWith(PREFIJO_QUIZ) ? quizRef.current?.recibir(m.texto) : setMensajeProfe(m)),
     onPareja: d => (d?.tipo === 'habilitar' ? recibirHabilitar(d) : parejaRef.current?.recibir(d)),
   });
   // Programación en pareja con el profesor (solo si el estudiante acepta)
@@ -381,6 +386,9 @@ export default function App() {
     onEvento: ev => medir(m => registrarEvento(m, ev)), onAviso: avisar,
   });
   parejaRef.current = pareja;
+  // Quiz en vivo de repaso (lo maneja el profesor desde el aula en vivo)
+  const quizEst = useQuizEstudiante({ clase: prog.clase, enviar: aula.enviarPareja, onEvento: ev => medir(m => registrarEvento(m, ev)) });
+  quizRef.current = quizEst;
 
   return (
     <div className="app">
@@ -571,6 +579,8 @@ export default function App() {
         </div>
       )}
       {panelProfe && profe && <PanelProfesor docente={docente} onVer={entrarVista} onCerrar={() => setPanelProfe(false)} />}
+      {profe && <QuizProyector docente={docente} />}
+      {!profe && quizEst.vista}
       {habilitado && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="habil-t">
           <div className="modal rpg-ventana">
