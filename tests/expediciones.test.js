@@ -126,13 +126,12 @@ class Taller {
 `,
 };
 
-test('la Expedición está oculta para estudiantes y abierta para el profesor', () => {
+test('la Expedición está activa para estudiantes y se abre con el jefe del Mundo 4', () => {
   assert.ok(exp, 'falta la Expedición en MISIONES');
-  assert.equal(exp.oculta, true);
-  assert.equal(misionVisible(exp), false);
-  assert.equal(misionVisible(exp, true), true);
-  assert.equal(misionDisponible(exp, []), false);
-  assert.equal(misionDisponible(exp, exp.requiere), false, 'aunque cumpla el requisito, un estudiante no la ve');
+  assert.equal(!!exp.oculta, false);
+  assert.equal(misionVisible(exp), true);
+  assert.equal(misionDisponible(exp, []), false, 'sin el jefe del Mundo 4 sigue bloqueada');
+  assert.equal(misionDisponible(exp, exp.requiere), true);
   assert.equal(misionDisponible(exp, [], true), true);
   for (const m of MISIONES.filter(x => !x.oculta)) assert.equal(misionVisible(m), true);
 });
