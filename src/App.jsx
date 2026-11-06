@@ -227,7 +227,7 @@ export default function App() {
   const misionAbierta = m => misionDisponible(m, prog.hechos, profe);
   const misionCompleta = m => misionCompletada(m, pasosHechos, prog.misionesHechas || []);
   const completadas = MISIONES.filter(misionCompleta);
-  // Las Expediciones ocultas (piloto) solo aparecen en el mapa en modo profesor
+  // Las Expediciones marcadas oculta solo aparecen en el mapa en modo profesor
   const misionesMapa = MISIONES.filter(m => misionVisible(m, profe));
   // Las recompensas de las misiones se ven en los robots de todas las escenas
   useEffect(() => { ponerEquipo(completadas.map(m => m.equipo)); }, [completadas.map(m => m.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -5,7 +5,7 @@
    El juez revisa cuatro capas: comportamiento, invariantes (filas al azar con semilla fija),
    reglas de diseño (leídas del modelo) y una extensión oculta: una clase intrusa que el juez
    escribe contra el contrato que el estudiante eligió, leyendo sus métodos abstractos del modelo.
-   Piloto: solo se ve en modo profesor (oculta: true). */
+   Activa para estudiantes: se abre al superar el jefe del Mundo 4. */
 import { caso, corrMain, previoMain } from './util.js';
 import { parsePrograma, ejecutar } from '../engine/motor.js';
 
@@ -364,10 +364,10 @@ export const EXPEDICION_CENTRAL = {
   concepto: 'Diseño libre con interfaces',
   mundo: 4,
   expedicion: true,
-  oculta: true,
+  oculta: false,
   requiere: ['futuro'],
-  requisito: 'Piloto: solo visible en modo profesor',
-  requisitoCorto: 'Solo modo profesor',
+  requisito: 'Superar el jefe «Las máquinas del futuro» (Mundo 4)',
+  requisitoCorto: 'Supera el jefe del Mundo 4',
   recompensa: 'Sello de arquitecto',
   equipo: null,
   codice: null,
