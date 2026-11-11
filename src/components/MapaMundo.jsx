@@ -21,6 +21,8 @@ const RAMALES = {
   'mision-strategy': { x: 360, y: 104, etiqueta: 'arriba' },
   'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
   'expedicion-central': { x: 326, y: 286, etiqueta: 'abajo' },
+  'mision-mvc': { x: 470, y: 360, etiqueta: 'abajo' },
+  'mision-kotlin': { x: 594, y: 180, etiqueta: 'arriba' },
 };
 const PUNTO_OTRO = { x: 330, y: 150, etiqueta: 'arriba' };
 const puntoRamal = id => RAMALES[id] || PUNTO_OTRO;
@@ -339,7 +341,7 @@ export default function MapaMundo({
       const m = misiones.find(x => x.id === sel.id) || mision;
       const ok = misionAbierta(m), hecho = misionCompleta(m), aqui = m.id === misionActual;
       return {
-        num: '✦', titulo: m.titulo, sub: m.expedicion ? `Expedición de diseño libre${m.oculta ? ' · oculta, solo la ves en modo profesor' : ''} · ${m.concepto}` : `Misión opcional · ${m.concepto}`,
+        num: '✦', titulo: m.titulo, sub: m.expedicion ? `Expedición de diseño libre${m.oculta ? ' · oculta, solo la ves en modo profesor' : ''} · ${m.concepto}` : `Misión opcional${m.oculta ? ' · oculta, solo la ves en modo profesor' : ''} · ${m.concepto}`,
         lineas: [['Sale de', `Sector ${String(m.mundo).padStart(2, '0')} · ${mundos[m.mundo - 1].nombre}`], ['Pasos', pasosDe(m) ? `${pasosDe(m).hechos} de ${pasosDe(m).total} superados` : `${m.pasos?.length || 1}`], ['Requisito', m.requisito || `Completar el Mundo ${m.mundo}`], ['Recompensa', m.recompensa]],
         estado: aqui ? 'Estás aquí' : hecho ? 'Módulo obtenido' : ok ? 'Disponible' : 'Bloqueada',
         boton: aqui ? (m.expedicion ? 'Seguir en la expedición' : 'Seguir en la misión') : ok ? (hecho ? (m.expedicion ? 'Repetir expedición ✦' : 'Repetir misión ✦') : pasosDe(m)?.hechos ? (m.expedicion ? 'Continuar expedición ✦' : 'Continuar misión ✦') : (m.expedicion ? 'Entrar a la grieta ✦' : 'Iniciar misión ✦')) : (m.requisitoCorto || `Completa el Mundo ${m.mundo}`),
@@ -458,7 +460,7 @@ export default function MapaMundo({
                     <button type="button" className={`mapa-destino mapa-destino-mision${m.expedicion ? ' mapa-destino-expedicion' : ''}${aqui ? ' actual' : ''}${terminado ? ' completo' : ''}${!ok ? ' bloqueado' : ''}${elegido(d) ? ' elegido' : ''}`}
                       aria-pressed={elegido(d)} aria-current={aqui ? 'location' : undefined} onClick={() => tocar(d)} onDoubleClick={() => ir(d)}>
                       <span className="mapa-destino-num">✦</span>
-                      <span className="mapa-destino-info"><strong>{m.titulo}</strong><small>{m.expedicion ? `Expedición${m.oculta ? ' · solo profesor' : ''} · ` : ''}{m.concepto} · {m.recompensa}</small></span>
+                      <span className="mapa-destino-info"><strong>{m.titulo}</strong><small>{m.expedicion ? `Expedición${m.oculta ? ' · solo profesor' : ''} · ` : (m.oculta ? 'Solo profesor · ' : '')}{m.concepto} · {m.recompensa}</small></span>
                       <span className="mapa-estado">{etiqueta}</span>
                     </button>
                   </li>;

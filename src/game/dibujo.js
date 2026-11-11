@@ -19,6 +19,10 @@ export function dibujarRobot(ctx, cx, piso, r, now, { caminando = false, fantasm
     // Módulo táctico: gema que cambia de color en la antena
     // Raíz de Object: un brote verde en la cabeza (todo cuelga de la misma raíz)
     if (EQUIPO.has('raiz') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x + 1, y - 2, 5, 4); ctx.fillStyle = '#4ade80'; ctx.fillRect(x + 2, y - 1, 1, 2); ctx.fillRect(x + 4, y - 1, 1, 2); ctx.fillRect(x + 3, y, 1, 2); }
+    // Visor de mando (MVC): una pantallita en el costado que muestra el estado del robot
+    if (EQUIPO.has('visor') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x - 3, y + 7, 5, 5); ctx.fillStyle = '#0e1a12'; ctx.fillRect(x - 2, y + 8, 3, 3); ctx.fillStyle = Math.floor(now / 500) % 2 ? P.green : '#9fe8ff'; ctx.fillRect(x - 2, y + 9, 3, 1); }
+    // Antena Android (MVC con Kotlin): una antena verde con señal intermitente
+    if (EQUIPO.has('antena') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x + 13, y - 6, 3, 7); ctx.fillStyle = '#3ddc84'; ctx.fillRect(x + 14, y - 5, 1, 5); if (Math.floor(now / 350) % 2) ctx.fillRect(x + 13, y - 7, 3, 1); }
     if (EQUIPO.has('tactico')) { ctx.fillStyle = P.ink; ctx.fillRect(x + 11, y - 1, 4, 4); ctx.fillStyle = Math.floor(now / 400) % 2 ? '#3fe0e0' : '#ff8fc7'; ctx.fillRect(x + 12, y, 2, 2); }
   }
   if (!sinBarra && typeof r.energia === 'number') barra(ctx, x + 2, y - 5, 12, r.energia);

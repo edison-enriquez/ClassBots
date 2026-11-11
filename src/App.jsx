@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NIVELES, MUNDOS } from './levels/niveles.js';
 import { MISIONES, PASOS, misionDisponible, misionCompletada, pasoAbierto, misionVisible } from './levels/misiones.js';
 import { evaluarNivel } from './levels/evaluar.js';
+import { evaluarRemoto } from './levels/remoto.js';
+import TelefonoAndroid from './game/TelefonoAndroid.jsx';
 import { diagnosticar } from './editor/diagnostico.js';
 import { obtenerProveedorIA } from './editor/ia.js';
 import { useProgreso, codigoDe, codigoInicial, codigoPaso, codigoInicialPaso, indiceDe } from './hooks/useProgreso.js';
@@ -36,6 +38,8 @@ import { useQuizEstudiante } from './quiz/QuizEstudiante.jsx';
 import { PREFIJO as PREFIJO_QUIZ } from './quiz/logica.js';
 
 const MODOS = [['off', 'Apagado'], ['basico', 'Básico'], ['ia', 'IA ✦']];
+
+const DIAG_VACIO = { modelo: { clases: {} }, lista: [], porArchivo: {} };
 
 export default function App() {
   const [prog, setProg] = useProgreso();
@@ -193,7 +197,11 @@ export default function App() {
   // Diagnóstico en vivo, con un pequeño retraso mientras se escribe
   const [diferidos, setDiferidos] = useState(cod.files);
   useEffect(() => { const t = setTimeout(() => setDiferidos(cod.files), 300); return () => clearTimeout(t); }, [cod.files]);
-  const diag = useMemo(() => diagnosticar(diferidos), [diferidos]);
+  // Los retos de Kotlin no pasan por el analizador de Java: los revisa el juez del servidor
+  const esKotlin = nivel.lenguaje === 'kotlin';
+  const diag = useMemo(() => (esKotlin ? DIAG_VACIO : diagnosticar(diferidos)), [diferidos, esKotlin]);
+  const [evaluando, setEvaluando] = useState(null); // { posicion, estado, enviar } mientras el juez trabaja
+  useEffect(() => { setEvaluando(null); }, [nivel.id]);
 
   // Aviso temporal en la barra de estado
   const tAviso = useRef(null);
@@ -224,7 +232,7 @@ export default function App() {
   const abierto = k => profe || k === 0 || hecho(k - 1) || hecho(k) || habilitados.includes(NIVELES[k].id);
   const pasosHechos = (vista ? progV?.pasosHechos : prog.pasosHechos) || [];
   const pasoOk = p => pasoAbierto(p, pasosHechos, profe) || habilitados.includes(p.id);
-  const misionAbierta = m => misionDisponible(m, prog.hechos, profe);
+  const misionAbierta = m => misionDisponible(m, prog.hechos, profe, prog.misionesHechas || []);
   const misionCompleta = m => misionCompletada(m, pasosHechos, prog.misionesHechas || []);
   const completadas = MISIONES.filter(misionCompleta);
   // Las Expediciones marcadas oculta solo aparecen en el mapa en modo profesor
@@ -263,14 +271,23 @@ export default function App() {
   useEffect(() => { if (!profe && misionDeNivel?.oculta) volverARuta(); }, [profe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const izq = useRef(null);
-  const ejecutar = enviar => {
+  const ejecutar = async enviar => {
     if (vista && enviar) return;
-    const r = evaluarNivel(nivel, cod.files, { incluirOcultas: enviar });
+    if (evaluando) return;
+    let r;
+    if (nivel.remoto) {
+      const id = nivel.id;
+      setEvaluando({ posicion: 0, estado: 'cola', enviar });
+      setResultado(null); setExito(null); setCaption('');
+      r = await evaluarRemoto(nivel, cod.files, { incluirOcultas: enviar, alumno: prog.perfil?.id || '', onCola: (posicion, estado) => setEvaluando(e => e && { ...e, posicion, estado }) });
+      setEvaluando(null);
+      if (nivelRef.current.id !== id) return; // cambió de nivel mientras esperaba
+    } else r = evaluarNivel(nivel, cod.files, { incluirOcultas: enviar });
     if (vista) { setResultado(r); setEnviado(false); setToken(t => t + 1); setExito(null); setTab('pruebas'); return; }
     volcarEscritura();
     medir(m => registrarResultado(m, nivel.id, r, enviar));
     if (enviar) {
-      const senales = analizarEstilo(cod.files, esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i), nivel.mundo >= 7 ? ['excepciones'] : []);
+      const senales = esKotlin ? [] : analizarEstilo(cod.files, esMision ? codigoInicialPaso(prog, nivel) : codigoInicial(prog, i), nivel.mundo >= 7 ? ['excepciones'] : []);
       if (senales.length) medir(m => registrarSenales(m, nivel.id, senales));
     }
     if (r.animacion && izq.current && izq.current.scrollTop > 120) izq.current.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -289,6 +306,8 @@ export default function App() {
   };
   const ejecutarRef = useRef(ejecutar);
   ejecutarRef.current = ejecutar;
+  const nivelRef = useRef(nivel);
+  nivelRef.current = nivel;
 
   const irA = (archivo, linea) => {
     if (archivo !== cod.activo && cod.files[archivo] != null) {
@@ -475,10 +494,12 @@ export default function App() {
         <aside className="izq" ref={izq}>
           <div className="monitor">
             <div className="monitor-bisel">
-              <PixelStage nivel={nivel} modelo={diag.modelo} animacion={resultado?.animacion} token={token} onCaption={setCaption} />
+              {nivel.escena === 'android'
+                ? <TelefonoAndroid captura={resultado?.captura} evaluando={evaluando} nivel={nivel} />
+                : <PixelStage nivel={nivel} modelo={diag.modelo} animacion={resultado?.animacion} token={token} onCaption={setCaption} />}
               {exito && <div className="sello">{esMision ? '¡Paso superado!' : '¡Capítulo superado!'}</div>}
             </div>
-            <Dialogo caption={caption} reposo={resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : vista ? `Vista de ${vivoV?.perfil.nombre || 'el estudiante'}: pulsa Ejecutar para ver su escena (no cuenta como intento suyo).` : `${prog.perfil ? `¡Hola, ${prog.perfil.nombre.split(' ')[0]}! ` : ''}Escribe tu código y pulsa Ejecutar para ver la escena.`} />
+            <Dialogo caption={caption} reposo={evaluando ? (evaluando.posicion > 1 ? `Tu código está en la fila del juez: hay ${evaluando.posicion - 1} antes que tú.` : 'El juez está compilando tu Kotlin y probando tu pantalla…') : resultado?.remoto ? (resultado.captura ? 'Así se ve tu pantalla en un Android de verdad. Revisa los casos de prueba.' : 'El juez terminó. Revisa los casos de prueba.') : resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : vista ? `Vista de ${vivoV?.perfil.nombre || 'el estudiante'}: pulsa Ejecutar para ver su escena (no cuenta como intento suyo).` : `${prog.perfil ? `¡Hola, ${prog.perfil.nombre.split(' ')[0]}! ` : ''}Escribe tu código y pulsa Ejecutar para ver la escena.`} />
           </div>
           <Leccion nivel={nivel} mundo={mundo} superado={esMision ? pasosHechos.includes(nivel.id) : hechos.includes(nivel.id)} onSolucion={() => { if (profe && !vista) { reemplazarTodo({ ...nivel.solucion }); medir(m => registrarSolucion(m, nivel.id)); } }} onGuia={setGuia} profe={!!profe && !vista} onPista={() => { if (!vista) medir(m => registrarPista(m, nivel.id)); }} />
         </aside>
@@ -539,8 +560,8 @@ export default function App() {
 
           <div className="barra-juez" ref={disp.refs.barra}>
             <span className="atajos" title="Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Shift+Alt+F ordena · Ctrl+Enter ejecuta">Tab acepta la sugerencia gris · Ctrl+Espacio sugiere · Ctrl+. corrige · Shift+Alt+F ordena · Ctrl+Enter ejecuta</span>
-            <button type="button" className="btn-sec" onClick={() => ejecutar(false)}>▶ Ejecutar código</button>
-            <button type="button" className="btn-pri" disabled={!!vista} title={vista ? 'En la vista de estudiante solo puedes ejecutar: enviar le corresponde al estudiante' : undefined} onClick={() => ejecutar(true)}>Enviar</button>
+            <button type="button" className="btn-sec" disabled={!!evaluando} onClick={() => ejecutar(false)}>{evaluando && !evaluando.enviar ? '⏳ Evaluando…' : '▶ Ejecutar código'}</button>
+            <button type="button" className="btn-pri" disabled={!!vista || !!evaluando} title={vista ? 'En la vista de estudiante solo puedes ejecutar: enviar le corresponde al estudiante' : undefined} onClick={() => ejecutar(true)}>Enviar</button>
           </div>
         </section>
       </main>

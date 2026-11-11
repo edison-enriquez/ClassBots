@@ -6,7 +6,8 @@ import { EditorState, StateEffect, StateField, Prec } from '@codemirror/state';
 import { autocompletion, completionKeymap, completionStatus, acceptCompletion, closeBrackets, closeBracketsKeymap, snippet, hasNextSnippetField, nextSnippetField, startCompletion } from '@codemirror/autocomplete';
 import { linter, lintGutter, forEachDiagnostic, lintKeymap } from '@codemirror/lint';
 import { defaultKeymap, history, historyKeymap, indentMore, indentLess } from '@codemirror/commands';
-import { indentOnInput, bracketMatching, syntaxHighlighting, HighlightStyle, indentUnit } from '@codemirror/language';
+import { indentOnInput, bracketMatching, syntaxHighlighting, HighlightStyle, indentUnit, StreamLanguage } from '@codemirror/language';
+import { kotlin } from '@codemirror/legacy-modes/mode/clike';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { java } from '@codemirror/lang-java';
 import { tags as t } from '@lezer/highlight';
@@ -135,7 +136,12 @@ const BOOST = { variable: 4, atributo: 3, metodo: 3, plantilla: 2, clase: 1, tip
  *   aviso(msg), iaNoDisponible(), onCambio(texto), onCursor(linea, col), onEjecutar()
  * }
  */
+/* Los retos de Kotlin se califican en el servidor: las ayudas locales (que entienden Java) se apagan en los .kt */
+const LENG_JAVA = java(), LENG_KOTLIN = StreamLanguage.define(kotlin);
+export const lenguajeDe = archivo => (/\.kt$/.test(archivo || '') ? LENG_KOTLIN : LENG_JAVA);
+
 export function crearExtensiones(cfg) {
+  const esKotlin = () => /\.kt$/.test(cfg.activo() || '');
   let memoKey = '', memoC = {};
   const clases = state => {
     const files = { ...cfg.archivos(), [cfg.activo()]: state.doc.toString() };
@@ -145,7 +151,7 @@ export function crearExtensiones(cfg) {
   };
 
   const fuente = context => {
-    if (cfg.modo() === 'off' && !context.explicit) return null;
+    if (esKotlin() || (cfg.modo() === 'off' && !context.explicit)) return null;
     const r = sugerencias(context.state.doc.toString(), context.pos, clases(context.state), context.explicit);
     if (!r || !r.items.length) return null;
     return {
@@ -159,6 +165,7 @@ export function crearExtensiones(cfg) {
   };
 
   const fuenteLint = view => {
+    if (esKotlin()) return [];
     const d = diagnosticar({ ...cfg.archivos(), [cfg.activo()]: view.state.doc.toString() });
     const m = d.porArchivo[cfg.activo()];
     if (!m) return [];
@@ -255,7 +262,7 @@ export function crearExtensiones(cfg) {
     }
     calcular() {
       const v = this.view, st = v.state, sel = st.selection.main;
-      if (st.field(ghostField) || !sel.empty || cfg.modo() === 'off') return;
+      if (st.field(ghostField) || !sel.empty || cfg.modo() === 'off' || esKotlin()) return;
       if (completionStatus(st) === 'active') return;
       const s = sugerenciaLocal(st.doc.toString(), sel.head, clases(st));
       if (s) v.dispatch({ effects: setGhost.of({ ...s, pos: sel.head }) });
@@ -265,7 +272,7 @@ export function crearExtensiones(cfg) {
 
   const calcFirma = st => {
     const sel = st.selection.main;
-    if (!sel.empty) return null;
+    if (!sel.empty || esKotlin()) return null;
     const f = firmaEn(st.doc.toString(), sel.head, clases(st));
     if (!f) return null;
     return {
@@ -286,6 +293,7 @@ export function crearExtensiones(cfg) {
   });
 
   const ordenar = view => {
+    if (esKotlin()) { cfg.aviso('Ordenar solo funciona con Java. En Kotlin usa la sangría de 4 espacios.'); return 0; }
     const n = ordenarVista(view);
     cfg.aviso(n ? `Código ordenado: ${n} ${n === 1 ? 'línea' : 'líneas'} con la sangría corregida.` : 'El código ya estaba ordenado.');
     return n;
@@ -334,11 +342,11 @@ export function crearExtensiones(cfg) {
     EditorState.allowMultipleSelections.of(false), indentUnit.of('    '), EditorState.tabSize.of(4),
     indentOnInput(), syntaxHighlighting(estilo), bracketMatching(), closeBrackets(),
     autocompletion({ override: [fuente], activateOnTypingDelay: 80, icons: true, maxRenderedOptions: 60 }),
-    highlightActiveLine(), highlightSelectionMatches(), java(),
+    highlightActiveLine(), highlightSelectionMatches(),
     lintGutter(), linter(fuenteLint, { delay: 400 }), lens,
     ghostField, ghostPlugin, firmaField, miKeymap,
     keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, ...lintKeymap]),
-    EditorView.contentAttributes.of({ 'aria-label': 'Editor de código Java', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off' }),
+    EditorView.contentAttributes.of({ 'aria-label': 'Editor de código', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off' }),
     tema, escritura,
   ];
   return { extensiones, pedirIA, aceptarGhost, ordenar };
