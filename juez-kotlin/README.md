@@ -36,7 +36,25 @@ curl -s http://127.0.0.1:8788/salud
 
 La construcción **falla si algún reto no pasa con su solución**, así que una imagen construida es una imagen probada.
 
-En Cloudflare, la ruta del túnel apunta a `http://localhost:8788` con el path `^/(kotlin/.*|salud)$`, porque `cloudflared` corre en el sistema y no dentro de Docker.
+En Cloudflare, la ruta del túnel usa el path `^/(kotlin/.*|salud)$`. El servicio depende de dónde corre `cloudflared`:
+
+| `cloudflared` | Servicio de la ruta | Cómo levantar el juez |
+|---|---|---|
+| En el sistema | `http://localhost:8788` | `docker compose up -d --build` |
+| En un contenedor | `http://juez:8788` | `RED_TUNEL=<red> docker compose -f compose.yaml -f compose.tunel.yaml up -d --build` |
+
+`compose.tunel.yaml` une solo la api a la red de `cloudflared` con el alias `juez`; el worker no entra a esa red. La red se ve con `docker inspect <contenedor de cloudflared> --format '{{json .NetworkSettings.Networks}}'`. Si la ruta no coincide, `https://juez.cybermas.app/salud` responde 502.
+
+## Aislamiento entre estudiantes
+
+El código del estudiante corre dentro de la JVM de pruebas con el mismo usuario que Gradle, así que el juez no confía en nada que ese código pueda escribir:
+
+- **Slot limpio en cada intento:** antes de compilar, el slot se restaura desde la plantilla (scripts de Gradle, `gradle.properties`, wrapper, fuentes y temporales). Solo sobreviven `app/build` y `.gradle`, que Gradle vuelve a verificar. Las cachés de build y de configuración y la compilación incremental de Kotlin están apagadas porque Gradle reusaría sus entradas sin revisarlas.
+- **Casa de Gradle efímera:** las dependencias se leen de una caché de solo lectura dentro de la imagen (`GRADLE_RO_DEP_CACHE`) y el resto se copia de `/opt/casa-gradle` a un tmpfs al arrancar. Un reinicio deja el worker como recién construido.
+- **Vigilante** (`VIGILAR=1`): después de cada intento revisa que no haya cambiado ningún `.jar`, `.class` o `.so` de la casa de Gradle (por inodo, tamaño y ctime, que no se pueden falsear) ni aparecido `init.d`, `init.gradle` o `gradle.properties`. Si pasa, ese intento no cuenta, se registra una `ALERTA` en el log y el worker sale; Docker lo levanta limpio en un par de minutos.
+- **Procesos sobrantes:** al terminar cada intento se matan los procesos que quedaron con el slot como carpeta de trabajo.
+
+Lo que queda: un estudiante puede hacer trampa en su propio intento (lee sus pruebas desde su código) o leer las soluciones en el bundle del juego, como en los mundos de Java. Lo que se cierra es que afecte los intentos de otros.
 
 ## API
 
@@ -61,4 +79,4 @@ Robolectric 4.17 necesita JDK 21: con el JDK 25 de Android Studio falla al inici
 
 ## Capacidad
 
-Con 2 copias en paralelo (`SLOTS=2`), un intento con pantalla tarda ~15 s y uno sin pantalla ~6 s. Un error de compilación vuelve en ~2 s. Una clase de 30 estudiantes que envía a la vez espera unos 4 minutos en el peor caso; sube `SLOTS` (y `MEMORIA`) si el equipo tiene RAM libre: cada copia usa ~1,5 GB.
+Con 2 copias en paralelo (`SLOTS=2`), un intento con pantalla tarda ~15 s (algo más sin las cachés de build y de configuración) y uno sin pantalla ~6 s. Un error de compilación vuelve en ~2 s. Una clase de 30 estudiantes que envía a la vez espera unos 4 minutos en el peor caso; sube `SLOTS` (y `MEMORIA`) si el equipo tiene RAM libre: cada copia usa ~1,5 GB.

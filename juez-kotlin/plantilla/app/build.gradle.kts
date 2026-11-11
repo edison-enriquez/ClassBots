@@ -33,6 +33,10 @@ android {
                 }
                 it.systemProperty("juez.captura", rootProject.file("captura.png").absolutePath)
                 it.systemProperty("juez.fuentes", file("src/main/java/com/classbots/taller").absolutePath)
+                // Temporales dentro del slot: el juez los borra antes de cada intento
+                val temporales = rootProject.file("tmp")
+                it.systemProperty("java.io.tmpdir", temporales.absolutePath)
+                it.doFirst { temporales.mkdirs() }
             }
         }
     }

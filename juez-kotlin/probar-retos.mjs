@@ -10,7 +10,7 @@ const aqui = path.dirname(fileURLToPath(import.meta.url));
 const retosDir = path.join(aqui, 'retos');
 const pedidos = process.argv.slice(2);
 const retos = (await readdir(retosDir)).filter(r => !pedidos.length || pedidos.includes(r)).sort();
-const w = crearWorker({ plantilla: path.join(aqui, 'plantilla'), retosDir, trabajo: process.env.TRABAJO || path.join(aqui, 'trabajo'), slots: 1 });
+const w = crearWorker({ plantilla: path.join(aqui, 'plantilla'), retosDir, trabajo: process.env.TRABAJO || path.join(aqui, 'trabajo'), slots: 1, casa: process.env.GRADLE_USER_HOME || null, casaBase: process.env.CASA_BASE || null });
 await w.preparar();
 let malos = 0;
 for (const reto of retos) {

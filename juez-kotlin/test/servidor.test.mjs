@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validarEnvio, prepararFuente, parsearErrores, parsearJUnit, crearApi, PAQUETE } from '../servidor.mjs';
+import { validarEnvio, prepararFuente, parsearErrores, parsearJUnit, crearApi, PAQUETE, restaurarSlot, crearVigilante, matarRestos } from '../servidor.mjs';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, appendFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const RETOS = ['kotlin-modelo', 'kotlin-pantalla'];
 
@@ -68,4 +73,107 @@ test('rechaza otros orígenes y deja un solo intento activo por estudiante', asy
     assert.equal(b.repetido, true);
     soltar();
   });
+});
+
+/* ---------- Aislamiento entre intentos ---------- */
+const temporal = () => mkdtemp(path.join(tmpdir(), 'juez-'));
+async function escribir(base, archivos) {
+  for (const [f, t] of Object.entries(archivos)) { await mkdir(path.dirname(path.join(base, f)), { recursive: true }); await writeFile(path.join(base, f), t); }
+}
+
+test('restaurar el slot deshace lo que dejó el intento anterior y conserva las salidas de compilación', async () => {
+  const dir = await temporal();
+  const plantilla = path.join(dir, 'plantilla'), slot = path.join(dir, 'slot1');
+  await escribir(plantilla, { 'gradlew': 'ok', 'gradle.properties': 'limpio', 'app/build.gradle.kts': 'limpio', 'app/src/main/AndroidManifest.xml': 'm', 'app/build/basura': 'no se copia', '.gradle/x': 'no se copia' });
+  await restaurarSlot(slot, plantilla);
+  assert.ok(!existsSync(path.join(slot, 'app/build/basura')), 'no copia las salidas locales de la plantilla');
+  assert.ok(existsSync(path.join(slot, 'tmp')));
+  // Lo que podría dejar un estudiante
+  await escribir(slot, {
+    'gradle.properties': 'org.gradle.jvmargs=-javaagent:/tmp/x.jar', 'app/build.gradle.kts': 'envenenado', 'init.gradle': 'x', 'buildSrc/a.kt': 'x',
+    'app/otro.gradle': 'x', 'app/src/main/java/com/classbots/taller/Viejo.kt': 'x', 'app/src/test/resources/x': 'x', 'tmp/libnativa.so': 'x',
+    'app/build/salida.class': 'compilado', '.gradle/historial': 'h',
+  });
+  await restaurarSlot(slot, plantilla);
+  assert.equal(await readFile(path.join(slot, 'gradle.properties'), 'utf8'), 'limpio');
+  assert.equal(await readFile(path.join(slot, 'app/build.gradle.kts'), 'utf8'), 'limpio');
+  for (const f of ['init.gradle', 'buildSrc', 'app/otro.gradle', 'app/src/main/java', 'app/src/test', 'tmp/libnativa.so']) assert.ok(!existsSync(path.join(slot, f)), `debe borrar ${f}`);
+  assert.ok(existsSync(path.join(slot, 'app/src/main/AndroidManifest.xml')));
+  assert.ok(existsSync(path.join(slot, 'app/build/salida.class')), 'conserva app/build');
+  assert.ok(existsSync(path.join(slot, '.gradle/historial')), 'conserva .gradle');
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('el vigilante detecta jars cambiados y scripts de inicio, y acepta archivos nuevos', async () => {
+  const casa = await temporal();
+  await escribir(casa, { 'caches/transforms/a/junit.jar': 'original', 'native/lib.so': 'n', 'wrapper/dists/gradle/lib/g.jar': 'g', 'caches/x.lock': 'l' });
+  const v = crearVigilante(casa);
+  assert.equal(await v.fijar(), 3);
+  await escribir(casa, { 'caches/transforms/b/nuevo.jar': 'legítimo', 'caches/x.lock': 'cambia siempre' });
+  assert.deepEqual(await v.revisar(), [], 'archivos nuevos y locks no son alarma');
+  await appendFile(path.join(casa, 'caches/transforms/a/junit.jar'), 'veneno');
+  assert.deepEqual(await v.revisar(), ['cambió caches/transforms/a/junit.jar']);
+  const v2 = crearVigilante(casa); await v2.fijar();
+  await escribir(casa, { 'init.d/robar.gradle': 'x' });
+  assert.deepEqual(await v2.revisar(), ['apareció init.d']);
+  // Mismo tamaño y mismo mtime no bastan para esconder un cambio: se mira el ctime
+  await rm(path.join(casa, 'init.d'), { recursive: true });
+  const v3 = crearVigilante(casa); await v3.fijar();
+  await new Promise(r => setTimeout(r, 20));
+  await writeFile(path.join(casa, 'native/lib.so'), 'm');
+  assert.deepEqual(await v3.revisar(), ['cambió native/lib.so']);
+  await rm(casa, { recursive: true, force: true });
+});
+
+test('mata los procesos que el intento dejó corriendo dentro del slot', { skip: !existsSync('/proc') }, async () => {
+  const slot = await temporal(), afuera = await temporal();
+  const resto = spawn('sleep', ['30'], { cwd: path.join(slot), stdio: 'ignore' });
+  const vecino = spawn('sleep', ['30'], { cwd: afuera, stdio: 'ignore' });
+  await new Promise(r => setTimeout(r, 100));
+  const salio = new Promise(r => resto.on('exit', r));
+  assert.equal(await matarRestos(slot), 1);
+  await salio;
+  assert.equal(vecino.exitCode, null, 'no toca procesos de otros slots');
+  vecino.kill('SIGKILL');
+  await rm(slot, { recursive: true, force: true }); await rm(afuera, { recursive: true, force: true });
+});
+
+test('worker: un intento que toca la casa de Gradle se anula y el siguiente arranca de un slot limpio', { skip: process.platform === 'win32' }, async () => {
+  const { crearWorker } = await import('../servidor.mjs');
+  const dir = await temporal();
+  const plantilla = path.join(dir, 'plantilla'), retos = path.join(dir, 'retos'), casa = path.join(dir, 'casa'), base = path.join(dir, 'base');
+  // gradlew falso: «compila» y escribe un resultado JUnit. Si el código trae una ruta tras «VENENO:», escribe ahí
+  // (como haría un estudiante desde su prueba) y además deja un build.gradle.kts envenenado en el slot.
+  await escribir(plantilla, {
+    'gradlew': `#!/bin/sh
+f=app/src/main/java/com/classbots/taller/Robot.kt
+v=$(sed -n 's/.*VENENO:\\([^ ]*\\).*/\\1/p' $f)
+if [ -n "$v" ]; then mkdir -p "$v"; echo veneno > app/build.gradle.kts; fi
+grep -q veneno app/build.gradle.kts && exit 3
+mkdir -p app/build/test-results/testDebugUnitTest
+echo '<testsuite><testcase name="pasa" classname="com.classbots.taller.ModeloTest"/></testsuite>' > app/build/test-results/testDebugUnitTest/TEST-a.xml
+`,
+    'app/build.gradle.kts': 'limpio', 'gradle.properties': 'x',
+  });
+  await (await import('node:fs/promises')).chmod(path.join(plantilla, 'gradlew'), 0o755);
+  await escribir(retos, { 'kotlin-modelo/pruebas/ModeloTest.kt': 'class ModeloTest' });
+  await escribir(base, { 'wrapper/dists/g/lib/gradle.jar': 'g' });
+  const w = crearWorker({ plantilla, retosDir: retos, trabajo: path.join(dir, 't'), slots: 1, casa, casaBase: base, vigilar: true });
+  await w.preparar();
+  assert.ok(existsSync(path.join(casa, 'wrapper/dists/g/lib/gradle.jar')), 'copia la casa de la imagen');
+  assert.equal(await w.fijarVigilante(), 1);
+
+  const bien = await w.evaluar({ reto: 'kotlin-modelo', archivos: { 'Robot.kt': 'class Robot' } });
+  assert.equal(bien.casos.length, 1); assert.equal(w.estado.contaminado, null);
+
+  const malo = await w.evaluar({ reto: 'kotlin-modelo', archivos: { 'Robot.kt': `// VENENO:${casa}/init.d` } });
+  assert.match(malo.fallo, /no cuenta/); assert.equal(malo.casos.length, 0);
+  assert.deepEqual(w.estado.contaminado, ['apareció init.d']);
+
+  // El build.gradle.kts envenenado no llega al siguiente estudiante
+  await rm(path.join(casa, 'init.d'), { recursive: true });
+  const otro = await w.evaluar({ reto: 'kotlin-modelo', archivos: { 'Robot.kt': 'class Robot' } });
+  assert.equal(otro.casos.length, 1);
+  assert.equal(await readFile(path.join(dir, 't/slot1/app/build.gradle.kts'), 'utf8'), 'limpio');
+  await rm(dir, { recursive: true, force: true });
 });

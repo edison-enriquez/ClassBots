@@ -1,14 +1,19 @@
 /* Juez de Kotlin de ClassBots.
    Dos modos en el mismo archivo (variable MODO):
    - api:    recibe los envíos del juego, los pone en cola y entrega el resultado. Nunca ejecuta código
-             del estudiante. Es el único contenedor con puerto publicado (127.0.0.1) y sin salida a internet.
+             del estudiante. Es el único contenedor con puerto publicado (solo en 127.0.0.1).
    - worker: compila y prueba el Kotlin del estudiante con Gradle + Robolectric dentro de una red interna
              sin salida, y devuelve los casos, los errores de compilación y una captura de la pantalla.
+   El código del estudiante corre con el mismo usuario que Gradle, así que nada de lo que pueda escribir
+   se reusa a ciegas: el slot se restaura desde la plantilla en cada intento, la casa de Gradle es una
+   copia efímera (las dependencias vienen de una caché de solo lectura) y un vigilante revisa después de
+   cada intento que no hayan cambiado los jars ni aparecido scripts de inicio; si pasa, el worker se
+   reinicia limpio.
    Sin dependencias: solo módulos de Node. */
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { cp, mkdir, readdir, readFile, rm, writeFile, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, readlink, rm, writeFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -91,22 +96,120 @@ function correr(cmd, args, { cwd, env, ms }) {
   });
 }
 
-export function crearWorker({ plantilla, retosDir, trabajo, slots = 2, gradleMs = 150_000 }) {
+/* ---------- Aislamiento entre intentos ---------- */
+
+/* Deja el slot como la plantilla. Solo sobreviven las salidas de compilación (app/build y .gradle),
+   que Gradle vuelve a comprobar por su cuenta; todo lo demás (scripts de Gradle, gradle.properties,
+   wrapper, fuentes, temporales) se borra o se pisa con la copia limpia. */
+const SALIDAS = /(^|[\\/])(build|\.gradle|\.kotlin)([\\/]|$)/;
+export async function restaurarSlot(slot, plantilla) {
+  await mkdir(slot, { recursive: true });
+  const base = new Set(await readdir(plantilla));
+  for (const n of await readdir(slot)) if (!base.has(n) && n !== '.gradle') await rm(path.join(slot, n), { recursive: true, force: true });
+  const app = path.join(slot, 'app');
+  if (existsSync(app)) {
+    const baseApp = new Set(await readdir(path.join(plantilla, 'app')));
+    for (const n of await readdir(app)) if (!baseApp.has(n) && n !== 'build') await rm(path.join(app, n), { recursive: true, force: true });
+    await rm(path.join(app, 'src'), { recursive: true, force: true });
+  }
+  await cp(plantilla, slot, { recursive: true, force: true, filter: f => !SALIDAS.test(path.relative(plantilla, f)) });
+  await mkdir(path.join(slot, 'tmp'), { recursive: true }); // java.io.tmpdir de las pruebas (ver app/build.gradle.kts)
+}
+
+/* Mata lo que quedó corriendo dentro del slot (procesos que lanzó el código del estudiante).
+   Los daemons de Gradle y de Kotlin se respetan: son del juez y no corren con el slot como carpeta. */
+export async function matarRestos(dir) {
+  if (!existsSync('/proc')) return 0;
+  let n = 0;
+  for (const p of await readdir('/proc')) {
+    if (!/^\d+$/.test(p) || +p === process.pid || +p === 1) continue;
+    let cwd, cmd;
+    try { cwd = await readlink(`/proc/${p}/cwd`); cmd = await readFile(`/proc/${p}/cmdline`, 'utf8'); } catch { continue; }
+    if (cwd !== dir && !cwd.startsWith(dir + path.sep)) continue;
+    if (/GradleDaemon|KotlinCompileDaemon/.test(cmd)) continue;
+    try { process.kill(+p, 'SIGKILL'); n++; } catch { /* ya terminó */ }
+  }
+  return n;
+}
+
+/* Huella de lo que Gradle carga como código: jars, clases y bibliotecas nativas. Usa ctime e inodo,
+   que el usuario no puede falsear (el mtime sí). */
+const CODIGO = /\.(jar|class|so)$/;
+export async function huella(dir, m = new Map(), raiz = dir) {
+  let entradas;
+  try { entradas = await readdir(dir, { withFileTypes: true }); } catch { return m; }
+  for (const e of entradas) {
+    const f = path.join(dir, e.name);
+    if (e.isDirectory()) await huella(f, m, raiz);
+    else if (CODIGO.test(e.name)) { try { const s = await stat(f); m.set(path.relative(raiz, f), `${s.ino}:${s.size}:${s.ctimeMs}`); } catch { /* se borró */ } }
+  }
+  return m;
+}
+
+/* Scripts que Gradle ejecuta en cada build si existen en su casa */
+const INICIO = ['init.d', 'init.gradle', 'init.gradle.kts', 'gradle.properties'];
+export function crearVigilante(casa) {
+  let base = null;
+  return {
+    async fijar() { base = await huella(casa); return base.size; },
+    async revisar() {
+      if (!base) return [];
+      const problemas = INICIO.filter(n => existsSync(path.join(casa, n))).map(n => `apareció ${n}`);
+      const ahora = await huella(casa);
+      for (const [f, h] of base) { const x = ahora.get(f); if (x !== undefined && x !== h) problemas.push(`cambió ${f}`); }
+      // Los archivos nuevos son normales (Gradle transforma dependencias): desde ahora también se vigilan
+      for (const [f, h] of ahora) if (!base.has(f)) base.set(f, h);
+      return problemas.slice(0, 10);
+    },
+  };
+}
+
+/* ---------- Worker: ejecuta Gradle en una copia de la plantilla ---------- */
+export function crearWorker({ plantilla, retosDir, trabajo, slots = 2, gradleMs = 150_000, casa = null, casaBase = null, vigilar = false }) {
   const libres = Array.from({ length: slots }, (_, i) => path.join(trabajo, `slot${i + 1}`));
   const espera = [];
   const tomarSlot = () => (libres.length ? Promise.resolve(libres.pop()) : new Promise(r => espera.push(r)));
   const soltarSlot = s => (espera.length ? espera.shift()(s) : libres.push(s));
+  const vigilante = vigilar && casa ? crearVigilante(casa) : null;
+  const estado = { contaminado: null };
 
   async function preparar() {
-    for (const s of [...libres]) if (!existsSync(path.join(s, 'gradlew'))) { await mkdir(s, { recursive: true }); await cp(plantilla, s, { recursive: true }); }
+    // La casa de Gradle se copia de la imagen (solo lectura) a un tmpfs: cada arranque empieza limpio
+    if (casa && casaBase && !existsSync(path.join(casa, 'wrapper'))) {
+      const t0 = Date.now();
+      await mkdir(casa, { recursive: true });
+      await cp(casaBase, casa, { recursive: true });
+      console.log(`casa de Gradle copiada de ${casaBase} en ${Date.now() - t0} ms`);
+    }
+    for (const s of libres) await restaurarSlot(s, plantilla);
   }
 
   async function evaluar({ reto, archivos }) {
     const slot = await tomarSlot();
     const t0 = Date.now();
+    let resultado;
     try {
+      resultado = await correrIntento(slot, reto, archivos, t0);
+    } finally {
+      const restos = await matarRestos(slot);
+      if (restos) console.log(`${slot}: maté ${restos} proceso(s) que dejó el intento`);
+      if (vigilante) {
+        const problemas = await vigilante.revisar();
+        if (problemas.length) {
+          estado.contaminado = problemas;
+          console.error(`ALERTA ${slot} (${reto}): el intento cambió la casa de Gradle → ${problemas.join('; ')}`);
+          resultado = { estado: 'listo', compilo: true, errores: [], casos: [], ms: Date.now() - t0, fallo: 'Tu código modificó archivos del juez. Este intento no cuenta y el juez se reinicia.' };
+        }
+      }
+      soltarSlot(slot);
+    }
+    return resultado;
+  }
+
+  async function correrIntento(slot, reto, archivos, t0) {
+    {
+      await restaurarSlot(slot, plantilla);
       const main = path.join(slot, 'app/src/main/java', RUTA_PAQUETE), test = path.join(slot, 'app/src/test/java', RUTA_PAQUETE);
-      await rm(main, { recursive: true, force: true }); await rm(test, { recursive: true, force: true });
       await mkdir(main, { recursive: true }); await mkdir(test, { recursive: true });
       await rm(path.join(slot, 'captura.png'), { force: true });
       await rm(path.join(slot, 'app/build/test-results'), { recursive: true, force: true });
@@ -125,7 +228,8 @@ export function crearWorker({ plantilla, retosDir, trabajo, slots = 2, gradleMs 
       }
       const r = await correr(path.join(slot, 'gradlew'), ['testDebugUnitTest', '--offline', '--console=plain', '-q', '--continue'], { cwd: slot, ms: gradleMs });
       if (r.tiempoAgotado) {
-        await correr(path.join(slot, 'gradlew'), ['--stop'], { cwd: slot, ms: 20_000 });
+        // Al cortar el cliente, el daemon cancela ese build; «gradlew --stop» tumbaría también el del otro slot
+        await matarRestos(slot);
         return { estado: 'listo', compilo: true, errores: [], casos: [], tiempoAgotado: true, ms: Date.now() - t0 };
       }
       const errores = parsearErrores(r.salida, desfases);
@@ -140,11 +244,12 @@ export function crearWorker({ plantilla, retosDir, trabajo, slots = 2, gradleMs 
       const agotado = sinCasos && /timed? ?out|timeout/i.test(r.salida);
       const fallo = sinCasos && !agotado ? r.salida.split('\n').filter(l => /error|exception|failed/i.test(l)).slice(0, 5).join('\n').slice(0, 800) : null;
       return { estado: 'listo', compilo: !errores.length, errores, casos, captura, ms: Date.now() - t0, ...(agotado ? { tiempoAgotado: true } : {}), ...(fallo ? { fallo } : {}) };
-    } finally {
-      soltarSlot(slot);
     }
   }
-  return { preparar, evaluar };
+
+  // Línea base del vigilante: después de preparar (y de calentar, si se calienta)
+  const fijarVigilante = async () => (vigilante ? vigilante.fijar() : 0);
+  return { preparar, evaluar, fijarVigilante, estado };
 }
 
 /* ---------- Utilidades HTTP ---------- */
@@ -226,7 +331,10 @@ async function principal() {
 
   if ((env.MODO || 'api') === 'worker') {
     const slots = +(env.SLOTS || 2);
-    const w = crearWorker({ plantilla: path.resolve(env.PLANTILLA || './plantilla'), retosDir, trabajo: path.resolve(env.TRABAJO || './trabajo'), slots });
+    const w = crearWorker({
+      plantilla: path.resolve(env.PLANTILLA || './plantilla'), retosDir, trabajo: path.resolve(env.TRABAJO || './trabajo'), slots,
+      casa: env.GRADLE_USER_HOME || null, casaBase: env.CASA_BASE || null, vigilar: env.VIGILAR === '1',
+    });
     await w.preparar();
     // Calentar cada copia con una solución de referencia: el primer estudiante no espera la compilación en frío
     const ref = retos.find(r => existsSync(path.join(retosDir, r, 'solucion')) && r.includes('pantalla')) || retos[0];
@@ -237,6 +345,8 @@ async function principal() {
       const rs = await Promise.all(Array.from({ length: slots }, () => w.evaluar({ reto: ref, archivos })));
       console.log(`calentado con ${ref} en ${Date.now() - t0} ms: ${rs.map(r => `${r.casos.filter(c => c.ok).length}/${r.casos.length}`).join(', ')}`);
     }
+    const vigilados = await w.fijarVigilante();
+    if (vigilados) console.log(`vigilante: ${vigilados} archivos de código en la casa de Gradle`);
     http.createServer(async (req, res) => {
       if (req.url === '/salud') return json(res, 200, { ok: true, retos });
       if (req.method !== 'POST' || req.url !== '/correr') return json(res, 404, { error: 'no existe' });
@@ -246,6 +356,8 @@ async function principal() {
         if (malo) return json(res, 400, { error: malo });
         json(res, 200, await w.evaluar(cuerpo));
       } catch (e) { json(res, 500, { error: String(e.message || e).slice(0, 200) }); }
+      // Si un intento tocó la casa de Gradle, el worker sale y Docker lo levanta limpio (tmpfs nuevos)
+      if (w.estado.contaminado) setTimeout(() => process.exit(70), 300);
     }).listen(puerto, host, () => console.log(`juez worker en ${host}:${puerto} · retos: ${retos.join(', ')}`));
     return;
   }

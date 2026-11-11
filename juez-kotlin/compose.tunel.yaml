@@ -1,0 +1,14 @@
+# Solo si cloudflared corre en un contenedor (la ruta del túnel apunta a http://juez:8788).
+# Une la api a la red de cloudflared con el alias «juez». El worker no entra a esa red.
+#   RED_TUNEL=<red de cloudflared> docker compose -f compose.yaml -f compose.tunel.yaml up -d --build
+# Para saber la red:  docker inspect <contenedor de cloudflared> --format '{{json .NetworkSettings.Networks}}'
+services:
+  api:
+    networks:
+      tunel:
+        aliases: [juez]
+
+networks:
+  tunel:
+    name: ${RED_TUNEL:?Define RED_TUNEL con la red de cloudflared}
+    external: true

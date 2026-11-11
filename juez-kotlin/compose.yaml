@@ -1,8 +1,11 @@
 # Juez de Kotlin de ClassBots
 #   cp .env.ejemplo .env && docker compose up -d --build
-# La api es la única con puerto, y solo en 127.0.0.1: le llega el cloudflared del sistema
-# (ruta del túnel → http://localhost:8788). El worker ejecuta el código de los estudiantes
-# en una red interna SIN salida a internet ni al resto de servicios del equipo.
+# La api es la única con puerto, y solo en 127.0.0.1. El worker ejecuta el código de los
+# estudiantes en una red interna SIN salida a internet ni al resto de servicios del equipo.
+# Cómo le llega el túnel a la api:
+#   - cloudflared en el sistema:      ruta → http://localhost:8788
+#   - cloudflared en un contenedor:   ruta → http://juez:8788, y se levanta también compose.tunel.yaml
+#       docker compose -f compose.yaml -f compose.tunel.yaml up -d --build
 name: classbots-juez
 
 services:
@@ -18,7 +21,9 @@ services:
       SIMULTANEOS: ${SLOTS:-2}
       MAX_COLA: ${MAX_COLA:-80}
     ports: ["127.0.0.1:${PUERTO:-8788}:8788"]
-    networks: [interna, publica]
+    networks:
+      interna: {}
+      publica: {}
     depends_on:
       worker: { condition: service_healthy }
     read_only: true
@@ -41,17 +46,19 @@ services:
       PUERTO: 8789
       SLOTS: ${SLOTS:-2}
       CALENTAR: "1"
+      # Revisa después de cada intento que el código del estudiante no haya tocado la casa de Gradle
+      VIGILAR: "1"
     networks: [interna]
     read_only: true
+    # Todo lo escribible es tmpfs: un reinicio deja el worker como recién construido.
+    # La casa de Gradle se copia de la imagen al arrancar (las dependencias se leen de la imagen).
     tmpfs:
       - /tmp:size=1g,exec
       - /trabajo:size=2g,uid=10001,gid=10001,exec
-    volumes:
-      # Caché de Gradle, de Kotlin y de Android: se llena desde la imagen la primera vez
-      - juez-casa:/home/juez
+      - /home/juez:size=${CASA:-3g},uid=10001,gid=10001,exec
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    mem_limit: ${MEMORIA:-6g}
+    mem_limit: ${MEMORIA:-8g}
     cpus: ${CPUS:-6}
     pids_limit: 2048
     healthcheck:
@@ -64,6 +71,3 @@ services:
 networks:
   interna: { internal: true }
   publica: {}
-
-volumes:
-  juez-casa: {}

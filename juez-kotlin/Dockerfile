@@ -38,5 +38,23 @@ RUN cp -r plantilla /tmp/c && cd /tmp/c \
  && cd /app && TRABAJO=/tmp/t node probar-retos.mjs \
  && /tmp/c/gradlew -p /tmp/c --stop && rm -rf /tmp/c /tmp/t
 
+# Casa de Gradle inmutable. Las dependencias pasan a una caché de solo lectura (GRADLE_RO_DEP_CACHE) y el
+# resto (wrapper, transformaciones) a /opt/casa-gradle; el worker copia eso a un tmpfs al arrancar, así que
+# nada de lo que deje un estudiante sobrevive a un reinicio. Todo queda de root y el contenedor es read_only.
+USER root
+RUN mkdir -p /opt/gradle-ro/caches \
+ && mv /home/juez/.gradle/caches/modules-2 /opt/gradle-ro/caches/ \
+ && find /opt/gradle-ro/caches/modules-2 \( -name '*.lock' -o -name 'gc.properties' \) -delete \
+ && rm -rf /home/juez/.gradle/daemon /home/juez/.gradle/caches/build-cache-1 \
+ && mv /home/juez/.gradle /opt/casa-gradle && mkdir /home/juez/.gradle && chown juez:juez /home/juez/.gradle \
+ && chown -R root:root /opt/gradle-ro /opt/casa-gradle /app && chmod -R a+rX,go-w /opt/gradle-ro /opt/casa-gradle /app
+USER juez
+ENV GRADLE_RO_DEP_CACHE=/opt/gradle-ro/caches CASA_BASE=/opt/casa-gradle
+
+# Segunda comprobación, ya como corre el worker: casa copiada, caché de solo lectura y --offline
+RUN GRADLE_USER_HOME=/tmp/casa TRABAJO=/tmp/t node probar-retos.mjs \
+ && GRADLE_USER_HOME=/tmp/casa /tmp/t/slot1/gradlew -p /tmp/t/slot1 --stop \
+ && du -sh /opt/casa-gradle /opt/gradle-ro && rm -rf /tmp/casa /tmp/t
+
 ENV NODE_ENV=production HOST=0.0.0.0 PLANTILLA=/app/plantilla RETOS=/app/retos TRABAJO=/trabajo
 CMD ["node", "servidor.mjs"]
