@@ -758,3 +758,24 @@ button.quiz-op:disabled { cursor: default; }
 .quiz-proy-cuerpo > *, .modal.quiz-est > * { flex-shrink: 0; }
 .quiz-leyenda { display: flex; gap: 16px; color: var(--dim); font-size: 14px; margin: 0; }
 .quiz-leyenda i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; border: 1px solid var(--negro); }
+
+/* Escena de los retos de Kotlin: el teléfono con la captura real de la pantalla */
+.android-escena { position: relative; display: flex; align-items: center; justify-content: center; aspect-ratio: 192 / 112; background: radial-gradient(circle at 50% 40%, #3a3f5c, #1b1030 75%); overflow: hidden; }
+.android-lado { position: absolute; left: 4%; top: 50%; transform: translateY(-50%); display: grid; gap: 2px; justify-items: start; max-width: 28%; font: clamp(7px, 1vw, 10px) var(--f-pixel); color: #c9cee8; }
+.android-lado small { font: clamp(9px, 1vw, 11px) var(--f-code); color: #8d88a8; margin-bottom: 6px; }
+.android-rotulo { color: #9fe8ff; }
+.android-rotulo.vista { color: #4ade80; }
+.android-telefono { position: relative; box-sizing: border-box; height: 92%; aspect-ratio: 10 / 18; padding: 7% 3.5% 5%; background: #11131c; border: 3px solid var(--negro); border-radius: 16px; box-shadow: inset 0 0 0 2px #3b3f55, 4px 4px 0 var(--negro); }
+.android-camara { position: absolute; top: 2.5%; left: 50%; width: 6px; height: 6px; transform: translateX(-50%); border-radius: 50%; background: #2b2f46; }
+.android-pantalla { display: grid; place-items: center; width: 100%; height: 100%; overflow: hidden; background: #fafafa; border-radius: 6px; }
+.android-pantalla img { width: 100%; height: 100%; object-fit: contain; }
+.android-pantalla p { margin: 0; padding: 8px; font: clamp(9px, 1vw, 11px)/1.4 var(--f-code); color: #444; text-align: center; }
+.android-cargando { display: grid; gap: 8px; justify-items: center; width: 80%; }
+.android-barra { width: 100%; height: 6px; overflow: hidden; background: #e3e0ef; border-radius: 3px; }
+.android-barra i { display: block; width: 40%; height: 100%; background: #6750a4; border-radius: 3px; }
+@media (prefers-reduced-motion: no-preference) { .android-barra i { animation: android-carga 1.1s ease-in-out infinite; } }
+@keyframes android-carga { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+.android-ver { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.android-grande { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; align-content: center; gap: 10px; padding: 16px; background: rgba(10, 6, 20, .82); cursor: zoom-out; }
+.android-grande img { max-width: min(92vw, 420px); max-height: 82vh; border: 6px solid #11131c; border-radius: 18px; box-shadow: 6px 6px 0 var(--negro); background: #fafafa; }
+.android-grande span { font: 12px var(--f-code); color: #c9cee8; }

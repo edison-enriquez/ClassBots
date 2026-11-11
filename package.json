@@ -8,13 +8,14 @@
     "build": "vite build",
     "build:single": "vite build --mode single",
     "preview": "vite preview",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js juez-kotlin/test/*.test.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.18.0",
     "@codemirror/commands": "^6.7.0",
     "@codemirror/lang-java": "^6.0.1",
     "@codemirror/language": "^6.10.0",
+    "@codemirror/legacy-modes": "^6.5.5",
     "@codemirror/lint": "^6.8.0",
     "@codemirror/search": "^6.5.0",
     "@codemirror/state": "^6.4.0",

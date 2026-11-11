@@ -3,7 +3,7 @@ import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, EditorSelection, Prec } from '@codemirror/state';
 import * as Y from 'yjs';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
-import { crearExtensiones } from '../editor/extensiones.js';
+import { crearExtensiones, lenguajeDe } from '../editor/extensiones.js';
 
 /* Extensiones de edición compartida (programación en pareja) para un archivo */
 export function extensionesColab(colab, archivo) {
@@ -49,8 +49,8 @@ const CodeEditor = forwardRef(function CodeEditor(props, ref) {
 
   function crearEstado(doc, archivo) {
     const c = latest.current.colab;
-    if (c) return EditorState.create({ doc: c.doc.getText(archivo).toString(), extensions: [herramientas.current.extensiones, extensionesColab(c, archivo)] });
-    return EditorState.create({ doc, extensions: [herramientas.current.extensiones, latest.current.soloLectura ? EditorState.readOnly.of(true) : []] });
+    if (c) return EditorState.create({ doc: c.doc.getText(archivo).toString(), extensions: [herramientas.current.extensiones, lenguajeDe(archivo), extensionesColab(c, archivo)] });
+    return EditorState.create({ doc, extensions: [herramientas.current.extensiones, lenguajeDe(archivo), latest.current.soloLectura ? EditorState.readOnly.of(true) : []] });
   }
 
   // Solo lectura (vista del profesor): el contenido sigue al de las props sin rehacer el editor

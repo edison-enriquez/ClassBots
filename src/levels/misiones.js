@@ -8,6 +8,8 @@ import { caso, corrMain, exigir, previoMain, casoRelacion, sinTexto } from './ut
 import { parsePrograma, ejecutar } from '../engine/motor.js';
 import { OBJECT } from './mision-object.js';
 import { EXPEDICION_CENTRAL } from './expedicion-central.js';
+import { MVC } from './mision-mvc.js';
+import { KOTLIN } from './mision-kotlin.js';
 
 const NORMAL = s => (s || '').replace(/\/\/.*$/gm, '').replace(/\s+/g, ' ').trim();
 const salidaDe = rt => rt.salida.join('\n').trim();
@@ -775,7 +777,7 @@ const STRATEGY = {
 };
 
 /* Las Expediciones (diseño libre) viajan como ramales: las marcadas oculta solo existen en modo profesor */
-export const MISIONES = [PLANTILLA, STRATEGY, OBJECT, EXPEDICION_CENTRAL];
+export const MISIONES = [PLANTILLA, STRATEGY, OBJECT, MVC, KOTLIN, EXPEDICION_CENTRAL];
 export const misionVisible = (mision, profesor = false) => !mision.oculta || !!profesor;
 
 /* Cada paso es un capítulo jugable con los datos de su misión */
@@ -783,7 +785,9 @@ export const PASOS = MISIONES.flatMap(m => m.pasos.map((p, k) => ({
   ...p, mision: true, expedicion: !!m.expedicion, misionId: m.id, misionCorto: m.corto, corto: p.corto || m.corto, mundo: m.mundo, enMundo: k, totalMundo: m.pasos.length, recompensa: m.recompensa, ultimo: k === m.pasos.length - 1,
 })));
 export const MISIONES_ESPECIALES = MISIONES;
-export const misionDisponible = (mision, hechos, profesor = false) => misionVisible(mision, profesor) && (profesor || mision.requiere.every(id => hechos.includes(id)));
+/* requiereMision: otra misión que hay que completar antes (la de Kotlin sigue a la de MVC en Java) */
+export const misionDisponible = (mision, hechos, profesor = false, misionesHechas = []) => misionVisible(mision, profesor)
+  && (profesor || (mision.requiere.every(id => hechos.includes(id)) && (!mision.requiereMision || misionesHechas.includes(mision.requiereMision))));
 export const misionCompletada = (mision, pasosHechos = [], misionesHechas = []) => misionesHechas.includes(mision.id) || mision.pasos.every(p => pasosHechos.includes(p.id));
 export const pasoAbierto = (paso, pasosHechos = [], profesor = false) => {
   const m = MISIONES.find(x => x.id === paso.misionId);

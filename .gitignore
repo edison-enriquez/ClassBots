@@ -5,3 +5,8 @@ e2e/*.png
 .env
 .env.local
 *llave_privada*
+juez-kotlin/trabajo
+juez-kotlin/plantilla/**/build
+juez-kotlin/plantilla/.gradle
+juez-kotlin/plantilla/.kotlin
+juez-kotlin/plantilla/local.properties

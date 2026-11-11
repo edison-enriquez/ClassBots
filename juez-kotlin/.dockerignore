@@ -1,0 +1,6 @@
+trabajo
+**/build
+**/.gradle
+**/local.properties
+.env
+test

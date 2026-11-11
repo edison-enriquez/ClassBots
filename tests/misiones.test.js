@@ -13,7 +13,8 @@ test('las misiones son ramales opcionales separados de la ruta principal', () =>
   for (const m of MISIONES) {
     assert.ok(m.requiere.every(r => NIVELES.some(n => n.id === r)), `${m.id} requiere un capítulo inexistente`);
     assert.equal(misionDisponible(m, []), false);
-    assert.equal(misionDisponible(m, m.requiere), !m.oculta);
+    assert.equal(misionDisponible(m, m.requiere, false, m.requiereMision ? [m.requiereMision] : []), !m.oculta);
+    if (m.requiereMision) assert.equal(misionDisponible(m, m.requiere), false, `${m.id} no debe abrirse sin ${m.requiereMision}`);
     assert.equal(misionDisponible(m, [], true), true);
     assert.ok(m.pasos.at(-1).jefe, `${m.id} debe cerrar con un mini-jefe`);
     assert.ok(m.pasos.some(p => p.pruebas.some(c => c.oculto)), `${m.id} necesita un caso oculto de extensión`);
@@ -32,6 +33,7 @@ test('los pasos se abren en orden y la misión se completa con todos', () => {
 
 for (let i = 0; i < PASOS.length; i++) {
   const p = PASOS[i];
+  if (p.remoto) continue; // los retos de Kotlin se califican en juez-kotlin (ver tests/kotlin.test.js)
   test(`Misión ${MISIONES.find(m => m.id === p.misionId).corto} · paso ${p.enMundo + 1} «${p.titulo}»: la solución pasa todo y el inicio no`, () => {
     const r = evaluarNivel(p, p.solucion, { incluirOcultas: true });
     assert.equal(r.estado, 'ejecutado', JSON.stringify(r.errores?.slice(0, 3) || r.previo));

@@ -77,6 +77,52 @@ public boolean equals(Object otro) {
     cuando: 'Siempre que imprimas, compares o guardes objetos en colecciones: toString, equals y hashCode deciden cómo se ven y cuándo dos objetos son «el mismo».',
     cuidado: 'Con una variable Object solo puedes llamar los métodos de Object: para lo específico, instanceof y cast. Y == compara referencias, no contenido.',
   },
+  mvc: {
+    nombre: 'MVC (Modelo-Vista-Controlador)', familia: 'Arquitectura', mision: 'mision-mvc',
+    intencion: 'Separar una aplicación en tres piezas: el modelo guarda los datos y las reglas, la vista los muestra y el controlador traduce lo que hace el usuario en cambios del modelo.',
+    problema: 'Una clase recibe órdenes, cambia sus datos e imprime a la vez: cambiar la pantalla o la forma de mandarla obliga a abrirla entera, y no se puede probar sin la interfaz.',
+    estructura: ['Modelo con los datos y las reglas, que no imprime ni conoce pantallas concretas', 'Interfaz de vista; el modelo guarda una lista y las notifica después de cada cambio (Observer)', 'Vistas concretas que solo muestran lo que reciben', 'Controlador que recibe las acciones del usuario, llama al modelo y pasa los avisos a la vista'],
+    uml: `Controlador ──> Robot ◇── 0..* VistaRobot «interface»
+                                △ (realización)
+                    VistaConsola   VistaBarra`,
+    codigo: `// Modelo: cambia y avisa
+public void avanzar() {
+    if (energia < 30) throw new IllegalStateException("sin energía");
+    posicion = posicion + 1;
+    energia = energia - 30;
+    for (VistaRobot v : vistas) v.mostrar(nombre, energia, posicion);
+}
+
+// Controlador: traduce la orden
+try { modelo.avanzar(); }
+catch (IllegalStateException e) { vista.aviso(e.getMessage()); }`,
+    cuando: 'En casi cualquier aplicación con interfaz (Android, web, escritorio): el mismo modelo se ve en varias pantallas y se maneja desde botones, voz o un piloto automático.',
+    cuidado: 'No es un patrón suelto sino una arquitectura que combina Observer y Strategy. En un programa de diez líneas es demasiado; y si la vista empieza a cambiar datos o el modelo a imprimir, las piezas vuelven a mezclarse.',
+  },  kotlin: {
+    nombre: 'MVC con Kotlin y Compose', familia: 'Arquitectura · Android', mision: 'mision-kotlin',
+    intencion: 'Llevar MVC a una app de Android: el modelo y los controladores en Kotlin puro, y la Activity con Jetpack Compose como vista.',
+    problema: 'La Activity guarda los datos, decide las reglas y dibuja: no se puede probar sin un teléfono y cada botón nuevo repite la lógica.',
+    estructura: ['Robot (modelo) en Kotlin puro, sin imports de Android, con private set y check()', 'VistaRobot (interfaz) que la Activity implementa', 'La Activity guarda lo que dibuja en un mutableStateOf y Compose redibuja solo', 'Uno o varios controladores sobre el mismo modelo; los botones solo los llaman'],
+    uml: `MainActivity ┄┄▷ VistaRobot «interface»
+     │ usa
+     ├──> ControladorRobot ──> Robot
+     └──> ControladorPiloto ──┘`,
+    codigo: `class MainActivity : ComponentActivity(), VistaRobot {
+    private var estado by mutableStateOf(EstadoPantalla())
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val control = ControladorRobot(Robot("Chispa"), this)
+        setContent { PantallaRobot(estado, control::orden) }
+    }
+
+    override fun mostrar(nombre: String, energia: Int, posicion: Int) {
+        estado = estado.copy(energia = energia, posicion = posicion)
+    }
+}`,
+    cuando: 'En cualquier app de Android: el modelo se prueba con JUnit sin emulador y la pantalla se puede cambiar sin tocar las reglas.',
+    cuidado: 'Si guardas el estado del juego en remember dentro de los botones, la vista vuelve a mandar. En Android moderno verás también MVVM (ViewModel): es la misma idea con otro nombre para el controlador.',
+  },
 };
 
 export default function Guia({ tema, onTema, onCerrar, patrones = [], misiones = [] }) {
