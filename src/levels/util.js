@@ -55,7 +55,8 @@ export function casoRelacion(de, a, tipo, opts = {}) {
   return {
     nombre: opts.nombre || `${de} → ${a} es una ${NOMBRE_REL[tipo]}`, oculto: opts.oculto,
     prueba: ({ modelo }) => {
-      const r = relaciones(modelo).find(x => x.de === de && x.a === a);
+      // Entre dos clases puede haber más de una relación (un decorador implementa la interfaz y además la guarda)
+      const rs = relaciones(modelo).filter(x => x.de === de && x.a === a), r = rs.find(x => x.tipo === tipo) || rs[0];
       return caso(r?.tipo === tipo, NOMBRE_REL[tipo], r ? NOMBRE_REL[r.tipo] : 'ninguna relación', r && r.tipo !== tipo ? r.razon : '');
     },
   };

@@ -1,7 +1,7 @@
 /* Métricas de aprendizaje sin servidor.
    Todo se guarda en el navegador del estudiante y viaja en un archivo .json que él descarga:
    sirve para continuar en otro computador y como entregable para el profesor. */
-import { NIVELES, MUNDOS } from '../levels/niveles.js';
+import { NIVELES, MUNDOS, capitulosHechos } from '../levels/niveles.js';
 import { MISIONES, PASOS } from '../levels/misiones.js';
 import { abrirSobre, clasePublica } from './cifrado.js';
 
@@ -298,7 +298,7 @@ export function aProgreso(d, base) {
     ...base,
     perfil: { ...d.perfil, alterado: d.perfil.alterado || !d.integro },
     nivelId: ids.has(d.progreso.nivelId) ? d.progreso.nivelId : NIVELES[0].id,
-    hechos: (d.progreso.hechos || []).filter(id => ids.has(id)),
+    hechos: capitulosHechos(d.progreso.hechos, d.progreso.pasosHechos),
     pasosHechos: (d.progreso.pasosHechos || []).filter(id => pids.has(id)),
     misionesHechas: (d.progreso.misionesHechas || []).filter(id => MISIONES.some(m => m.id === id)),
     habilitados: (d.progreso.habilitados || []).filter(id => ids.has(id) || pids.has(id)),

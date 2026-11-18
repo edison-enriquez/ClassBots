@@ -27,6 +27,8 @@ export function dibujarRobot(ctx, cx, piso, r, now, { caminando = false, fantasm
     if (EQUIPO.has('difusion') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x - 2, y + 1, 3, 5); ctx.fillStyle = P.steel; ctx.fillRect(x - 1, y + 2, 1, 3); const o = Math.floor(now / 250) % 3; ctx.fillStyle = '#4ade80'; if (o > 0) ctx.fillRect(x - 3, y, 1, 2); if (o > 1) ctx.fillRect(x - 5, y - 1, 1, 3); }
     // Troquel de fábrica (Factory Method): un engranaje dorado en el pecho que gira
     if (EQUIPO.has('troquel') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x + 11, y + 9, 5, 5); ctx.fillStyle = P.gold; if (Math.floor(now / 300) % 2) { ctx.fillRect(x + 12, y + 11, 3, 1); ctx.fillRect(x + 13, y + 10, 1, 3); } else { ctx.fillRect(x + 12, y + 10, 1, 1); ctx.fillRect(x + 14, y + 10, 1, 1); ctx.fillRect(x + 12, y + 12, 1, 1); ctx.fillRect(x + 14, y + 12, 1, 1); ctx.fillRect(x + 13, y + 11, 1, 1); } }
+    // Arnés modular (Decorator): dos módulos apilados sobre el hombro derecho
+    if (EQUIPO.has('arnes') && dir !== 'arriba') { ctx.fillStyle = P.ink; ctx.fillRect(x + 16, y + 2, 4, 6); ctx.fillStyle = '#3fe0e0'; ctx.fillRect(x + 17, y + 3, 2, 2); ctx.fillStyle = '#ff5d5d'; ctx.fillRect(x + 17, y + 5, 2, 2); }
     if (EQUIPO.has('tactico')) { ctx.fillStyle = P.ink; ctx.fillRect(x + 11, y - 1, 4, 4); ctx.fillStyle = Math.floor(now / 400) % 2 ? '#3fe0e0' : '#ff8fc7'; ctx.fillRect(x + 12, y, 2, 2); }
   }
   if (!sinBarra && typeof r.energia === 'number') barra(ctx, x + 2, y - 5, 12, r.energia);

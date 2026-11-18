@@ -53,6 +53,11 @@ kbd { font-family: var(--f-code); font-size: .72rem; border: 1px solid currentCo
 .mundo-chip.completo { box-shadow: inset 0 -4px 0 var(--go); }
 .mundo-chip:disabled { opacity: .45; font-family: inherit; font-size: 11px; }
 .mapa-mundo { display: flex; align-items: center; gap: 10px; min-width: 0; overflow-x: auto; }
+/* Mundo de patrones: una ficha por patrón; la cabecera lista solo los capítulos del patrón elegido */
+.patrones { display: flex; gap: 3px; flex: none; }
+.patron-chip { min-width: 30px; height: 26px; padding: 0 3px; font-family: var(--f-pixel); font-size: 9px; background: var(--panel); color: var(--dim); border: 2px dashed var(--negro); }
+.patron-chip[aria-selected="true"] { background: var(--gold); color: var(--gold-ink); border-style: solid; }
+.patron-chip.completo { box-shadow: inset 0 -4px 0 var(--go); }
 .mapa-nombre { font-family: var(--f-pixel); font-size: 9px; color: var(--gold); white-space: nowrap; }
 .mapa ol { list-style: none; display: flex; align-items: center; margin: 0; padding: 4px 2px; min-width: max-content; }
 .mapa li { display: flex; align-items: center; }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NIVELES, MUNDOS } from './levels/niveles.js';
 import { MISIONES, PASOS, misionDisponible, misionCompletada, pasoAbierto, misionVisible } from './levels/misiones.js';
+import { PATRONES, patronCompleto } from './levels/mundo8.js';
 import { evaluarNivel } from './levels/evaluar.js';
 import { evaluarRemoto } from './levels/remoto.js';
 import TelefonoAndroid from './game/TelefonoAndroid.jsx';
@@ -69,6 +70,9 @@ export default function App() {
   const misionDeNivel = esMision ? MISIONES.find(m => m.id === misionId) : null;
   const mundo = MUNDOS.find(m => m.id === nivel.mundo);
   const [verMundo, setVerMundo] = useState(nivel.mundo);
+  // En un mundo de patrones la cabecera muestra un tramo a la vez: null = el del capítulo actual
+  const [verPatron, setVerPatron] = useState(null);
+  useEffect(() => { setVerPatron(null); }, [nivel.id, verMundo]);
   const [guia, setGuia] = useState(null);
   const [mapa, setMapa] = useState(false);
   const [avance, setAvance] = useState(false);
@@ -234,10 +238,11 @@ export default function App() {
   const pasoOk = p => pasoAbierto(p, pasosHechos, profe) || habilitados.includes(p.id);
   const misionAbierta = m => misionDisponible(m, prog.hechos, profe, prog.misionesHechas || []);
   const misionCompleta = m => misionCompletada(m, pasosHechos, prog.misionesHechas || []);
-  const completadas = MISIONES.filter(misionCompleta);
+  // Logros con recompensa: los patrones dominados del Mundo 8 y las misiones especiales completadas
+  const completadas = [...PATRONES.filter(p => patronCompleto(p, hechos)), ...MISIONES.filter(misionCompleta)];
   // Las Expediciones marcadas oculta solo aparecen en el mapa en modo profesor
   const misionesMapa = MISIONES.filter(m => misionVisible(m, profe));
-  // Las recompensas de las misiones se ven en los robots de todas las escenas
+  // Las recompensas de los patrones y las misiones se ven en los robots de todas las escenas
   useEffect(() => { ponerEquipo(completadas.map(m => m.equipo)); }, [completadas.map(m => m.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const irNivel = k => {
@@ -327,7 +332,21 @@ export default function App() {
   const nv = prog.hechos.length + 1;
   const delMundo = NIVELES.filter(n => n.mundo === mundo.id);
   const pctMundo = Math.round(100 * delMundo.filter(n => prog.hechos.includes(n.id)).length / delMundo.length);
-  const mundoAbierto = m => !!m.niveles && abierto(NIVELES.findIndex(n => n.mundo === m.id));
+  // Tramos del mundo que se está viendo (solo el Mundo 8 los tiene) y cuál se muestra en la cabecera
+  const patronesVistos = PATRONES.filter(p => p.mundo === verMundo);
+  const patronFoco = !patronesVistos.length ? null
+    : verPatron || (nivel.mundo === verMundo && nivel.patron) || (NIVELES.find(n => n.mundo === verMundo && !hechos.includes(n.id)) || NIVELES.find(n => n.mundo === verMundo)).patron;
+  const finDeMundo = nivel.enMundo === nivel.totalMundo - 1;
+  // En pantallas angostas la lista de capítulos se desplaza de lado: el capítulo actual queda a la vista
+  const rutaRef = useRef(null);
+  useEffect(() => {
+    const c = rutaRef.current, el = c?.querySelector('[aria-current="step"]');
+    if (!c || !el || c.scrollWidth <= c.clientWidth) return;
+    const rc = c.getBoundingClientRect(), re = el.getBoundingClientRect();
+    c.scrollLeft += re.left - rc.left - (rc.width - re.width) / 2;
+  }, [nivel.id, verMundo, patronFoco]);
+  // Un mundo también cuenta como abierto si ya tiene capítulos superados (patrones hechos cuando eran misiones)
+  const mundoAbierto = m => !!m.niveles && (abierto(NIVELES.findIndex(n => n.mundo === m.id)) || m.niveles.some(n => hechos.includes(n.id)));
   const mundoCompleto = m => !!m.niveles && m.niveles.every(n => prog.hechos.includes(n.id));
   const viajar = m => {
     const ks = NIVELES.map((n, k) => k).filter(k => NIVELES[k].mundo === m.id);
@@ -448,13 +467,21 @@ export default function App() {
               {!vista && <button type="button" className="btn-sec volver-ruta" onClick={volverARuta}>← Volver a la ruta principal</button>}
             </div>
           ) : (
-          <div className="mapa-mundo">
+          <div className="mapa-mundo" ref={rutaRef}>
             <span className="mapa-nombre">{MUNDOS.find(m => m.id === verMundo)?.nombre}</span>
-            <ol>
-              {NIVELES.map((n, k) => n.mundo !== verMundo ? null : (
+            {patronesVistos.length > 0 && (
+              <div className="patrones" role="tablist" aria-label="Patrones de este mundo">
+                {patronesVistos.map(p => (
+                  <button key={p.id} type="button" role="tab" className={'patron-chip' + (patronCompleto(p, hechos) ? ' completo' : '')} aria-selected={patronFoco === p.id}
+                    title={`${p.corto} · «${p.titulo}»${patronCompleto(p, hechos) ? ' · dominado' : ''}`} onClick={() => setVerPatron(p.id)}>{p.sigla}</button>
+                ))}
+              </div>
+            )}
+            <ol aria-label={patronFoco ? `Capítulos de ${patronesVistos.find(p => p.id === patronFoco).corto}` : undefined}>
+              {NIVELES.map((n, k) => n.mundo !== verMundo || (patronFoco && n.patron !== patronFoco) ? null : (
                 <li key={n.id} className={(hecho(k) ? 'hecho' : '') + (vista && n.id === vivoV?.nivel.id ? ' alumno-aqui' : '')}>
                   <button type="button" className={'nodo' + (n.jefe ? ' jefe' : '')} aria-current={(vista ? n.id === nivel.id : k === i) ? 'step' : undefined} disabled={!abierto(k)} onClick={() => (vista ? verNivelVista(n.id) : irNivel(k))} title={(vista && n.id === vivoV?.nivel.id ? `Aquí está ${vivoV.perfil.nombre} · ` : '') + (abierto(k) ? `${n.mundo}.${n.enMundo + 1} ${n.titulo} · ${n.concepto}` : 'Supera el capítulo anterior para abrirlo')}>
-                    {n.jefe ? '★' : n.enMundo + 1}
+                    {n.jefe ? '★' : (n.patron ? n.pasoPatron : n.enMundo) + 1}
                   </button>
                 </li>
               ))}
@@ -570,7 +597,8 @@ export default function App() {
         misiones={misionesMapa} misionAbierta={misionAbierta} misionCompleta={misionCompleta}
         onIniciarMision={m => (m.id === misionId ? setMapa(false) : iniciarMision(m))} onViajar={viajar} onCerrar={() => setMapa(false)}
         pasosDe={m => ({ hechos: m.pasos.filter(p => pasosHechos.includes(p.id)).length, total: m.pasos.length })}
-        misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)} />}
+        misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)}
+        patrones={m => { const ps = PATRONES.filter(p => p.mundo === m.id); return ps.length ? { hechos: ps.filter(p => patronCompleto(p, prog.hechos)).length, total: ps.length } : null; }} />}
 
       {!prog.perfil && <Bienvenida prog={prog} onClase={c => setProg(p => ({ ...p, clase: clasePublica(c) }))}
         onListo={perfil => { setProg(p => ({ ...p, perfil })); medir(m => registrarEvento(m, { tipo: 'alta', nombre: perfil.nombre, grupo: perfil.grupo, perfilId: perfil.id, claseId: prog.clase?.id || null })); }} />}
@@ -641,18 +669,21 @@ export default function App() {
           </div>
         </div>
       )}
-      {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={misionesMapa} />}
+      {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={[...PATRONES, ...misionesMapa]} />}
 
       {exito && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="exito-t">
           <div className="modal rpg-ventana exito">
             <p className="mision">¡MISIÓN CUMPLIDA!</p>
             <Avatar tamano={4} />
-            <h2 id="exito-t">{exito.esMision ? (exito.ultimo ? (misionDeNivel?.expedicion ? '¡Expedición completada!' : '¡Misión especial completada!') : `Paso ${nivel.enMundo + 1} de ${nivel.totalMundo} superado`) : nivel.jefe ? `¡Mundo ${mundo.id} completado!` : `Capítulo ${nivel.mundo}.${nivel.enMundo + 1} superado`}</h2>
+            <h2 id="exito-t">{exito.esMision ? (exito.ultimo ? (misionDeNivel?.expedicion ? '¡Expedición completada!' : '¡Misión especial completada!') : `Paso ${nivel.enMundo + 1} de ${nivel.totalMundo} superado`) : nivel.cierraPatron && !finDeMundo ? `¡Patrón ${nivel.patronCorto} dominado!` : nivel.jefe ? `¡Mundo ${mundo.id} completado!` : `Capítulo ${nivel.mundo}.${nivel.enMundo + 1} superado`}</h2>
             <p>{nivel.exito}</p>
             {exito.esMision
               ? exito.ultimo && <p className="xp-gana">✦ Recompensa: {nivel.recompensa}.{misionDeNivel?.codice ? ' Tus robots ya lo llevan puesto y el patrón quedó en el Códice.' : ' Ese diseño es tuyo: nadie te dio los nombres.'}</p>
-              : exito.nuevo && <p className="xp-gana">+100 EXP · ¡Subiste a NV {nv}!</p>}
+              : <>
+                  {exito.nuevo && <p className="xp-gana">+100 EXP · ¡Subiste a NV {nv}!</p>}
+                  {nivel.cierraPatron && <p className="xp-gana">✦ Recompensa: {nivel.recompensa}. Tus robots ya lo llevan puesto y el patrón quedó en el Códice.</p>}
+                </>}
             <div className="modal-acc">
               <button type="button" className="btn-sec" onClick={() => setExito(null)}>Seguir aquí</button>
               {exito.esMision
@@ -662,9 +693,12 @@ export default function App() {
                       <button type="button" className="btn-pri" autoFocus onClick={volverARuta}>Volver a la ruta →</button>
                     </>
                   : <button type="button" className="btn-pri" autoFocus onClick={() => irPaso(PASOS[PASOS.findIndex(p => p.id === nivel.id) + 1])}>Siguiente paso: {PASOS[PASOS.findIndex(p => p.id === nivel.id) + 1].titulo} →</button>)
-                : i + 1 < NIVELES.length
-                  ? <button type="button" className="btn-pri" autoFocus onClick={() => irNivel(i + 1)}>Siguiente: {NIVELES[i + 1].titulo} →</button>
-                  : <button type="button" className="btn-pri" autoFocus onClick={() => setExito(null)}>Seguir explorando</button>}
+                : <>
+                    {nivel.cierraPatron && <button type="button" className="btn-sec" onClick={() => { setExito(null); setGuia('patrones'); }}>Ver el Códice</button>}
+                    {i + 1 < NIVELES.length
+                      ? <button type="button" className="btn-pri" autoFocus onClick={() => irNivel(i + 1)}>Siguiente: {NIVELES[i + 1].titulo} →</button>
+                      : <button type="button" className="btn-pri" autoFocus onClick={() => setExito(null)}>Seguir explorando</button>}
+                  </>}
             </div>
           </div>
         </div>

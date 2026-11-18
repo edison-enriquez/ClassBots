@@ -1,4 +1,4 @@
-/* Misión especial · «La fábrica de unidades» (ramal del Mundo 7): Factory Method.
+/* Patrón Factory Method · «La fábrica de unidades» (Mundo 8 · La Forja).
    Los new de cada tipo de unidad están copiados en varias clases que deciden con if sobre un texto.
    Paso 1: se reúnen en una fábrica simple que rechaza los tipos desconocidos con una excepción.
    Paso 2: el patrón Factory Method: cada planta decide qué unidad crea redefiniendo un método,
@@ -22,7 +22,7 @@ const igualSalida = (run, esperado) => {
 const sellados = (archivos, mapa) => Object.entries(mapa).filter(([a, v]) => NORMAL(archivos[a]) !== NORMAL(v)).map(([a]) => a.replace('.java', ''));
 /* Clases de archivo que hacen new de alguna unidad concreta */
 const conNew = (archivos, nombres, productos) => nombres.filter(n => !sinTexto(archivos, n + '.java', new RegExp(`\\bnew\\s+(${productos.join('|')})\\s*\\(`)));
-const GUIA = '<p class="guia-link">Al completar la misión, el patrón queda registrado en el <button type="button" class="enlace" data-guia="patrones">Códice de patrones</button>.</p>';
+const GUIA = '<p class="guia-link">Al superar este mini-jefe, el patrón queda registrado en el <button type="button" class="enlace" data-guia="patrones">Códice de patrones</button>.</p>';
 const ESCENA = 'fabrica';
 
 /* ---------- Productos ---------- */
@@ -331,8 +331,7 @@ export const FACTORY = {
   corto: 'Factory Method',
   rotulo: 'Factory', // rótulo corto en el plano
   concepto: 'Patrón Factory Method',
-  mundo: 7,
-  requiere: ['averia-jefe'],
+  refuerza: 7, // mundo cuyo concepto retoma
   recompensa: 'Troquel de fábrica',
   equipo: 'troquel',
   codice: 'factory',

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { NIVELES } from '../levels/niveles.js';
+import { NIVELES, capitulosHechos } from '../levels/niveles.js';
 import { MISIONES, PASOS } from '../levels/misiones.js';
 import { metricasVacias } from '../metricas/metricas.js';
 
@@ -31,7 +31,8 @@ function leer() {
     if (g && typeof g === 'object') return {
       ...VACIO,
       ...g,
-      hechos: Array.isArray(g.hechos) ? g.hechos.filter(id => NIVELES.some(n => n.id === id)) : [],
+      // Los pasos de los patrones que antes eran misiones cuentan como capítulos del Mundo 8
+      hechos: capitulosHechos(g.hechos, g.pasosHechos),
       misionesHechas: Array.isArray(g.misionesHechas) ? g.misionesHechas.filter(id => MISIONES.some(m => m.id === id)) : [],
       pasosHechos: Array.isArray(g.pasosHechos) ? g.pasosHechos.filter(id => PASOS.some(x => x.id === id)) : [],
       habilitados: Array.isArray(g.habilitados) ? g.habilitados.filter(id => NIVELES.some(n => n.id === id) || PASOS.some(x => x.id === id)) : [],

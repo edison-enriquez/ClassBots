@@ -1,4 +1,4 @@
-/* Misión especial · «La sala de calderas» (ramal del Mundo 6): el patrón Observer.
+/* Patrón Observer · «La sala de calderas» (Mundo 8 · La Forja).
    La Caldera llama a mano a cada robot que le interesa su temperatura; cada robot nuevo
    obliga a abrirla. El estudiante la convierte en un sujeto que guarda una lista de
    Observador y los avisa a todos, maneja altas y bajas, descubre la
@@ -19,7 +19,7 @@ function conExtra(archivos, extra, arnes) {
 const comparar = (r, esperado) => (r.error
   ? caso(false, esperado.replace(/\n/g, ' / '), r.error)
   : caso(r.salida.join('\n') === esperado, esperado.replace(/\n/g, ' / '), r.salida.join(' / ') || '(sin salida)'));
-const GUIA = '<p class="guia-link">Al completar la misión, el patrón queda registrado en el <button type="button" class="enlace" data-guia="patrones">Códice de patrones</button>.</p>';
+const GUIA = '<p class="guia-link">Al superar este mini-jefe, el patrón queda registrado en el <button type="button" class="enlace" data-guia="patrones">Códice de patrones</button>.</p>';
 const ESCENA = 'calderas';
 const sellados = (archivos, mapa) => Object.entries(mapa).filter(([a, v]) => NORMAL(archivos[a]) !== NORMAL(v)).map(([a]) => a.replace('.java', ''));
 
@@ -369,8 +369,7 @@ export const OBSERVER = {
   titulo: 'La sala de calderas',
   corto: 'Observer',
   concepto: 'Patrón Observer',
-  mundo: 6,
-  requiere: ['arena-torneo'],
+  refuerza: 6, // mundo cuyo concepto retoma
   recompensa: 'Antena de difusión',
   equipo: 'difusion',
   codice: 'observer',
