@@ -21,6 +21,7 @@ const RAMALES = {
   'mision-strategy': { x: 360, y: 104, etiqueta: 'arriba' },
   'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
   'mision-observer': { x: 452, y: 276, etiqueta: 'abajo' },
+  'mision-factory': { x: 604, y: 342, etiqueta: 'abajo' },
   'expedicion-central': { x: 326, y: 286, etiqueta: 'abajo' },
   'mision-mvc': { x: 470, y: 360, etiqueta: 'abajo' },
   'mision-kotlin': { x: 594, y: 180, etiqueta: 'arriba' },
@@ -200,14 +201,16 @@ function dibujarMision(ctx, mision, disponible, completada, ahora) {
   rect(ctx, base, x - 6, y - 4, 12, 7);
   rect(ctx, '#182838', x - 2, y - 3, 4, 5);
   rect(ctx, '#536475', x - 18, y - 19, 36, 3);
-  const txt = `MISIÓN ✦ ${mision.corto.toUpperCase()}`;
+  const txt = `MISIÓN ✦ ${(mision.rotulo || mision.corto).toUpperCase()}`;
   ctx.font = 'bold 9px monospace';
   const w = Math.ceil(ctx.measureText(txt).width) + 14, ty = etiqueta === 'abajo' ? y + 18 : y - 44;
-  rect(ctx, '#101a25', x - w / 2, ty, w, 17);
-  rect(ctx, disponible || completada ? '#4a3a17' : '#2b3644', x - w / 2 + 2, ty + 2, w - 4, 13);
+  // El rótulo se corre hacia adentro si el ramal está pegado al borde del plano
+  const lx = Math.max(w / 2 + 26, Math.min(W - w / 2 - 26, x));
+  rect(ctx, '#101a25', lx - w / 2, ty, w, 17);
+  rect(ctx, disponible || completada ? '#4a3a17' : '#2b3644', lx - w / 2 + 2, ty + 2, w - 4, 13);
   ctx.fillStyle = base;
   ctx.textAlign = 'center';
-  ctx.fillText(txt, x, ty + 12);
+  ctx.fillText(txt, lx, ty + 12);
   ctx.textAlign = 'start';
 }
 
