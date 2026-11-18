@@ -20,6 +20,7 @@ const RAMALES = {
   'mision-plantilla': { x: 318, y: 350, etiqueta: 'abajo' },
   'mision-strategy': { x: 360, y: 104, etiqueta: 'arriba' },
   'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
+  'mision-observer': { x: 452, y: 276, etiqueta: 'abajo' },
   'expedicion-central': { x: 326, y: 286, etiqueta: 'abajo' },
   'mision-mvc': { x: 470, y: 360, etiqueta: 'abajo' },
   'mision-kotlin': { x: 594, y: 180, etiqueta: 'arriba' },
