@@ -641,7 +641,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={MISIONES} />}
+      {guia && <Guia tema={guia} onTema={setGuia} onCerrar={() => setGuia(null)} patrones={completadas.map(m => m.codice)} misiones={misionesMapa} />}
 
       {exito && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="exito-t">

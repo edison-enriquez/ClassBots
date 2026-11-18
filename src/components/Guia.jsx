@@ -97,6 +97,32 @@ private void notificar() {
     cuando: 'Cuando varios objetos deben reaccionar a los cambios de otro y la lista de interesados cambia: eventos de botones (listeners), notificaciones, sensores, la vista de MVC.',
     cuidado: 'Si un observador se desuscribe durante el aviso y recorres la lista original, Java lanza ConcurrentModificationException (o se salta a alguien en silencio). Y un observador que nunca se desuscribe sigue vivo mientras el sujeto lo tenga en su lista.',
   },
+  factory: {
+    nombre: 'Factory Method (Método fábrica)', familia: 'Creación', mision: 'mision-factory',
+    intencion: 'Dejar que una subclase decida qué objeto crear: la clase base trabaja con el tipo general y llama a un método abstracto que cada subclase redefine para devolver su producto.',
+    problema: 'Las mismas cadenas de if con new Dron(), new Tanque()… copiadas en varias clases: cada copia acaba distinta y un tipo nuevo obliga a buscar todos los new.',
+    estructura: ['Producto: una interfaz (Unidad) y sus clases concretas', 'Creador: clase abstracta (Planta) con el trabajo común en un método final y el método fábrica abstracto crearUnidad()', 'Creadores concretos (PlantaAerea, PlantaTerrestre) que redefinen crearUnidad()', 'Paso previo habitual: la fábrica simple, un método static crear(String) que reúne los new y rechaza lo desconocido con IllegalArgumentException'],
+    uml: `Planta «abstract» ┄┄> Unidad «interface»
+  + producir() {final}         △
+  # crearUnidad() {abstract}  Dron  Tanque
+      △            △
+PlantaAerea  PlantaTerrestre`,
+    codigo: `public abstract class Planta {
+    public final Unidad producir() {
+        Unidad u = crearUnidad();   // lo decide la subclase
+        System.out.println("control de calidad: " + u.describir());
+        return u;
+    }
+    protected abstract Unidad crearUnidad();
+}
+
+public class PlantaAerea extends Planta {
+    @Override
+    protected Unidad crearUnidad() { return new Dron(); }
+}`,
+    cuando: 'Cuando una clase sabe qué hacer con un objeto pero no cuál crear, y quieres agregar variantes sin tocarla. Lo usas a diario: lista.iterator() es un método fábrica (cada colección crea su iterador).',
+    cuidado: 'Si los tipos llegan como texto desde afuera, la fábrica simple es más práctica que una subclase por tipo. Y no conviertas cada new en una fábrica: solo donde la decisión de qué crear cambia o se repite.',
+  },
   mvc: {
     nombre: 'MVC (Modelo-Vista-Controlador)', familia: 'Arquitectura', mision: 'mision-mvc',
     intencion: 'Separar una aplicación en tres piezas: el modelo guarda los datos y las reglas, la vista los muestra y el controlador traduce lo que hace el usuario en cambios del modelo.',
@@ -249,6 +275,8 @@ function Codice({ abiertos, misiones }) {
       <div className="codice">
         {Object.entries(CODICE).map(([clave, p]) => {
           const m = misiones.find(x => x.id === p.mision);
+          // Una misión oculta (fuera del modo profesor) no se anuncia en el Códice, salvo que ya se haya completado
+          if (!m && !abiertos.includes(clave)) return null;
           if (!abiertos.includes(clave)) return (
             <article key={clave} className="codice-ficha bloqueada">
               <h3>✦ ???</h3>
