@@ -77,6 +77,26 @@ public boolean equals(Object otro) {
     cuando: 'Siempre que imprimas, compares o guardes objetos en colecciones: toString, equals y hashCode deciden cómo se ven y cuándo dos objetos son «el mismo».',
     cuidado: 'Con una variable Object solo puedes llamar los métodos de Object: para lo específico, instanceof y cast. Y == compara referencias, no contenido.',
   },
+  observer: {
+    nombre: 'Observer (Observador)', familia: 'Comportamiento', mision: 'mision-observer',
+    intencion: 'Cuando un objeto cambia, avisar a todos los que dependen de él sin conocerlos: cada interesado se suscribe y recibe el aviso por una interfaz común.',
+    problema: 'El objeto que cambia llama a mano a cada interesado: un atributo y una línea por robot. Agregar uno nuevo obliga a abrir la clase y la acopla a todas las demás.',
+    estructura: ['Sujeto (Caldera) con una lista de la interfaz, suscribir(o) y desuscribir(o)', 'Interfaz Observador con actualizar(...)', 'Observadores concretos que reaccionan a su manera', 'notificar() recorre una copia de la lista: un observador puede retirarse en pleno aviso', 'Muchos a muchos: un observador puede escuchar varios sujetos'],
+    uml: `Caldera ◇──── 0..* Observador «interface»
+                       △ (realización)
+         Ventilador   Sirena   Termografo`,
+    codigo: `public void suscribir(Observador o) {
+    if (!observadores.contains(o)) observadores.add(o);
+}
+
+private void notificar() {
+    for (Observador o : new ArrayList<>(observadores)) {
+        o.actualizar(temperatura);
+    }
+}`,
+    cuando: 'Cuando varios objetos deben reaccionar a los cambios de otro y la lista de interesados cambia: eventos de botones (listeners), notificaciones, sensores, la vista de MVC.',
+    cuidado: 'Si un observador se desuscribe durante el aviso y recorres la lista original, Java lanza ConcurrentModificationException (o se salta a alguien en silencio). Y un observador que nunca se desuscribe sigue vivo mientras el sujeto lo tenga en su lista.',
+  },
   mvc: {
     nombre: 'MVC (Modelo-Vista-Controlador)', familia: 'Arquitectura', mision: 'mision-mvc',
     intencion: 'Separar una aplicación en tres piezas: el modelo guarda los datos y las reglas, la vista los muestra y el controlador traduce lo que hace el usuario en cambios del modelo.',
