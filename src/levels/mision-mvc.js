@@ -298,6 +298,8 @@ export const MVC = {
   concepto: 'Arquitectura MVC',
   mundo: 7,
   requiere: ['averia-jefe'],
+  // Por ahora solo en modo profesor (igual que la misión de Kotlin, que la sigue)
+  oculta: true,
   requisito: 'Superar «Protocolo de emergencia» (jefe del Mundo 7)',
   requisitoCorto: 'Supera el jefe del Mundo 7',
   recompensa: 'Visor de mando · tus robots muestran su estado en una pantalla',

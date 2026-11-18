@@ -249,6 +249,8 @@ function Codice({ abiertos, misiones }) {
       <div className="codice">
         {Object.entries(CODICE).map(([clave, p]) => {
           const m = misiones.find(x => x.id === p.mision);
+          // Una misión oculta (fuera del modo profesor) no se anuncia en el Códice, salvo que ya se haya completado
+          if (!m && !abiertos.includes(clave)) return null;
           if (!abiertos.includes(clave)) return (
             <article key={clave} className="codice-ficha bloqueada">
               <h3>✦ ???</h3>
