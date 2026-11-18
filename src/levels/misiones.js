@@ -10,6 +10,7 @@ import { OBJECT } from './mision-object.js';
 import { EXPEDICION_CENTRAL } from './expedicion-central.js';
 import { MVC } from './mision-mvc.js';
 import { OBSERVER } from './mision-observer.js';
+import { FACTORY } from './mision-factory.js';
 import { KOTLIN } from './mision-kotlin.js';
 
 const NORMAL = s => (s || '').replace(/\/\/.*$/gm, '').replace(/\s+/g, ' ').trim();
@@ -778,7 +779,7 @@ const STRATEGY = {
 };
 
 /* Las Expediciones (diseño libre) viajan como ramales: las marcadas oculta solo existen en modo profesor */
-export const MISIONES = [PLANTILLA, STRATEGY, OBJECT, OBSERVER, MVC, KOTLIN, EXPEDICION_CENTRAL];
+export const MISIONES = [PLANTILLA, STRATEGY, OBJECT, OBSERVER, MVC, FACTORY, KOTLIN, EXPEDICION_CENTRAL];
 export const misionVisible = (mision, profesor = false) => !mision.oculta || !!profesor;
 
 /* Cada paso es un capítulo jugable con los datos de su misión */

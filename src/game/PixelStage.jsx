@@ -4,6 +4,7 @@ import { escenaArena, alEntrarArena, escenaLinea } from './escenas3.js';
 import { escenaAverias } from './escenas4.js';
 import { escenaMando } from './escenas5.js';
 import { escenaCalderas } from './escenas6.js';
+import { escenaFabrica } from './escenas7.js';
 import { W, H, P, ETIQUETA, BALDE, BATERIA, sprite, texto, colorDe } from './sprites.js';
 import { suelo, muro, ventana, placa, mesa, cristal, escaleras, plataforma, antorcha, monitorPared, maceta, paletaRPG, R_ABAJO } from './rpg.js';
 import { dibujarRobot, linea } from './dibujo.js';
@@ -106,6 +107,7 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
     else if (nivel.escena === 'averias') escenaAverias(ctx, datos);
     else if (nivel.escena === 'mando') escenaMando(ctx, datos);
     else if (nivel.escena === 'calderas') escenaCalderas(ctx, datos);
+    else if (nivel.escena === 'fabrica') escenaFabrica(ctx, datos);
     else escenaPasillo(ctx, nivel, fr, prev, s, now);
     s.part = s.part.filter(q => q.vida > 0);
     for (const q of s.part) {
