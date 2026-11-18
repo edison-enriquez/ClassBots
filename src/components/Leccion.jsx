@@ -26,7 +26,7 @@ export default function Leccion({ nivel, mundo, superado, onSolucion, onGuia, pr
         <span className="chip">{nivel.concepto}</span>
         <span className="rotulo">{nivel.mision
           ? `${nivel.expedicion ? 'Expedición' : 'Misión especial'} · ${nivel.misionCorto} · paso ${nivel.enMundo + 1} de ${nivel.totalMundo}`
-          : `Mundo ${mundo.id} · ${mundo.nombre} · capítulo ${nivel.enMundo + 1} de ${nivel.totalMundo}`}{superado ? ' · superado' : ''}</span>
+          : `Mundo ${mundo.id} · ${mundo.nombre} · capítulo ${nivel.enMundo + 1} de ${nivel.totalMundo}${nivel.patron ? ` · ${nivel.patronCorto}, paso ${nivel.pasoPatron + 1} de ${nivel.pasosPatron}` : ''}`}{superado ? ' · superado' : ''}</span>
       </header>
       <h2 className="lec-titulo">{nivel.titulo}</h2>
       <Mentor texto={nivel.mentor} />

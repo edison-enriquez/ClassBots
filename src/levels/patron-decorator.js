@@ -1,4 +1,4 @@
-/* Misión especial · «Capa sobre capa» (ramal del Mundo 6): el patrón Decorator.
+/* Patrón Decorator · «Capa sobre capa» (Mundo 8 · La Forja).
    Los módulos empiezan soldados al chasis por herencia (Laser extends BotBasico), y un bot con dos
    módulos pediría una clase por combinación. El estudiante los convierte en envoltorios:
    un Modulo ES un Bot y TIENE un Bot, así que se apilan sobre cualquier chasis y en cualquier orden.
@@ -34,7 +34,7 @@ function pilas(rt) {
 const forma = capas => capas.map(r => r.cls).join(' → ');
 const sellados = (archivos, mapa) => Object.entries(mapa).filter(([a, v]) => NORMAL(archivos[a]) !== NORMAL(v)).map(([a]) => a.replace('.java', ''));
 const linea = v => `${v.describir()}: poder ${v.poder()}, defensa ${v.defensa()}`;
-const GUIA = '<p class="guia-link">Al completar la misión, el patrón queda registrado en el <button type="button" class="enlace" data-guia="patrones">Códice de patrones</button>.</p>';
+const GUIA = '<p class="guia-link">Al superar este mini-jefe, el patrón queda registrado en el <button type="button" class="enlace" data-guia="patrones">Códice de patrones</button>.</p>';
 const ESCENA = 'modulos';
 
 /* ---------- Piezas del taller ---------- */
@@ -408,8 +408,7 @@ export const DECORATOR = {
   titulo: 'Capa sobre capa',
   corto: 'Decorator',
   concepto: 'Patrón Decorator',
-  mundo: 6,
-  requiere: ['arena-torneo'],
+  refuerza: 6, // mundo cuyo concepto retoma
   recompensa: 'Arnés modular · módulos que se apilan sobre cualquier bot',
   equipo: 'arnes',
   codice: 'decorator',

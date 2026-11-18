@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DECORATOR } from '../src/levels/mision-decorator.js';
-import { MISIONES, misionDisponible } from '../src/levels/misiones.js';
+import { DECORATOR } from '../src/levels/patron-decorator.js';
 import { evaluarNivel } from '../src/levels/evaluar.js';
 
 globalThis.performance ??= { now: () => Date.now() };
@@ -11,13 +10,6 @@ const juzgar = (paso, cambios) => evaluarNivel(paso, { ...paso.solucion, ...camb
 const fallan = r => r.casos.filter(c => c.estado !== 'ok').map(c => c.nombre);
 const todoBien = r => { assert.equal(r.estado, 'ejecutado', JSON.stringify(r.errores?.slice(0, 2) || r.previo)); assert.deepEqual(fallan(r), []); };
 const cambiar = (paso, archivo, de, a) => { const t = paso.solucion[archivo]; assert.ok(t.includes(de), `${archivo} no contiene «${de}»`); return { [archivo]: t.replace(de, a) }; };
-
-test('Decorator: es un ramal del Mundo 6 que se abre con el jefe de la Arena', () => {
-  assert.ok(MISIONES.includes(DECORATOR));
-  assert.equal(DECORATOR.mundo, 6);
-  assert.equal(misionDisponible(DECORATOR, []), false);
-  assert.equal(misionDisponible(DECORATOR, ['arena-torneo']), true);
-});
 
 test('Decorator 1: el código inicial compila y pide primero la clase Modulo', () => {
   const r = evaluarNivel(p1, p1.inicial(), { incluirOcultas: true });

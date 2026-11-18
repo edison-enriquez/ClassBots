@@ -13,7 +13,7 @@ const RELACIONES = [
 ];
 const MULT = [['1', 'exactamente uno', 'cada robot tiene una batería'], ['0..1', 'ninguno o uno', 'un robot tiene como máximo un responsable'], ['0..*', 'cero o muchos (también se escribe *)', 'una cuadrilla tiene muchos robots, o ninguno'], ['1..*', 'al menos uno', 'una planta con al menos una cuadrilla'], ['2..4', 'entre 2 y 4', 'un dron con 2 a 4 hélices']];
 
-/* Códice de patrones: cada misión completada registra su patrón */
+/* Códice de patrones: cada patrón dominado en el Mundo 8 y cada misión completada registran su entrada */
 const CODICE = {
   plantilla: {
     nombre: 'Template Method', familia: 'Comportamiento', mision: 'mision-plantilla',
@@ -55,6 +55,26 @@ public void cambiarEstilo(Estilo nuevo) {
     cuando: 'Cuando hay varias formas de hacer lo mismo y quieres agregar otras sin tocar el contexto, o cambiarlas en ejecución.',
     cuidado: 'Si solo hay dos variantes que nunca cambiarán, un if puede ser más simple. Lo que el objeto es se hereda; lo que hace y puede cambiar, se compone.',
   },
+  observer: {
+    nombre: 'Observer (Observador)', familia: 'Comportamiento', mision: 'mision-observer',
+    intencion: 'Cuando un objeto cambia, avisar a todos los que dependen de él sin conocerlos: cada interesado se suscribe y recibe el aviso por una interfaz común.',
+    problema: 'El objeto que cambia llama a mano a cada interesado: un atributo y una línea por robot. Agregar uno nuevo obliga a abrir la clase y la acopla a todas las demás.',
+    estructura: ['Sujeto (Caldera) con una lista de la interfaz, suscribir(o) y desuscribir(o)', 'Interfaz Observador con actualizar(...)', 'Observadores concretos que reaccionan a su manera', 'notificar() recorre una copia de la lista: un observador puede retirarse en pleno aviso', 'Muchos a muchos: un observador puede escuchar varios sujetos'],
+    uml: `Caldera ◇──── 0..* Observador «interface»
+                       △ (realización)
+         Ventilador   Sirena   Termografo`,
+    codigo: `public void suscribir(Observador o) {
+    if (!observadores.contains(o)) observadores.add(o);
+}
+
+private void notificar() {
+    for (Observador o : new ArrayList<>(observadores)) {
+        o.actualizar(temperatura);
+    }
+}`,
+    cuando: 'Cuando varios objetos deben reaccionar a los cambios de otro y la lista de interesados cambia: eventos de botones (listeners), notificaciones, sensores, la vista de MVC.',
+    cuidado: 'Si un observador se desuscribe durante el aviso y recorres la lista original, Java lanza ConcurrentModificationException (o se salta a alguien en silencio). Y un observador que nunca se desuscribe sigue vivo mientras el sujeto lo tenga en su lista.',
+  },
   decorator: {
     nombre: 'Decorator', familia: 'Estructural', mision: 'mision-decorator',
     intencion: 'Agregar responsabilidades a un objeto envolviéndolo en otro que cumple el mismo contrato, sin modificar su clase y sin crear una subclase por cada combinación.',
@@ -78,48 +98,6 @@ Bot rayo = new Escudo(
     new Laser(new BotBasico("Rayo")));`,
     cuando: 'Cuando los extras son opcionales, se combinan entre sí y la combinación se decide al crear el objeto. Ya lo usas en Java: new BufferedReader(new FileReader("datos.txt")) es un lector envuelto en otro.',
     cuidado: 'El orden de las capas cambia el resultado, y muchas capas pequeñas cuestan más de depurar. Si lo que varía es una sola decisión interna del objeto, Strategy es más directo.',
-  },
-  object: {
-    nombre: 'Object, la raíz', familia: 'Fundamento de Java', mision: 'mision-object',
-    intencion: 'Toda clase hereda de Object, aunque no escriba extends: de ahí vienen toString(), equals(), hashCode() y getClass().',
-    problema: 'Código que repite un método por cada tipo, compara objetos con == o imprime arreglos y obtiene cosas como [I@1b6d…',
-    estructura: ['Object en la raíz: String, Number (Integer, Double), Boolean, ArrayList, los arreglos y tus clases cuelgan de ella', 'Una variable o un for-each de tipo Object recibe cualquier objeto, y responde el objeto real', 'equals(Object) y hashCode() se redefinen juntos para comparar por contenido', 'Los primitivos no son objetos: sus clases envoltorio sí (ArrayList<Integer>, no ArrayList<int>)', 'Los arreglos no redefinen toString() ni equals(): usa Arrays.toString y Arrays.equals'],
-    uml: `            Object
-   ┌────────┬────┴─────┬─────────┐
- String   Number   ArrayList   Caja
-          △    △
-    Integer    Double`,
-    codigo: `for (Object o : cosas) {
-    System.out.println(o.getClass().getSimpleName() + " → " + o);
-}
-
-@Override
-public boolean equals(Object otro) {
-    if (!(otro instanceof Caja)) return false;
-    return contenido.equals(((Caja) otro).contenido);
-}`,
-    cuando: 'Siempre que imprimas, compares o guardes objetos en colecciones: toString, equals y hashCode deciden cómo se ven y cuándo dos objetos son «el mismo».',
-    cuidado: 'Con una variable Object solo puedes llamar los métodos de Object: para lo específico, instanceof y cast. Y == compara referencias, no contenido.',
-  },
-  observer: {
-    nombre: 'Observer (Observador)', familia: 'Comportamiento', mision: 'mision-observer',
-    intencion: 'Cuando un objeto cambia, avisar a todos los que dependen de él sin conocerlos: cada interesado se suscribe y recibe el aviso por una interfaz común.',
-    problema: 'El objeto que cambia llama a mano a cada interesado: un atributo y una línea por robot. Agregar uno nuevo obliga a abrir la clase y la acopla a todas las demás.',
-    estructura: ['Sujeto (Caldera) con una lista de la interfaz, suscribir(o) y desuscribir(o)', 'Interfaz Observador con actualizar(...)', 'Observadores concretos que reaccionan a su manera', 'notificar() recorre una copia de la lista: un observador puede retirarse en pleno aviso', 'Muchos a muchos: un observador puede escuchar varios sujetos'],
-    uml: `Caldera ◇──── 0..* Observador «interface»
-                       △ (realización)
-         Ventilador   Sirena   Termografo`,
-    codigo: `public void suscribir(Observador o) {
-    if (!observadores.contains(o)) observadores.add(o);
-}
-
-private void notificar() {
-    for (Observador o : new ArrayList<>(observadores)) {
-        o.actualizar(temperatura);
-    }
-}`,
-    cuando: 'Cuando varios objetos deben reaccionar a los cambios de otro y la lista de interesados cambia: eventos de botones (listeners), notificaciones, sensores, la vista de MVC.',
-    cuidado: 'Si un observador se desuscribe durante el aviso y recorres la lista original, Java lanza ConcurrentModificationException (o se salta a alguien en silencio). Y un observador que nunca se desuscribe sigue vivo mientras el sujeto lo tenga en su lista.',
   },
   factory: {
     nombre: 'Factory Method (Método fábrica)', familia: 'Creación', mision: 'mision-factory',
@@ -147,6 +125,28 @@ public class PlantaAerea extends Planta {
     cuando: 'Cuando una clase sabe qué hacer con un objeto pero no cuál crear, y quieres agregar variantes sin tocarla. Lo usas a diario: lista.iterator() es un método fábrica (cada colección crea su iterador).',
     cuidado: 'Si los tipos llegan como texto desde afuera, la fábrica simple es más práctica que una subclase por tipo. Y no conviertas cada new en una fábrica: solo donde la decisión de qué crear cambia o se repite.',
   },
+  object: {
+    nombre: 'Object, la raíz', familia: 'Fundamento de Java', mision: 'mision-object',
+    intencion: 'Toda clase hereda de Object, aunque no escriba extends: de ahí vienen toString(), equals(), hashCode() y getClass().',
+    problema: 'Código que repite un método por cada tipo, compara objetos con == o imprime arreglos y obtiene cosas como [I@1b6d…',
+    estructura: ['Object en la raíz: String, Number (Integer, Double), Boolean, ArrayList, los arreglos y tus clases cuelgan de ella', 'Una variable o un for-each de tipo Object recibe cualquier objeto, y responde el objeto real', 'equals(Object) y hashCode() se redefinen juntos para comparar por contenido', 'Los primitivos no son objetos: sus clases envoltorio sí (ArrayList<Integer>, no ArrayList<int>)', 'Los arreglos no redefinen toString() ni equals(): usa Arrays.toString y Arrays.equals'],
+    uml: `            Object
+   ┌────────┬────┴─────┬─────────┐
+ String   Number   ArrayList   Caja
+          △    △
+    Integer    Double`,
+    codigo: `for (Object o : cosas) {
+    System.out.println(o.getClass().getSimpleName() + " → " + o);
+}
+
+@Override
+public boolean equals(Object otro) {
+    if (!(otro instanceof Caja)) return false;
+    return contenido.equals(((Caja) otro).contenido);
+}`,
+    cuando: 'Siempre que imprimas, compares o guardes objetos en colecciones: toString, equals y hashCode deciden cómo se ven y cuándo dos objetos son «el mismo».',
+    cuidado: 'Con una variable Object solo puedes llamar los métodos de Object: para lo específico, instanceof y cast. Y == compara referencias, no contenido.',
+  },
   mvc: {
     nombre: 'MVC (Modelo-Vista-Controlador)', familia: 'Arquitectura', mision: 'mision-mvc',
     intencion: 'Separar una aplicación en tres piezas: el modelo guarda los datos y las reglas, la vista los muestra y el controlador traduce lo que hace el usuario en cambios del modelo.',
@@ -168,7 +168,8 @@ try { modelo.avanzar(); }
 catch (IllegalStateException e) { vista.aviso(e.getMessage()); }`,
     cuando: 'En casi cualquier aplicación con interfaz (Android, web, escritorio): el mismo modelo se ve en varias pantallas y se maneja desde botones, voz o un piloto automático.',
     cuidado: 'No es un patrón suelto sino una arquitectura que combina Observer y Strategy. En un programa de diez líneas es demasiado; y si la vista empieza a cambiar datos o el modelo a imprimir, las piezas vuelven a mezclarse.',
-  },  kotlin: {
+  },
+  kotlin: {
     nombre: 'MVC con Kotlin y Compose', familia: 'Arquitectura · Android', mision: 'mision-kotlin',
     intencion: 'Llevar MVC a una app de Android: el modelo y los controladores en Kotlin puro, y la Activity con Jetpack Compose como vista.',
     problema: 'La Activity guarda los datos, decide las reglas y dibuja: no se puede probar sin un teléfono y cada botón nuevo repite la lógica.',
@@ -295,7 +296,7 @@ function Interfaces() {
 function Codice({ abiertos, misiones }) {
   return (
     <>
-      <p className="guia-lead">El <strong>Códice</strong> registra los patrones de diseño y los fundamentos de Java que dominas. Las misiones especiales del mapa (los ramales ✦) los desbloquean; los mundos 8 a 10 completarán los patrones.</p>
+      <p className="guia-lead">El <strong>Códice</strong> registra los patrones de diseño y los fundamentos de Java que dominas. Cada patrón se registra al superar su mini-jefe en el Mundo 8 (La Forja); las misiones especiales del mapa (los ramales ✦) agregan fundamentos y arquitecturas.</p>
       <div className="codice">
         {Object.entries(CODICE).map(([clave, p]) => {
           const m = misiones.find(x => x.id === p.mision);
@@ -304,7 +305,9 @@ function Codice({ abiertos, misiones }) {
           if (!abiertos.includes(clave)) return (
             <article key={clave} className="codice-ficha bloqueada">
               <h3>✦ ???</h3>
-              <p>Completa la misión <strong>«{m?.titulo}»</strong>, ramal del Mundo {m?.mundo}, para registrar este patrón.</p>
+              {m?.patron
+                ? <p>Supera el mini-jefe de <strong>«{m.titulo}»</strong>, en el Mundo {m.mundo}, para registrar este patrón.</p>
+                : <p>Completa la misión <strong>«{m?.titulo}»</strong>, ramal del Mundo {m?.mundo}, para registrar este patrón.</p>}
             </article>
           );
           return (

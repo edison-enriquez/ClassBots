@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PASOS } from '../src/levels/misiones.js';
+import { NIVELES } from '../src/levels/niveles.js';
 import { evaluarNivel } from '../src/levels/evaluar.js';
 import { parsePrograma, ejecutar, relaciones } from '../src/engine/motor.js';
 
 globalThis.performance ??= { now: () => Date.now() };
 
-const paso = id => PASOS.find(p => p.id === id);
+const paso = id => NIVELES.find(p => p.id === id);
 const fallan = (p, archivos) => evaluarNivel(p, archivos, { incluirOcultas: true }).casos.filter(c => c.estado !== 'ok').map(c => c.nombre);
 const correr = (files, cuerpo) => {
   const m = parsePrograma({ ...files, 'Main.java': `import java.util.ArrayList;\npublic class Main { public static void main(String[] args) { ${cuerpo} } }` });

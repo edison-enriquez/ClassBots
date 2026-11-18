@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PASOS } from '../src/levels/misiones.js';
+import { NIVELES } from '../src/levels/niveles.js';
 import { evaluarNivel } from '../src/levels/evaluar.js';
 import { parsePrograma, relaciones } from '../src/engine/motor.js';
 
 globalThis.performance ??= { now: () => Date.now() };
 
-const paso = id => PASOS.find(p => p.id === id);
+const paso = id => NIVELES.find(p => p.id === id);
 const evaluar = (p, archivos) => evaluarNivel(p, archivos, { incluirOcultas: true });
 const fallan = (p, archivos) => evaluar(p, archivos).casos.filter(c => c.estado !== 'ok').map(c => c.nombre);
 const cambiar = (p, archivo, a, b) => {

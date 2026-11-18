@@ -11,18 +11,11 @@ const LUGARES = [
   { x: 390, y: 246, zona: 'ÁRBOL', techo: '#83bd68', forma: 'arbol' },
   { x: 462, y: 146, zona: 'ARENA', techo: '#d97869', forma: 'arena' },
   { x: 540, y: 318, zona: 'AVERÍAS', techo: '#e0606e', forma: 'averias' },
-  { x: 548, y: 229, zona: 'FÁBRICA', techo: '#d7a85f', forma: 'fabrica' },
-  { x: 572, y: 93, zona: 'CIUDAD', techo: '#91a5c9', forma: 'ciudad' },
-  { x: 467, y: 54, zona: 'CONTROL', techo: '#b87591', forma: 'torre' },
+  { x: 548, y: 229, zona: 'FORJA', techo: '#d7a85f', forma: 'fabrica' },
 ];
 /* Ramales de misión: cada uno sale del sector cuyo concepto refuerza */
 const RAMALES = {
-  'mision-plantilla': { x: 318, y: 350, etiqueta: 'abajo' },
-  'mision-strategy': { x: 360, y: 104, etiqueta: 'arriba' },
   'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
-  'mision-observer': { x: 452, y: 276, etiqueta: 'abajo' },
-  'mision-factory': { x: 604, y: 342, etiqueta: 'abajo' },
-  'mision-decorator': { x: 425, y: 304, etiqueta: 'abajo' },
   'expedicion-central': { x: 326, y: 286, etiqueta: 'abajo' },
   'mision-mvc': { x: 470, y: 360, etiqueta: 'abajo' },
   'mision-kotlin': { x: 594, y: 180, etiqueta: 'arriba' },
@@ -126,7 +119,7 @@ function dibujarMaquina(ctx, lugar, bloqueado, ahora) {
     rect(ctx, '#84909b', x + dx, y - 16, 3, 4);
     rect(ctx, '#84909b', x + dx, y + 5, 3, 4);
   }
-  if (lugar.forma === 'fabrica' || lugar.forma === 'torre') {
+  if (lugar.forma === 'fabrica') {
     rect(ctx, '#101a25', x + 14, y - 34, 10, 17);
     rect(ctx, '#71808e', x + 16, y - 32, 6, 15);
     if (!bloqueado && Math.floor(ahora / 500) % 2 === 0) rect(ctx, '#c4d2dc', x + 17, y - 39, 4, 5);
@@ -215,7 +208,7 @@ function dibujarMision(ctx, mision, disponible, completada, ahora) {
   ctx.textAlign = 'start';
 }
 
-/* Rutas del plano: la línea principal 1→10 y el ramal de la misión desde Contratos (04) */
+/* Rutas del plano: la línea principal 1→8 y los ramales de misión que cuelgan de su sector */
 const esRamal = n => typeof n === 'string';
 const puntoDe = n => (esRamal(n) ? puntoRamal(n) : LUGARES[n]);
 /* Ruta entre dos nodos: sectores (índices 0..9) o ramales (id de la misión), que cuelgan de su sector */
@@ -255,7 +248,7 @@ const reducido = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers
 
 export default function MapaMundo({
   mundos, actual, abierto, completo, onViajar, onCerrar, capitulos = () => null,
-  misiones = [], misionAbierta = () => false, misionCompleta = () => false, onIniciarMision = () => {}, misionActual = null, pasosDe = () => null,
+  misiones = [], misionAbierta = () => false, misionCompleta = () => false, onIniciarMision = () => {}, misionActual = null, pasosDe = () => null, patrones = () => null,
 }) {
   const ref = useRef(null);
   const sprite = useRef(null);
@@ -357,12 +350,12 @@ export default function MapaMundo({
     const ok = abierto(m), hecho = completo(m), aqui = !enMision && m.id === actual, cap = capitulos(m);
     return {
       num: String(m.id).padStart(2, '0'), titulo: m.nombre, sub: m.tema,
-      lineas: [cap ? ['Capítulos', `${cap.hechos} de ${cap.total} superados`] : ['Capítulos', 'En diseño'], ['Estado', hecho ? 'Operativo' : ok ? 'Abierto' : m.niveles ? 'Bloqueado' : 'Próximamente']],
+      lineas: [cap ? ['Capítulos', `${cap.hechos} de ${cap.total} superados`] : ['Capítulos', 'En diseño'], ...(patrones(m) ? [['Patrones', `${patrones(m).hechos} de ${patrones(m).total} dominados`]] : []), ['Estado', hecho ? 'Operativo' : ok ? 'Abierto' : m.niveles ? 'Bloqueado' : 'Próximamente']],
       estado: aqui ? 'Estás aquí' : hecho ? 'Operativo' : ok ? 'Disponible' : m.niveles ? 'Bloqueado' : 'En diseño',
       boton: aqui ? 'Seguir aquí' : enMision && m.id === actual ? 'Volver a la ruta' : ok ? 'Viajar aquí →' : m.niveles ? 'Completa el sector anterior' : 'Próximamente',
       ok: ok || aqui,
     };
-  }, [sel, mundos, misiones, mision, abierto, completo, misionAbierta, misionCompleta, misionActual, actual, enMision, capitulos]);
+  }, [sel, mundos, misiones, mision, abierto, completo, misionAbierta, misionCompleta, misionActual, actual, enMision, capitulos, patrones]);
 
   const elegido = d => sel.tipo === d.tipo && sel.id === d.id;
 

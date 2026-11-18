@@ -1,4 +1,4 @@
-/* Escena de la misión Decorator · El taller de módulos.
+/* Escena del patrón Decorator · El taller de módulos.
    Cada bot es un chasis (el robot) envuelto en capas: un anillo y una ficha por módulo.
    En la lista de fichas, la de arriba es la capa de afuera y la de abajo es el chasis.
    Cuando llega una llamada se enciende la capa que la atiende, así que se la ve bajar

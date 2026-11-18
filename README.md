@@ -2,7 +2,7 @@
 
 Juego web para aprender programación orientada a objetos en Java. El estudiante escribe clases reales y un robot en pixel art se construye y se mueve según lo que hace su código.
 
-Mundos jugables (40 capítulos):
+Mundos jugables (56 capítulos):
 
 | Mundo | Tema | Capítulos | Escena |
 |---|---|---|---|
@@ -13,21 +13,31 @@ Mundos jugables (40 capítulos):
 | 5 · El Árbol | Herencia con `extends`, redefinición, clases abstractas y jerarquías multinivel | 5 | Diagrama de herencia UML |
 | 6 · La Arena | Polimorfismo: listas de la clase base, tipo declarado frente a tipo real, `instanceof` y casting, sobrecarga frente a redefinición, `toString()`, polimorfismo con interfaces y torneo abierto/cerrado | 6 | Coliseo: cada luchador muestra qué versión del método se ejecutó |
 | 7 · La Sala de Averías | Manejo de errores: `throw`, `try/catch`, varios `catch` y la jerarquía de excepciones, excepciones propias comprobadas (`throws`), `finally` y un protocolo que atrapa por la clase base | 6 | Sala de reparación: la baliza se enciende con cada `throw`, la red verde del `catch` la apaga y `finally` deja su marca |
+| 8 · La Forja | Patrones de diseño: Template Method, Strategy, Observer, Decorator y Factory Method, cada uno en un tramo de 3 o 4 capítulos que cierra con un mini-jefe | 16 | La de cada patrón: línea de ensamble, coliseo, sala de calderas, taller de módulos y fábrica de unidades |
 
-Los mundos 8 a 10 (patrones de diseño) aparecen bloqueados en el mapa. Las **misiones especiales** son ramales opcionales del mapa que refuerzan, con un patrón de diseño o una arquitectura, el concepto del mundo del que salen:
+### Mundo 8 · La Forja: patrones de diseño
+
+Se abre con el jefe del Mundo 7. Cada patrón es un tramo que empieza con código que huele mal, sigue con una o dos variaciones y cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente). Al superar el mini-jefe, el patrón queda en el **Códice de patrones** de la Guía y su recompensa se ve en los robots de todas las escenas. La cabecera muestra una ficha por patrón (TM, ST, OB, DE, FM) y lista solo los capítulos del patrón elegido.
+
+| Patrón | Retoma | Capítulos | Recompensa |
+|---|---|---|---|
+| Template Method · «El manual de ensamblaje» | Herencia y clases abstractas (Mundo 5) | 3: refactorizar dos recetas copiadas, gancho opcional y `final`, mini-jefe con un modelo desconocido | Manual de ensamblaje |
+| Strategy · «Estilos de combate» | Interfaces, composición y polimorfismo (Mundos 3, 4 y 6) | 3: quitar los `if` sobre un texto, cambiar de estilo en ejecución, mini-jefe «¿herencia o composición?» | Módulo táctico |
+| Observer · «La sala de calderas» | Agregación e interfaces (Mundos 3 y 4) | 4: cambiar los cables de una caldera por una lista de `Observador`, suscribir/desuscribir sin duplicados ni avisos repetidos, un extintor que se retira en pleno aviso (`ConcurrentModificationException` y recorrer una copia), mini-jefe con un termógrafo que escucha dos calderas selladas y observadores desconocidos | Antena de difusión |
+| Decorator · «Capa sobre capa» | Interfaces, clases abstractas y polimorfismo (Mundos 4 a 6) | 3: convertir en envoltorios los módulos que heredaban del chasis (`Modulo` implementa `Bot` y guarda un `Bot`), los mismos módulos en dos órdenes y un módulo repetido, mini-jefe «la puerta blindada» con un chasis y un módulo nuevos y pocas ranuras | Arnés modular |
+| Factory Method · «La fábrica de unidades» | Clases abstractas, `static` y excepciones (Mundos 2, 5 y 7) | 3: reunir los `new` desperdigados en una fábrica simple que rechaza lo desconocido con `IllegalArgumentException`; el método fábrica `crearUnidad()` en una `Planta` abstracta con `producir()` final; mini-jefe con una unidad y una planta nuevas en una central sellada y una planta desconocida | Troquel de fábrica |
+
+Los cinco patrones nacieron como misiones-ramal y conservan sus identificadores (`mision-strategy`, `strategy-1`…). Por eso un avance guardado antes del Mundo 8 sigue valiendo: los pasos de misión ya superados cuentan como capítulos, y las recompensas, el código y las métricas se conservan. Para agregar otro patrón, escribe su archivo `levels/patron-*.js` y súmalo a `PATRONES` en `levels/mundo8.js`.
+
+Las **misiones especiales** son ramales opcionales del mapa que amplían el mundo del que salen con un fundamento de Java o una arquitectura:
 
 | Misión | Sale de | Pasos | Recompensa |
 |---|---|---|---|
-| El manual de ensamblaje · Template Method | Mundo 5 (herencia) | 3: refactorizar dos recetas copiadas, gancho opcional y `final`, mini-jefe con un modelo desconocido | Manual de ensamblaje |
-| Estilos de combate · Strategy | Mundo 6 (polimorfismo) | 3: quitar los `if` sobre un texto, cambiar de estilo en ejecución, mini-jefe «¿herencia o composición?» | Módulo táctico |
-| Capa sobre capa · Decorator | Mundo 6 (polimorfismo) | 3: convertir en envoltorios los módulos que heredaban del chasis (`Modulo` implementa `Bot` y guarda un `Bot`), los mismos módulos en dos órdenes y un módulo repetido, mini-jefe «la puerta blindada» con un chasis y un módulo nuevos y pocas ranuras | Arnés modular |
 | La raíz de todo · Object | Mundo 6 (tras 6.4, `toString`) | 3: un solo `describir(Object o)` con `for (Object o : cosas)` y `getClass()`; `equals(Object)` y `hashCode()` (y por qué `equals(Caja)` no redefine); mini-jefe con clases envoltorio (`ArrayList<Integer>`, `instanceof Number`) y arreglos como objetos (`[I@…`, `Arrays.toString`, `Arrays.equals`) | Raíz de Object (brote verde) |
-| La sala de calderas · Observer | Mundo 6 (tras el jefe) | 4: cambiar los cables de una caldera por una lista de `Observador`, suscribir/desuscribir sin duplicados ni avisos repetidos, un extintor que se retira en pleno aviso (`ConcurrentModificationException` y recorrer una copia), mini-jefe con un termógrafo que escucha dos calderas selladas y observadores desconocidos | Antena de difusión |
 | La sala de mando · MVC | Mundo 7 (tras el jefe de excepciones) | 3: partir un robot que lo hace todo en modelo, vista y controlador (con `VistaRobot` y notificación tipo Observer), una segunda vista sin tocar el modelo, mini-jefe con un controlador nuevo (piloto automático) y una vista desconocida | Visor de mando |
-| La fábrica de unidades · Factory Method | Mundo 7 (tras el jefe) | 3: reunir los `new` desperdigados en una fábrica simple que rechaza lo desconocido con `IllegalArgumentException`; el método fábrica `crearUnidad()` en una `Planta` abstracta con `producir()` final; mini-jefe con una unidad y una planta nuevas en una central sellada y una planta desconocida | Troquel de fábrica |
 | MVC con Kotlin · Android | Misión «La sala de mando» | 3: modelo y controlador en Kotlin puro, la pantalla con Jetpack Compose (la Activity como vista), mini-jefe con un botón de piloto automático sobre el modelo sellado. Se califica en el **juez de Kotlin** ([`juez-kotlin/`](juez-kotlin/README.md)), que compila, prueba con Robolectric y devuelve una captura de la pantalla | Antena Android |
 
-Cada misión empieza con código que huele mal, cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente) y su recompensa tiene efecto: registra el patrón en el **Códice de patrones** de la Guía y queda visible en los robots de todas las escenas. Las misiones no alteran el avance ni la experiencia de la ruta principal, y los mundos 7 a 9 no dan por hecho que se jugaron. Por ahora las misiones **MVC** y **MVC con Kotlin** están marcadas `oculta: true`: solo aparecen en el mapa y en el Códice en modo profesor. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
+Cada misión cierra con un mini-jefe con un caso oculto de extensión y su recompensa tiene efecto: registra su entrada en el **Códice** de la Guía y queda visible en los robots de todas las escenas. Las misiones no alteran el avance ni la experiencia de la ruta principal, y ningún mundo da por hecho que se jugaron. Por ahora las misiones **MVC** y **MVC con Kotlin** están marcadas `oculta: true`: solo aparecen en el mapa y en el Códice en modo profesor. La **Guía** (botón en la barra superior y enlaces dentro de las lecciones) explica los seis tipos de relación UML, la multiplicidad y las interfaces.
 
 **Expediciones.** Son ramales de diseño libre: el encargo describe el problema y el estudiante decide qué clases e interfaces existen y cómo se llaman. Como el juez no conoce esos nombres, el estudiante los declara en `Roles.java` (el *mapa de roles*) y las pruebas llaman `C[roles.X]`. El juez revisa cuatro capas: comportamiento, invariantes con filas al azar y semilla fija, reglas de diseño leídas del modelo y una **clase intrusa** que el juez escribe contra el contrato que eligió el estudiante (lee sus métodos abstractos del modelo). La primera es **La central de servicios** (ramal del Mundo 4, `src/levels/expedicion-central.js`): un paso de plano y un jefe. La central se abre al superar el jefe del Mundo 4. Las Expediciones marcadas `oculta: true` no aparecen en el mapa ni se pueden abrir fuera del modo profesor (sirve para pilotear las próximas).
 
@@ -143,9 +153,11 @@ Basado en CodeMirror 6, con un asistente propio que entiende las clases del proy
 ```
 src/
   engine/motor.js       analizador del subconjunto de Java, traductor a JS, runtime con eventos, PlantUML
-  levels/mundo1..6.js   capítulos: lección, código inicial, solución y casos de prueba
+  levels/mundo1..7.js   capítulos: lección, código inicial, solución y casos de prueba
+  levels/mundo8.js      Mundo 8: arma sus capítulos con los patrones de levels/patron-*.js
+  levels/patron-*.js    un patrón por archivo (Template Method, Strategy, Observer, Decorator, Factory Method)
   levels/misiones.js    misiones opcionales y sus recompensas, separadas de la ruta principal
-  levels/mision-*.js    una misión por archivo (Object, MVC, Kotlin, Decorator)
+  levels/mision-*.js    una misión por archivo (Object, MVC, Kotlin)
   levels/niveles.js     catálogo de mundos
   levels/util.js        ayudas para pruebas: caso, exigir, casoRelacion, sinTexto
   levels/evaluar.js     juez: compila, valida estructura, corre cada caso en limpio y prepara la animación
@@ -156,7 +168,7 @@ src/
   game/sprites.js       fuente 3×5, sprites y paletas en pixel art
   game/PixelStage.jsx   escenas: mesa de planos, línea de ensamble y pasillo
   game/escenas2.js      escenas de la bóveda, las conexiones y la estación
-  game/escenas8.js      taller de módulos (misión Decorator): un anillo y una ficha por cada capa
+  game/escenas8.js      taller de módulos (patrón Decorator): un anillo y una ficha por cada capa
   components/           lección, editor, panel de resultados, UML con relaciones, guía, avatar
 tests/                  pruebas con node:test
 e2e/                    recorridos con Playwright sobre dist-single
@@ -190,6 +202,6 @@ Entre dos clases puede haber dos relaciones a la vez: un decorador implementa la
 
 ## Límites actuales
 
-- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 7 y las misiones (clases, interfaces, herencia con `super`, métodos abstractos, sobrecarga, constructores, métodos, `static`, `final`, casting con `ClassCastException`, excepciones con `throw`, `try/catch/finally`, multi-catch, `throws` y comprobadas, `Object` implícito (`equals`, `hashCode`, `getClass`), clases envoltorio, arreglos y `Arrays`, `if`, `for`, `while`, `ArrayList` (con copia `new ArrayList<>(otra)` y for-each que lanza `ConcurrentModificationException` si la lista cambia), `Comparable`, `Collections.sort`, `System.out.println`).
+- El código del estudiante no corre en una JVM: el motor traduce a JavaScript el subconjunto que usan los mundos 1 a 8 y las misiones (clases, interfaces, herencia con `super`, métodos abstractos, sobrecarga, constructores, métodos, `static`, `final`, casting con `ClassCastException`, excepciones con `throw`, `try/catch/finally`, multi-catch, `throws` y comprobadas, `Object` implícito (`equals`, `hashCode`, `getClass`), clases envoltorio, arreglos y `Arrays`, `if`, `for`, `while`, `ArrayList` (con copia `new ArrayList<>(otra)` y for-each que lanza `ConcurrentModificationException` si la lista cambia), `Comparable`, `Collections.sort`, `System.out.println`).
 - El formato del registro de eventos (`crear`, `set`, `llamada`, `print`) es el contrato con el escenario: un backend con Java o Kotlin real (Piston, Judge0) puede devolver ese mismo registro y el juego no cambia.
 - El progreso se guarda en el navegador (`localStorage`).
