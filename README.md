@@ -20,6 +20,7 @@ Los mundos 8 a 10 (patrones de diseño) aparecen bloqueados en el mapa. Las **mi
 |---|---|---|---|
 | El manual de ensamblaje · Template Method | Mundo 5 (herencia) | 3: refactorizar dos recetas copiadas, gancho opcional y `final`, mini-jefe con un modelo desconocido | Manual de ensamblaje |
 | Estilos de combate · Strategy | Mundo 6 (polimorfismo) | 3: quitar los `if` sobre un texto, cambiar de estilo en ejecución, mini-jefe «¿herencia o composición?» | Módulo táctico |
+| Capa sobre capa · Decorator | Mundo 6 (polimorfismo) | 3: convertir en envoltorios los módulos que heredaban del chasis (`Modulo` implementa `Bot` y guarda un `Bot`), los mismos módulos en dos órdenes y un módulo repetido, mini-jefe «la puerta blindada» con un chasis y un módulo nuevos y pocas ranuras | Arnés modular |
 | La raíz de todo · Object | Mundo 6 (tras 6.4, `toString`) | 3: un solo `describir(Object o)` con `for (Object o : cosas)` y `getClass()`; `equals(Object)` y `hashCode()` (y por qué `equals(Caja)` no redefine); mini-jefe con clases envoltorio (`ArrayList<Integer>`, `instanceof Number`) y arreglos como objetos (`[I@…`, `Arrays.toString`, `Arrays.equals`) | Raíz de Object (brote verde) |
 | La sala de calderas · Observer | Mundo 6 (tras el jefe) | 4: cambiar los cables de una caldera por una lista de `Observador`, suscribir/desuscribir sin duplicados ni avisos repetidos, un extintor que se retira en pleno aviso (`ConcurrentModificationException` y recorrer una copia), mini-jefe con un termógrafo que escucha dos calderas selladas y observadores desconocidos | Antena de difusión |
 | La sala de mando · MVC | Mundo 7 (tras el jefe de excepciones) | 3: partir un robot que lo hace todo en modelo, vista y controlador (con `VistaRobot` y notificación tipo Observer), una segunda vista sin tocar el modelo, mini-jefe con un controlador nuevo (piloto automático) y una vista desconocida | Visor de mando |
@@ -144,6 +145,7 @@ src/
   engine/motor.js       analizador del subconjunto de Java, traductor a JS, runtime con eventos, PlantUML
   levels/mundo1..6.js   capítulos: lección, código inicial, solución y casos de prueba
   levels/misiones.js    misiones opcionales y sus recompensas, separadas de la ruta principal
+  levels/mision-*.js    una misión por archivo (Object, MVC, Kotlin, Decorator)
   levels/niveles.js     catálogo de mundos
   levels/util.js        ayudas para pruebas: caso, exigir, casoRelacion, sinTexto
   levels/evaluar.js     juez: compila, valida estructura, corre cada caso en limpio y prepara la animación
@@ -154,6 +156,7 @@ src/
   game/sprites.js       fuente 3×5, sprites y paletas en pixel art
   game/PixelStage.jsx   escenas: mesa de planos, línea de ensamble y pasillo
   game/escenas2.js      escenas de la bóveda, las conexiones y la estación
+  game/escenas8.js      taller de módulos (misión Decorator): un anillo y una ficha por cada capa
   components/           lección, editor, panel de resultados, UML con relaciones, guía, avatar
 tests/                  pruebas con node:test
 e2e/                    recorridos con Playwright sobre dist-single
@@ -182,6 +185,8 @@ Cada capítulo en `niveles.js` define `escena` (`plano`, `taller` o `pasillo`), 
 - **Dependencia:** A usa B de paso (parámetro, variable local o `new`) sin guardarlo.
 
 Entre asociación y agregación la frontera es de intención; el taller usa esta regla fija para poder revisarla y lo explica en la guía.
+
+Entre dos clases puede haber dos relaciones a la vez: un decorador implementa la interfaz (realización) y además guarda un objeto de ese tipo (asociación). El plano objetivo y `casoRelacion` buscan la del tipo pedido, y el diagrama las dibuja separadas.
 
 ## Límites actuales
 

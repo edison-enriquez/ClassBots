@@ -95,7 +95,8 @@ export default function UmlPanel({ modelo, objetivo }) {
 
 function Objetivo({ objetivo, rels }) {
   const filas = objetivo.map(([de, a, tipo]) => {
-    const r = rels.find(x => x.de === de && x.a === a);
+    // Puede haber dos relaciones entre el mismo par (realización y asociación en un decorador)
+    const r = rels.find(x => x.de === de && x.a === a && x.tipo === tipo) || rels.find(x => x.de === de && x.a === a);
     return { de, a, tipo, ok: r?.tipo === tipo, encontrado: r ? NOMBRE_REL[r.tipo] : null };
   });
   const n = filas.filter(f => f.ok).length;
@@ -209,7 +210,12 @@ function Diagrama({ modelo, rels }) {
   // capas por camino más largo
   const arriba = r => (r.tipo === 'realizacion' || r.tipo === 'herencia' ? r.a : r.de), abajo = r => (r.tipo === 'realizacion' || r.tipo === 'herencia' ? r.de : r.a);
   const capa = Object.fromEntries(cs.map(c => [c.nombre, 0]));
-  for (let it = 0; it < cs.length; it++) for (const r of rs) if (capa[abajo(r)] < capa[arriba(r)] + 1) capa[abajo(r)] = Math.min(cs.length, capa[arriba(r)] + 1);
+  // Un decorador guarda (o recibe) la misma interfaz que implementa: esa relación apunta hacia un ancestro
+  // y no debe empujar capas, porque cerraría un ciclo con la herencia y todo acabaría en una sola fila.
+  const jer = r => r.tipo === 'realizacion' || r.tipo === 'herencia';
+  const sube = (de, a, vistos = new Set([de])) => de === a || rs.some(r => jer(r) && r.de === de && !vistos.has(r.a) && (vistos.add(r.a), sube(r.a, a, vistos)));
+  const rsCapas = rs.filter(r => jer(r) || !sube(r.de, r.a));
+  for (let it = 0; it < cs.length; it++) for (const r of rsCapas) if (capa[abajo(r)] < capa[arriba(r)] + 1) capa[abajo(r)] = Math.min(cs.length, capa[arriba(r)] + 1);
   const CW = 7.4, LH = 16, PAD = 10, GX = 34, GY = 70;
   const cajas = cs.map(c => {
     const { atr, ops } = miembrosUML(c);
@@ -233,7 +239,7 @@ function Diagrama({ modelo, rels }) {
     y += Math.max(...fila.map(b => b.h)) + GY;
   });
   function media(b) {
-    const vec = rs.filter(r => abajo(r) === b.c.nombre && pos[arriba(r)]).map(r => pos[arriba(r)].x + pos[arriba(r)].w / 2);
+    const vec = rsCapas.filter(r => abajo(r) === b.c.nombre && pos[arriba(r)]).map(r => pos[arriba(r)].x + pos[arriba(r)].w / 2);
     return vec.length ? vec.reduce((s, v) => s + v, 0) / vec.length : 0;
   }
   const W = ancho + 20, H = y - GY + 20;
@@ -255,6 +261,14 @@ function Diagrama({ modelo, rels }) {
         const A = pos[r.de], B = pos[r.a];
         const ca = { x: A.x + A.w / 2, y: A.y + A.h / 2 }, cb = { x: B.x + B.w / 2, y: B.y + B.h / 2 };
         const p1 = borde(A, cb), p2 = borde(B, ca);
+        // Dos relaciones entre el mismo par (realización y asociación) se separan para que no se tapen
+        const gemelas = rs.filter(q => (q.de === r.de && q.a === r.a) || (q.de === r.a && q.a === r.de));
+        if (gemelas.length > 1) {
+          const [n1, n2] = [r.de, r.a].sort(), c1 = pos[n1], c2 = pos[n2];
+          const nx = -((c2.y + c2.h / 2) - (c1.y + c1.h / 2)), ny = (c2.x + c2.w / 2) - (c1.x + c1.w / 2), nl = Math.hypot(nx, ny) || 1;
+          const d = (gemelas.indexOf(r) - (gemelas.length - 1) / 2) * 22;
+          p1.x += (nx / nl) * d; p1.y += (ny / nl) * d; p2.x += (nx / nl) * d; p2.y += (ny / nl) * d;
+        }
         const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
         const ux = p2.x - p1.x, uy = p2.y - p1.y, L = Math.hypot(ux, uy) || 1;
         return (

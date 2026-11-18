@@ -22,6 +22,7 @@ const RAMALES = {
   'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
   'mision-observer': { x: 452, y: 276, etiqueta: 'abajo' },
   'mision-factory': { x: 604, y: 342, etiqueta: 'abajo' },
+  'mision-decorator': { x: 425, y: 304, etiqueta: 'abajo' },
   'expedicion-central': { x: 326, y: 286, etiqueta: 'abajo' },
   'mision-mvc': { x: 470, y: 360, etiqueta: 'abajo' },
   'mision-kotlin': { x: 594, y: 180, etiqueta: 'arriba' },

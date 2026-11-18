@@ -55,6 +55,30 @@ public void cambiarEstilo(Estilo nuevo) {
     cuando: 'Cuando hay varias formas de hacer lo mismo y quieres agregar otras sin tocar el contexto, o cambiarlas en ejecución.',
     cuidado: 'Si solo hay dos variantes que nunca cambiarán, un if puede ser más simple. Lo que el objeto es se hereda; lo que hace y puede cambiar, se compone.',
   },
+  decorator: {
+    nombre: 'Decorator', familia: 'Estructural', mision: 'mision-decorator',
+    intencion: 'Agregar responsabilidades a un objeto envolviéndolo en otro que cumple el mismo contrato, sin modificar su clase y sin crear una subclase por cada combinación.',
+    problema: 'Cada extra se resuelve con una subclase (Laser, Escudo, LaserEscudo…): las combinaciones explotan y se repiten por cada clase base.',
+    estructura: ['Componente: la interfaz que cumplen todos (Bot)', 'Componente concreto: el objeto que responde de verdad (BotBasico)', 'Decorador base abstracto: implementa la interfaz, guarda un componente y le pasa cada llamada', 'Decoradores concretos: redefinen solo lo que cambian y agregan lo suyo a la respuesta del envuelto'],
+    uml: `           Bot «interface»
+          △               △
+   BotBasico       Modulo {abstract} ──> Bot
+                          △
+              Laser   Escudo   Blindaje`,
+    codigo: `public abstract class Modulo implements Bot {
+    protected Bot bot;
+
+    public int poder() {
+        return bot.poder();
+    }
+}
+
+// En Laser:  return bot.poder() + 15;
+Bot rayo = new Escudo(
+    new Laser(new BotBasico("Rayo")));`,
+    cuando: 'Cuando los extras son opcionales, se combinan entre sí y la combinación se decide al crear el objeto. Ya lo usas en Java: new BufferedReader(new FileReader("datos.txt")) es un lector envuelto en otro.',
+    cuidado: 'El orden de las capas cambia el resultado, y muchas capas pequeñas cuestan más de depurar. Si lo que varía es una sola decisión interna del objeto, Strategy es más directo.',
+  },
   object: {
     nombre: 'Object, la raíz', familia: 'Fundamento de Java', mision: 'mision-object',
     intencion: 'Toda clase hereda de Object, aunque no escriba extends: de ahí vienen toString(), equals(), hashCode() y getClass().',
