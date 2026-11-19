@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { NIVELES, MUNDOS } from './levels/niveles.js';
+import { NIVELES, MUNDOS, capituloAbierto, requisitoCapitulo, siguienteCapitulo } from './levels/niveles.js';
 import { MISIONES, PASOS, misionDisponible, misionCompletada, pasoAbierto, misionVisible } from './levels/misiones.js';
 import { PATRONES, patronCompleto, papelEnMVC } from './levels/mundo8.js';
 import { evaluarNivel } from './levels/evaluar.js';
@@ -230,7 +230,8 @@ export default function App() {
   const hechos = vista ? (progV?.hechos || []) : prog.hechos;
   const habilitados = vista ? (progV?.habilitados || []) : (prog.habilitados || []);
   const hecho = k => hechos.includes(NIVELES[k].id);
-  const abierto = k => profe || k === 0 || hecho(k - 1) || hecho(k) || habilitados.includes(NIVELES[k].id);
+  // La ruta es secuencial; el mundo de patrones va en orden libre (ver capituloAbierto)
+  const abierto = k => profe || capituloAbierto(k, hechos) || habilitados.includes(NIVELES[k].id);
   const pasosHechos = (vista ? progV?.pasosHechos : prog.pasosHechos) || [];
   const pasoOk = p => pasoAbierto(p, pasosHechos, profe) || habilitados.includes(p.id);
   const misionAbierta = m => misionDisponible(m, prog.hechos, profe, prog.misionesHechas || []);
@@ -347,6 +348,8 @@ export default function App() {
     })),
   });
   const finDeMundo = nivel.enMundo === nivel.totalMundo - 1;
+  // Capítulo al que lleva «Siguiente» en el modal de éxito (con el avance ya guardado)
+  const sigK = profe ? (i + 1 < NIVELES.length ? i + 1 : null) : siguienteCapitulo(i, hechos);
   // En pantallas angostas la lista de capítulos se desplaza de lado: el capítulo actual queda a la vista
   const rutaRef = useRef(null);
   useEffect(() => {
@@ -380,7 +383,7 @@ export default function App() {
     if (nivelVivoV.mision) { const k = PASOS.indexOf(nivelVivoV); const p = PASOS[k + 1]; return p && p.misionId === nivelVivoV.misionId ? p : null; }
     return NIVELES[NIVELES.indexOf(nivelVivoV) + 1] || null;
   })();
-  const yaAbiertoV = siguienteV && (hechos.includes(siguienteV.id) || pasosHechos.includes(siguienteV.id) || habilitados.includes(siguienteV.id) || habilitadosVista.includes(siguienteV.id) || (!siguienteV.mision && hechos.includes(nivelVivoV.id)));
+  const yaAbiertoV = siguienteV && (hechos.includes(siguienteV.id) || pasosHechos.includes(siguienteV.id) || habilitados.includes(siguienteV.id) || habilitadosVista.includes(siguienteV.id) || (!siguienteV.mision && capituloAbierto(NIVELES.indexOf(siguienteV), hechos)));
   const habilitarVista = async () => {
     if (!siguienteV) return;
     const ok = await docente.habilitar(vista.claseId, vista.alumno, siguienteV.id);
@@ -488,7 +491,7 @@ export default function App() {
             <ol>
               {NIVELES.map((n, k) => n.mundo !== verMundo || (patronVisto && n.patron !== patronVisto.id) ? null : (
                 <li key={n.id} className={(hecho(k) ? 'hecho' : '') + (vista && n.id === vivoV?.nivel.id ? ' alumno-aqui' : '')}>
-                  <button type="button" className={'nodo' + (n.jefe ? ' jefe' : '')} aria-current={(vista ? n.id === nivel.id : k === i) ? 'step' : undefined} disabled={!abierto(k)} onClick={() => (vista ? verNivelVista(n.id) : irNivel(k))} title={(vista && n.id === vivoV?.nivel.id ? `Aquí está ${vivoV.perfil.nombre} · ` : '') + (abierto(k) ? `${n.mundo}.${n.enMundo + 1} ${n.titulo} · ${n.concepto}` : 'Supera el capítulo anterior para abrirlo')}>
+                  <button type="button" className={'nodo' + (n.jefe ? ' jefe' : '')} aria-current={(vista ? n.id === nivel.id : k === i) ? 'step' : undefined} disabled={!abierto(k)} onClick={() => (vista ? verNivelVista(n.id) : irNivel(k))} title={(vista && n.id === vivoV?.nivel.id ? `Aquí está ${vivoV.perfil.nombre} · ` : '') + (abierto(k) ? `${n.mundo}.${n.enMundo + 1} ${n.titulo} · ${n.concepto}` : requisitoCapitulo(k, hechos))}>
                     {n.jefe ? '★' : (n.patron ? n.pasoPatron : n.enMundo) + 1}
                   </button>
                 </li>
@@ -705,8 +708,10 @@ export default function App() {
                   : <button type="button" className="btn-pri" autoFocus onClick={() => irPaso(PASOS[PASOS.findIndex(p => p.id === nivel.id) + 1])}>Siguiente paso: {PASOS[PASOS.findIndex(p => p.id === nivel.id) + 1].titulo} →</button>)
                 : <>
                     {nivel.cierraPatron && <button type="button" className="btn-sec" onClick={() => { setExito(null); setGuia('patrones'); }}>Ver el Códice</button>}
-                    {i + 1 < NIVELES.length
-                      ? <button type="button" className="btn-pri" autoFocus onClick={() => irNivel(i + 1)}>Siguiente: {NIVELES[i + 1].titulo} →</button>
+                    {/* Al dominar un patrón se puede elegir el siguiente en el plano (el mundo de patrones va en orden libre) */}
+                    {nivel.cierraPatron && sigK != null && NIVELES[sigK].patron && <button type="button" className="btn-sec" onClick={() => { setExito(null); setMapa('patrones'); }}>Elegir patrón ▸ plano</button>}
+                    {sigK != null
+                      ? <button type="button" className="btn-pri" autoFocus onClick={() => irNivel(sigK)}>Siguiente: {NIVELES[sigK].titulo} →</button>
                       : <button type="button" className="btn-pri" autoFocus onClick={() => setExito(null)}>Seguir explorando</button>}
                   </>}
             </div>

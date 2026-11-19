@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MUNDOS, NIVELES, capitulosHechos } from '../src/levels/niveles.js';
+import { MUNDOS, NIVELES, capitulosHechos, capituloAbierto, requisitoCapitulo, siguienteCapitulo } from '../src/levels/niveles.js';
 import { MUNDO8, PATRONES, patronCompleto, patronDe, papelEnMVC } from '../src/levels/mundo8.js';
 import { MISIONES, PASOS } from '../src/levels/misiones.js';
 import { aProgreso, resumen } from '../src/metricas/metricas.js';
@@ -82,4 +82,33 @@ test('Mundo 8: MVC cierra el mundo y reúne a los otros cinco patrones', () => {
   assert.equal(papelEnMVC(mvc.id), null);
   // Lo que un profesor guardó cuando MVC era una misión cuenta como capítulos
   assert.deepEqual(capitulosHechos(['plano'], ['mvc-1', 'mvc-2']), ['plano', 'mvc-1', 'mvc-2']);
+});
+
+test('Mundo 8: los patrones van en orden libre y MVC espera a los otros cinco', () => {
+  const ids = NIVELES.map(n => n.id), k = id => ids.indexOf(id);
+  const abiertos = h => MUNDO8.filter(n => capituloAbierto(k(n.id), h)).map(n => n.id);
+  const hasta7 = ids.slice(0, k('plantilla-1'));
+  // Sin el jefe del Mundo 7 no se abre nada; con él, el primer paso de los cinco patrones
+  assert.deepEqual(abiertos(hasta7.slice(0, -1)), []);
+  assert.deepEqual(abiertos(hasta7), ['plantilla-1', 'strategy-1', 'observer-1', 'decorator-1', 'factory-1']);
+  // Dentro de un patrón se sigue paso a paso
+  assert.equal(capituloAbierto(k('decorator-2'), hasta7), false);
+  assert.equal(capituloAbierto(k('decorator-2'), [...hasta7, 'decorator-1']), true);
+  assert.equal(requisitoCapitulo(k('decorator-2'), hasta7), 'Supera el capítulo anterior para abrirlo');
+  // Empezar por Factory Method: al dominarlo, «Siguiente» lleva al primer patrón pendiente (vuelve al inicio del mundo)
+  const fm = [...hasta7, 'factory-1', 'factory-2', 'factory-3'];
+  assert.equal(ids[siguienteCapitulo(k('factory-3'), fm)], 'plantilla-1');
+  assert.equal(ids[siguienteCapitulo(k('factory-1'), [...hasta7, 'factory-1'])], 'factory-2');
+  // MVC: cerrado hasta dominar los cinco, y el título dice cuáles faltan
+  assert.equal(capituloAbierto(k('mvc-1'), fm), false);
+  assert.match(requisitoCapitulo(k('mvc-1'), fm), /Template Method, Strategy, Observer, Decorator\)/);
+  const cinco = [...hasta7, ...MUNDO8.filter(n => n.patron !== 'mision-mvc').map(n => n.id)];
+  assert.equal(capituloAbierto(k('mvc-1'), cinco.filter(id => id !== 'observer-4')), false);
+  assert.match(requisitoCapitulo(k('mvc-1'), cinco.filter(id => id !== 'observer-4')), /^Domina Observer/);
+  assert.equal(capituloAbierto(k('mvc-1'), cinco), true);
+  assert.equal(ids[siguienteCapitulo(k('plantilla-3'), cinco)], 'mvc-1');
+  // El resto de la ruta sigue secuencial
+  assert.equal(capituloAbierto(1, []), false);
+  assert.equal(capituloAbierto(1, [ids[0]]), true);
+  assert.equal(siguienteCapitulo(0, [ids[0]]), 1);
 });

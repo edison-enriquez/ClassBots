@@ -92,5 +92,23 @@ const abrir = async (b, antes) => {
   console.log('tras viajar:', (await m.textContent('.plano-btn')).trim(), '· capítulo:', (await m.textContent('.marca p')).trim(), '· pasos arriba:', (await m.locator('.mapa-mundo li .nodo').allTextContents()).join(' '));
   await foto(m, 'mvc-estudiante');
   console.log('errores (estudiante nuevo):', m.errores);
+  await m.close();
+
+  /* ---- 4. Orden libre: estudiante que acaba de vencer el Mundo 7 y empieza por Decorator ---- */
+  const h7 = ids.slice(0, ids.indexOf('plantilla-1'));
+  const o = await abrir(b, `if (!localStorage.getItem('taller-objetos-react-v2')) localStorage.setItem('taller-objetos-react-v2', JSON.stringify({ nivelId: 'averia-jefe', hechos: ${JSON.stringify(h7)}, pasosHechos: [], misionesHechas: [], codigo: {}, perfil: { id: 'e2e4', nombre: 'Leo Libre', grupo: '' }, segmentos: [] }));`);
+  await o.waitForTimeout(600);
+  await o.click('.mapa-btn'); await o.waitForTimeout(400);
+  await o.click('.mapa-paginas button >> nth=1'); await o.waitForTimeout(400);
+  console.log('orden libre · sectores:', (await o.locator('.mapa-lienzo .mapa-punto').evaluateAll(xs => xs.map(x => x.textContent + ':' + (x.classList.contains('cerrado') ? 'cerrado' : 'abierto')))).join(' '));
+  await o.click('.mapa-lienzo .mapa-punto >> nth=5'); await o.waitForTimeout(300);
+  console.log('botón de MVC:', await o.textContent('.mapa-ir'));
+  await o.click('.mapa-lienzo .mapa-punto >> nth=3'); await o.waitForTimeout(300);
+  await foto(o, 'orden-libre', '.mapa-modal');
+  await o.click('.mapa-ir'); await o.waitForSelector('.mapa-modal', { state: 'detached', timeout: 8000 }); await o.waitForTimeout(400);
+  console.log('empieza por:', (await o.textContent('.plano-btn')).trim(), '·', (await o.textContent('h2, .leccion h2')).trim().slice(0, 60));
+  const pasoCerrado = await o.locator('.mapa-mundo li .nodo >> nth=1').getAttribute('title');
+  console.log('paso 2 cerrado:', pasoCerrado);
+  console.log('errores (orden libre):', o.errores);
   await b.close();
 })();
