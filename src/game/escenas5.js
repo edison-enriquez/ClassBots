@@ -1,5 +1,5 @@
 /* Escenas de MVC.
-   - escenaHMI (misión MVC en Java · El panel de control): la pantalla HMI que ve el operador, con botones
+   - escenaHMI (patrón MVC del Mundo 8 · El panel de control): la pantalla HMI que ve el operador, con botones
      que se pueden pulsar. Solo se ve la vista; el reparto entre clases está en la pestaña UML.
    - escenaMando (misión MVC con Kotlin): tres puestos en fila, CONTROL, MODELO y VISTAS, con cables que
      se encienden cuando la orden llega al modelo y cuando el modelo notifica a cada vista. */
@@ -22,7 +22,6 @@ function clasesVista(modelo) {
 
 /* Qué clase es el modelo y con qué métodos llegan las órdenes en cada escena (`textual` recibe la orden como texto) */
 const SALA_ROBOT = { modelo: 'Robot', ordenes: ['orden', 'piloto'], textual: 'orden' };
-const SALA_TANQUE = { modelo: 'Tanque', ordenes: ['pulsar', 'ciclos'], textual: 'pulsar' };
 
 /* Estado de la sala en el cuadro i: vistas creadas y lo último que mostró cada una, última orden y último cambio del modelo.
    De mostrar(nombre, valor, cuenta) se guardan el valor de la barra (energía o nivel) y la cuenta (posición o cargas). */
@@ -144,36 +143,40 @@ export function escenaMando(ctx, { modelo, fr, s, now }) {
   if (!frames.length) bocadillo(ctx, 96, 34, 'EJECUTA PARA ENCENDER', P.white);
 }
 
-/* ---------- El panel HMI del tanque (misión MVC en Java) ----------
+/* ---------- El panel HMI del tanque (patrón MVC del Mundo 8) ----------
    La escena ES la vista: la pantalla que ve el operador. Solo muestra lo que las vistas del estudiante
    recibieron del modelo (si ninguna está suscrita, el panel no tiene datos), y sus botones son de verdad:
    al pulsarlos, PixelStage llama al controlador del programa que se acaba de ejecutar. La arquitectura
    (quién conoce a quién) se ve en la pestaña UML, no aquí. */
 
-/* Botones del panel en coordenadas del lienzo. `metodo` es lo que se llama en el controlador del estudiante. */
+/* Botones del panel en coordenadas del lienzo. `metodo` es lo que se llama en el controlador del estudiante;
+   `alterna` pide crear un objeto de la clase que sigue a la del modo vigente y pasarlo como argumento. */
 export const BOTONES_HMI = [
   { id: 'BOMBEAR', x: 6, y: 90, w: 42, h: 16, metodo: 'pulsar', arg: 'BOMBEAR', color: '#4ade80' },
   { id: 'VACIAR', x: 52, y: 90, w: 42, h: 16, metodo: 'pulsar', arg: 'VACIAR', color: '#ffcc33' },
-  { id: 'PURGAR', x: 98, y: 90, w: 42, h: 16, metodo: 'pulsar', arg: 'PURGAR', color: '#b9a4e8' },
-  { id: 'AUTO', x: 144, y: 90, w: 42, h: 16, metodo: 'ciclos', arg: 1, color: '#7cd4ff' },
+  { id: 'MARCHA', x: 98, y: 90, w: 42, h: 16, metodo: 'pulsar', arg: 'MARCHA', color: '#b9a4e8' },
+  { id: 'MODO', x: 144, y: 90, w: 42, h: 16, metodo: 'cambiarModo', alterna: ['ModoManual', 'ModoAuto'], color: '#7cd4ff' },
 ];
 
-/* Lo que el panel sabe en el cuadro i: qué mostró cada vista, el último dato recibido, el aviso vigente y el último botón */
+/* Lo que el panel sabe en el cuadro i: qué mostró cada indicador, el último dato recibido, el aviso vigente,
+   el último botón y el modo del mando. Una vista que guarda otra vista es un decorador: no es un indicador
+   aparte, sino una capa (por ejemplo, la alarma) sobre el indicador que envuelve. */
 function estadoPanel(frames, i, modelo) {
   const esVista = clasesVista(modelo);
-  const vistas = [], porId = new Map();
+  const todas = [], porId = new Map();
   let dato = null, aviso = null, boton = null, hablando = null, lanza = null;
-  for (let k = 0; k <= Math.min(i, frames.length - 1); k++) {
+  const hasta = Math.min(i, frames.length - 1);
+  for (let k = 0; k <= hasta; k++) {
     const f = frames[k];
     if (f.tipo === 'crear') {
-      if (esVista.has(f.cls) && vistas.length < 3) { const v = { id: f.quien, cls: f.cls, k: -1, texto: null }; vistas.push(v); porId.set(f.quien, v); }
+      if (esVista.has(f.cls)) { const v = { id: f.quien, cls: f.cls, k: -1, texto: null, capas: [] }; todas.push(v); porId.set(f.quien, v); }
       continue;
     }
     if (f.tipo === 'lanza') { lanza = { k, msg: f.msg }; continue; }
     // Lo que se imprime justo después de mostrar(...) o aviso(...) es lo que esa vista dibuja en el panel
     if (f.tipo === 'print') {
       const txt = f.cap.replace(/^System\.out\.println → /, '');
-      if (hablando?.aviso) aviso = { k, txt };
+      if (hablando?.aviso) aviso = { ...aviso, k, txt };
       else if (hablando) hablando.v.texto = txt;
       continue;
     }
@@ -182,17 +185,35 @@ function estadoPanel(frames, i, modelo) {
     const args = (/\((.*)\)$/.exec(f.cap)?.[1] || '').split(', ');
     const v = porId.get(f.quien);
     if (v && f.metodo === 'mostrar') {
-      Object.assign(v, { k, texto: null, valor: +args[1], cuenta: +args[2] });
+      // El indicador conserva lo último que dibujó hasta que imprima de nuevo
+      Object.assign(v, { k, valor: +args[1], cuenta: +args[2] });
       dato = { k, etiqueta: sinComillas(args[0]), nivel: +args[1], cargas: +args[2] };
-      aviso = null; hablando = { v };
+      // Un aviso sigue en la franja mientras los indicadores reciben el mismo dato (la misma ronda de avisos del modelo)
+      if (aviso && aviso.con !== `${dato.nivel}/${dato.cargas}`) aviso = null;
+      hablando = { v };
     } else if (v && f.metodo === 'aviso') {
-      v.k = k; aviso = { k, txt: 'Aviso: ' + sinComillas(args.join(', ')) }; hablando = { v, aviso: true };
+      v.k = k; aviso = { k, txt: 'Aviso: ' + sinComillas(args.join(', ')), con: dato ? `${dato.nivel}/${dato.cargas}` : '' }; hablando = { v, aviso: true };
     } else {
       hablando = null;
-      if (/^Controlador/.test(cls) || SALA_TANQUE.ordenes.includes(f.metodo)) boton = { k, auto: f.metodo !== SALA_TANQUE.textual, id: f.metodo === SALA_TANQUE.textual ? sinComillas(args[0]).toUpperCase() : 'AUTO' };
+      if (/^Controlador/.test(cls) && f.metodo === 'pulsar') boton = { k, id: sinComillas(args[0]).toUpperCase() };
+      else if (/^Controlador/.test(cls) && f.metodo === 'cambiarModo') boton = { k, id: 'MODO' };
     }
   }
-  return { vistas, dato, aviso, boton, lanza, esVista };
+  // Con la foto de los objetos en este cuadro: qué vista envuelve a cuál y qué modo guarda el último controlador
+  const objetos = frames[hasta]?.objetos || [];
+  const refs = o => Object.values(o.f || {}).map(x => x && x.ref).filter(Boolean);
+  const dentro = new Map();
+  for (const o of objetos) if (porId.has(o.id)) { const r = refs(o).find(id => porId.has(id) && id !== o.id); if (r) dentro.set(o.id, r); }
+  for (const [fuera] of dentro) {
+    let fondo = fuera, saltos = 0;
+    while (dentro.has(fondo) && saltos++ < 8) fondo = dentro.get(fondo);
+    porId.get(fondo).capas.push(porId.get(fuera).cls);
+  }
+  const vistas = todas.filter(v => !dentro.has(v.id)).slice(0, 3);
+  const clsDe = id => objetos.find(o => o.id === id)?.cls || '';
+  let modo = null;
+  for (const o of objetos) if (/^Controlador/.test(o.cls)) { const m = refs(o).map(clsDe).find(c => /^Modo/.test(c)); if (m) modo = m.replace(/^Modo/, '').toUpperCase(); }
+  return { vistas, dato, aviso, boton, lanza, esVista, modo };
 }
 
 /* Sinóptico: el tanque con el nivel que llegó a las vistas y la marca del enclavamiento (70 %) */
@@ -222,7 +243,11 @@ function indicador(ctx, x, y, w, v, activo, apagado) {
   ctx.fillStyle = activo ? '#ffffff' : P.ink; ctx.fillRect(x, y, w, 16);
   ctx.fillStyle = '#0e1a12'; ctx.fillRect(x + 1, y + 1, w - 2, 14);
   ctx.fillStyle = '#1d3a2a'; ctx.fillRect(x + 1, y + 1, w - 2, 6);
-  texto(ctx, corto(etiquetaVista(v.cls).toUpperCase(), 14), x + 3, y + 2, '#9fe8ff');
+  const nombre = corto(etiquetaVista(v.cls).toUpperCase(), 12);
+  texto(ctx, nombre, x + 3, y + 2, '#9fe8ff');
+  // Capas que envuelven al indicador (decoradores): VistaConAlarma se lee «+ALARMA»
+  const capas = (v.capas || []).map(c => '+' + etiquetaVista(c).replace(/^Con/, '').toUpperCase()).join(' ');
+  if (capas) texto(ctx, corto(capas, Math.floor((w - 10) / 4) - nombre.length), x + 7 + nombre.length * 4, y + 2, P.gold);
   const max = Math.floor((w - 6) / 4);
   if (apagado) texto(ctx, 'SIN CONECTAR', x + 3, y + 9, '#5d7a6a');
   else if (v.texto == null) texto(ctx, v.k < 0 ? '...' : '(NO IMPRIME)', x + 3, y + 9, '#5d7a6a');
@@ -247,7 +272,7 @@ function botonHMI(ctx, b, { activo, hundido }) {
   texto(ctx, b.id, b.x + b.w / 2, b.y + 4 + dy, activo || hundido ? P.ink : '#7a83a8', { centrar: true });
 }
 
-/* `acciones` dice qué métodos tiene el controlador vivo ({ pulsar, ciclos }); `s.pulso` es el último botón tocado con el ratón */
+/* `acciones` dice qué métodos tiene el controlador vivo ({ pulsar, cambiarModo }); `s.pulso` es el último botón tocado con el ratón */
 export function escenaHMI(ctx, { modelo, s, now, acciones = {} }) {
   ctx.fillStyle = '#0b0f1c'; ctx.fillRect(0, 0, W, 112);
   ctx.fillStyle = '#1c2540'; ctx.fillRect(0, 0, W, 13);
@@ -260,14 +285,14 @@ export function escenaHMI(ctx, { modelo, s, now, acciones = {} }) {
 
   // Barra de título: nombre del panel y modo de mando
   texto(ctx, 'PANEL HMI', 5, 4, '#9fe8ff');
-  const auto = !!est.boton?.auto;
-  ctx.fillStyle = auto ? '#7cd4ff' : frames.length ? P.green : '#3a4160'; ctx.fillRect(W - 49, 4, 5, 5);
-  texto(ctx, !frames.length ? 'APAGADO' : auto ? 'AUTO' : 'MANUAL', W - 41, 4, frames.length ? P.white : '#7a83a8');
+  const modo = est.modo || 'MANUAL', auto = modo !== 'MANUAL';
+  ctx.fillStyle = !frames.length ? '#3a4160' : auto ? '#7cd4ff' : P.green; ctx.fillRect(W - 49, 4, 5, 5);
+  texto(ctx, !frames.length ? 'APAGADO' : corto(modo, 10), W - 41, 4, frames.length ? P.white : '#7a83a8');
 
   sinoptico(ctx, est.dato, reciente(est.dato), now);
 
   // Indicadores: las vistas creadas en la ejecución o, antes de ejecutar, las clases de vista que existen
-  const lista = est.vistas.length ? est.vistas : [...est.esVista].slice(0, 3).map(cls => ({ cls, k: -1 }));
+  const lista = est.vistas.length ? est.vistas : [...est.esVista].filter(c => !/^VistaCon/.test(c)).slice(0, 3).map(cls => ({ cls, k: -1 }));
   const apagado = !est.vistas.length;
   lista.forEach((v, k) => indicador(ctx, 66, 16 + k * 18, 122, v, !apagado && v.k >= 0 && i - v.k <= 1, apagado));
   if (!lista.length) indicador(ctx, 66, 16, 122, { cls: 'Vista?' }, false, true);
@@ -283,7 +308,7 @@ export function escenaHMI(ctx, { modelo, s, now, acciones = {} }) {
     texto(ctx, corto(alarma.txt.replace(/^Aviso:\s*/i, '').toUpperCase(), 28), 74, 77, '#ffd9df');
   }
   else if (!frames.length) texto(ctx, 'EJECUTA PARA ENCENDER', 70, 77, '#7a83a8');
-  else if (fin && (acciones.pulsar || acciones.ciclos)) texto(ctx, 'EN VIVO: PULSA UN BOTON', 70, 77, Math.floor(now / 500) % 2 ? P.green : '#3d6b50');
+  else if (fin && (acciones.pulsar || acciones.cambiarModo)) texto(ctx, 'EN VIVO: PULSA UN BOTON', 70, 77, Math.floor(now / 500) % 2 ? P.green : '#3d6b50');
   else texto(ctx, 'SIN AVISOS', 70, 77, '#3d6b50');
 
   // Botones: se hunden cuando los pulsa el programa (Main) o el ratón

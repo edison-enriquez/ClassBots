@@ -57,17 +57,27 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption,
     const reg = props.current.animacion?.registro || [];
     return [...reg].reverse().find(r => /^Controlador/.test(r.cls) && typeof r.raw[metodo] === 'function') || reg.find(r => typeof r.raw[metodo] === 'function') || null;
   };
-  const acciones = () => Object.fromEntries((BOTONES[props.current.nivel.escena] || []).map(b => [b.metodo, !!quienAtiende(b.metodo)]));
+  /* Un botón con `alterna` crea un objeto del programa y lo pasa como argumento: la clase que sigue,
+     en esa lista, a la del objeto de ese tipo que el controlador guarda ahora (el selector MANUAL / AUTO). */
+  const argumento = (b, quien) => {
+    if (!b.alterna) return b.arg;
+    const an = props.current.animacion, reg = an?.registro || [], C = an?.clases || {};
+    const guardados = Object.values(quien.raw).map(v => reg.find(r => v && (r.raw === v || r.proxy === v))?.cls);
+    const ahora = b.alterna.findIndex(c => guardados.includes(c));
+    return new C[b.alterna[(ahora + 1) % b.alterna.length]]();
+  };
+  const disponible = b => !!quienAtiende(b.metodo) && (!b.alterna || b.alterna.every(c => typeof props.current.animacion?.clases?.[c] === 'function'));
+  const acciones = () => Object.fromEntries((BOTONES[props.current.nivel.escena] || []).map(b => [b.metodo, disponible(b)]));
 
   /* Botón de la escena: llama al programa del estudiante, que sigue vivo después de ejecutar Main,
      y reproduce los eventos nuevos. La consola y la pestaña de eventos se actualizan con ellos. */
   function pulsar(b) {
     const an = props.current.animacion, s = st.current, quien = quienAtiende(b.metodo);
-    if (!an || !quien) return;
+    if (!an || !quien || !disponible(b)) return;
     const antes = an.log.length;
     s.pulso = { id: b.id, t: performance.now() };
     s.errorVivo = null;
-    try { (quien.proxy || quien.raw)[b.metodo](b.arg); }
+    try { (quien.proxy || quien.raw)[b.metodo](argumento(b, quien)); }
     catch (e) { s.errorVivo = e?.java ? e.message : e?.__msg != null ? `excepción sin atrapar: ${e.__msg}` : String(e?.message || e); }
     if (an.log.length === antes && !s.errorVivo) return;
     const viejos = s.frames.length;
@@ -230,7 +240,9 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption,
       {botones.map(b => (
         <button key={b.id} type="button" className="escena-boton" disabled={!vivo[b.metodo]} onClick={() => pulsar(b)}
           style={{ left: `${(b.x / W) * 100}%`, top: `${(b.y / H) * 100}%`, width: `${(b.w / W) * 100}%`, height: `${(b.h / H) * 100}%` }}
-          aria-label={`Pulsar ${b.id} en el panel`} title={vivo[b.metodo] ? `Pulsar ${b.id}: llama a ${b.metodo}(${typeof b.arg === 'string' ? `"${b.arg}"` : b.arg}) en tu controlador` : 'Ejecuta tu código para encender este botón'} />
+          aria-label={`Pulsar ${b.id} en el panel`}
+          title={vivo[b.metodo] ? `Pulsar ${b.id}: llama a ${b.metodo}(${b.alterna ? b.alterna.map(c => `new ${c}()`).join(' o ') : `"${b.arg}"`}) en tu controlador`
+            : animacion ? `Tu programa todavía no tiene un controlador con ${b.metodo}(...)` : 'Ejecuta tu código para encender este botón'} />
       ))}
     </div>
   );

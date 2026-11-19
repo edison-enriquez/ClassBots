@@ -1,18 +1,20 @@
 /* Segunda página del plano: el interior del sector de patrones (Mundo 8 · La Forja).
    Se lee igual que la primera: cada patrón es un sector con su máquina, unidos por la cinta, y se viaja
    de sector en sector. Los capítulos de cada patrón no son paradas del plano: se ven en la lista de la
-   derecha (y como testigos bajo la máquina) para quien quiera entrar a un paso concreto. */
+   derecha (y como testigos bajo la máquina) para quien quiera entrar a un paso concreto.
+   El último sector (MVC) reúne a los demás: al elegirlo, o al elegir uno de los que usa, se ven los enlaces. */
 import { useEffect, useRef, useState } from 'react';
 import { W, H, pisoBase, banco, caja, rect, dibujarCinta, dibujarMaquina, largo, puntoEn, direccion, dibujarRuta, anillo, reducido, dibujarRobotPlano } from './mapaDibujo.js';
 
 const ENTRADA = { x: 38, y: 296 };
 /* Un sector por patrón, en el orden del mundo: la cinta entra por la izquierda y zigzaguea como en el complejo */
 const LUGARES = [
-  { x: 104, y: 296, techo: '#d89648', forma: 'taller' },
-  { x: 214, y: 196, techo: '#d97869', forma: 'arena' },
-  { x: 326, y: 296, techo: '#e0606e', forma: 'averias' },
-  { x: 438, y: 196, techo: '#6fa8d8', forma: 'estacion' },
-  { x: 548, y: 296, techo: '#d7a85f', forma: 'fabrica' },
+  { x: 96, y: 296, techo: '#d89648', forma: 'taller' },
+  { x: 189, y: 196, techo: '#d97869', forma: 'arena' },
+  { x: 282, y: 296, techo: '#e0606e', forma: 'averias' },
+  { x: 375, y: 196, techo: '#6fa8d8', forma: 'estacion' },
+  { x: 468, y: 296, techo: '#d7a85f', forma: 'fabrica' },
+  { x: 561, y: 196, techo: '#7fc8ff', forma: 'panel' },
 ];
 const lugarDe = i => LUGARES[i % LUGARES.length];
 
@@ -56,8 +58,11 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
   const accesible = p => p.capitulos.some(c => c.abierto || c.aqui);
   const [sel, setSel] = useState(() => (iAqui >= 0 ? iAqui : Math.max(0, patrones.findIndex(p => !p.dominado && accesible(p)))));
   const [viaje, setViaje] = useState(null);
+  // Enlaces del patrón elegido: el que reúne a otros (MVC) se une con cada uno; los demás, con el que los reúne
+  const iReune = patrones.findIndex(p => p.reune?.length);
+  const enlaces = i => (i === iReune ? patrones[i].reune.map(id => patrones.findIndex(p => p.id === id)).filter(k => k >= 0) : iReune >= 0 && patrones[i].papel ? [i] : []);
   const estado = useRef({});
-  estado.current = { patrones, sel, viaje, iAqui, accesible };
+  estado.current = { patrones, sel, viaje, iAqui, accesible, iReune, enlaces };
 
   // Puntos de la cinta entre dos sectores (-1 es la entrada)
   const puntos = (desde, hasta) => {
@@ -100,6 +105,8 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
       rect(ctx, '#101a25', ENTRADA.x - 12, ENTRADA.y - 16, 16, 32);
       rect(ctx, '#bd9d55', ENTRADA.x - 9, ENTRADA.y - 13, 10, 26);
       rect(ctx, '#101a25', ENTRADA.x - 6, ENTRADA.y - 10, 4, 20);
+      // Enlaces punteados entre el patrón elegido y MVC (se dibujan bajo las máquinas)
+      if (!e.viaje) for (const k of e.enlaces(e.sel)) dibujarCinta(ctx, lugarDe(k), lugarDe(e.iReune), e.patrones[k].dominado, ahora, true);
       e.patrones.forEach((p, i) => {
         const l = lugarDe(i);
         dibujarMaquina(ctx, { ...l, zona: p.corto.toUpperCase() }, !e.accesible(p), ahora);
@@ -161,6 +168,8 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
               <div><dt>Capítulos</dt><dd>{hechosDe(pSel)} de {pSel.capitulos.length} superados</dd></div>
               <div><dt>{pSel.dominado ? 'Empieza en' : 'Sigue'}</dt><dd>{meta.etiqueta} · {meta.titulo}</dd></div>
               <div><dt>Recompensa</dt><dd>{pSel.recompensa}</dd></div>
+              {sel === iReune && <div><dt>Reúne</dt><dd>{enlaces(sel).map(k => patrones[k].corto).join(' · ')}</dd></div>}
+              {sel !== iReune && iReune >= 0 && pSel.papel && <div><dt>En {patrones[iReune].corto}</dt><dd>{pSel.papel}</dd></div>}
             </dl>
           </div>
           <button type="button" className="btn-pri mapa-ir" disabled={!!viaje || !(accesible(pSel) || sel === iAqui)} onClick={() => ir(sel)}>
@@ -171,6 +180,7 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
           <span><i className="actual" /> Ubicación actual</span>
           <span><i className="completo" /> Dominado</span>
           <span><i className="cerrado" /> Bloqueado</span>
+          {iReune >= 0 && <span><i className="ramal" /> Se usa en {patrones[iReune].corto}</span>}
           <span className="mapa-ayuda">Clic para ver la ruta · doble clic o «Viajar» para ir</span>
         </div>
       </section>

@@ -823,6 +823,7 @@ function ejecutar(modelo,arnes){
   const js=PRELUDIO+Object.values(modelo.clases).map(c=>genClase(c,modelo)).join('\n')+`\nreturn {${[...nombres,'__lista:ArrayList'].join(',')}};`;
   let C;
   try{C=new Function('__rt',js)(rt);}catch(e){return {rt,error:traducirError(e,rt),js};}
+  rt.clases=C;
   try{arnes(C,rt);}catch(e){return {rt,error:traducirError(e,rt),js};}
   return {rt,js};
 }

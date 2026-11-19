@@ -17,7 +17,6 @@ const LUGARES = [
 const RAMALES = {
   'mision-object': { x: 205, y: 160, etiqueta: 'arriba' },
   'expedicion-central': { x: 326, y: 286, etiqueta: 'abajo' },
-  'mision-mvc': { x: 470, y: 360, etiqueta: 'abajo' },
   'mision-kotlin': { x: 594, y: 180, etiqueta: 'arriba' },
 };
 const PUNTO_OTRO = { x: 330, y: 150, etiqueta: 'arriba' };

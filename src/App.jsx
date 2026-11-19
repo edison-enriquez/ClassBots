@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NIVELES, MUNDOS } from './levels/niveles.js';
 import { MISIONES, PASOS, misionDisponible, misionCompletada, pasoAbierto, misionVisible } from './levels/misiones.js';
-import { PATRONES, patronCompleto } from './levels/mundo8.js';
+import { PATRONES, patronCompleto, papelEnMVC } from './levels/mundo8.js';
 import { evaluarNivel } from './levels/evaluar.js';
 import { evaluarRemoto } from './levels/remoto.js';
 import TelefonoAndroid from './game/TelefonoAndroid.jsx';
@@ -331,11 +331,15 @@ export default function App() {
   const pctMundo = Math.round(100 * delMundo.filter(n => prog.hechos.includes(n.id)).length / delMundo.length);
   // Un mundo de patrones (el 8) no lista sus capítulos en la cabecera: se eligen en la segunda página del plano
   const patronesVistos = PATRONES.filter(p => p.mundo === verMundo);
+  // En el mundo de patrones la cabecera muestra los pasos de un solo patrón: el del capítulo abierto o, si se mira desde otro mundo, el primero sin dominar
+  const patronVisto = patronesVistos.length ? ((!esMision && nivel.mundo === verMundo && patronesVistos.find(p => p.id === nivel.patron)) || patronesVistos.find(p => !patronCompleto(p, hechos)) || patronesVistos.at(-1)) : null;
   const mundoPatrones = MUNDOS.find(m => PATRONES.some(p => p.mundo === m.id));
   const planoPatrones = () => ({
     mundo: mundoPatrones,
     patrones: PATRONES.filter(p => p.mundo === mundoPatrones.id).map(p => ({
       id: p.id, corto: p.corto, titulo: p.titulo, sigla: p.sigla, recompensa: p.recompensa, dominado: patronCompleto(p, hechos),
+      // MVC reúne a los demás: cada patrón sabe qué papel cumple allí, y MVC, con cuáles se arma
+      papel: papelEnMVC(p.id), reune: (p.reune || []).map(r => r.id),
       capitulos: NIVELES.flatMap((n, k) => (n.patron !== p.id ? [] : [{
         k, id: n.id, etiqueta: `${n.mundo}.${n.enMundo + 1}`, paso: n.pasoPatron, titulo: n.titulo, concepto: n.concepto,
         hecho: hecho(k), abierto: abierto(k), aqui: !esMision && k === i,
@@ -475,16 +479,14 @@ export default function App() {
           ) : (
           <div className="mapa-mundo" ref={rutaRef}>
             <span className="mapa-nombre">{MUNDOS.find(m => m.id === verMundo)?.nombre}</span>
-            {patronesVistos.length > 0 ? (
-              <button type="button" className="plano-btn" onClick={() => setMapa('patrones')} title={`Abrir el plano de ${MUNDOS.find(m => m.id === verMundo)?.nombre}: los patrones y sus capítulos`}>
-                {nivel.mundo === verMundo && nivel.patron && !esMision
-                  ? <><strong>{nivel.patronCorto}</strong> · paso {nivel.pasoPatron + 1} de {nivel.pasosPatron}</>
-                  : <>{patronesVistos.filter(p => patronCompleto(p, hechos)).length} de {patronesVistos.length} patrones</>}
-                <span aria-hidden="true"> ▸ plano</span>
+            {patronVisto && (
+              <button type="button" className="plano-btn" onClick={() => setMapa('patrones')} title={`Abrir el plano de ${MUNDOS.find(m => m.id === verMundo)?.nombre} para cambiar de patrón (${patronesVistos.filter(p => patronCompleto(p, hechos)).length} de ${patronesVistos.length} dominados)`}>
+                <strong>{patronVisto.corto}</strong><span aria-hidden="true"> ▸ plano</span>
               </button>
-            ) : (
+            )}
+            {/* Los pasos se ven igual en todos los mundos; en el de patrones, solo los del patrón en curso */}
             <ol>
-              {NIVELES.map((n, k) => n.mundo !== verMundo ? null : (
+              {NIVELES.map((n, k) => n.mundo !== verMundo || (patronVisto && n.patron !== patronVisto.id) ? null : (
                 <li key={n.id} className={(hecho(k) ? 'hecho' : '') + (vista && n.id === vivoV?.nivel.id ? ' alumno-aqui' : '')}>
                   <button type="button" className={'nodo' + (n.jefe ? ' jefe' : '')} aria-current={(vista ? n.id === nivel.id : k === i) ? 'step' : undefined} disabled={!abierto(k)} onClick={() => (vista ? verNivelVista(n.id) : irNivel(k))} title={(vista && n.id === vivoV?.nivel.id ? `Aquí está ${vivoV.perfil.nombre} · ` : '') + (abierto(k) ? `${n.mundo}.${n.enMundo + 1} ${n.titulo} · ${n.concepto}` : 'Supera el capítulo anterior para abrirlo')}>
                     {n.jefe ? '★' : (n.patron ? n.pasoPatron : n.enMundo) + 1}
@@ -492,7 +494,6 @@ export default function App() {
                 </li>
               ))}
             </ol>
-            )}
           </div>
           )}
         </nav>

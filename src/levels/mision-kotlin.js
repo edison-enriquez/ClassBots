@@ -1,4 +1,4 @@
-/* Misión especial · «MVC con Kotlin» (sigue a «El panel de control», la misión MVC en Java).
+/* Misión especial · «MVC con Kotlin» (sigue a «El panel de control», el patrón MVC del Mundo 8).
    El estudiante construye una app de Android de verdad: modelo y controlador en Kotlin puro y la vista
    con Jetpack Compose. Estos pasos NO se califican en el navegador: el juego envía el código al juez de
    Kotlin (juez-kotlin/, servidor propio) que compila, corre las pruebas con Robolectric y devuelve una
@@ -29,13 +29,13 @@ export const KOTLIN = {
   titulo: 'MVC con Kotlin',
   corto: 'Kotlin',
   concepto: 'MVC en una app Android',
-  mundo: 7,
-  requiere: ['averia-jefe'],
-  requiereMision: 'mision-mvc',
+  mundo: 8,
+  // Sigue al patrón MVC en Java: se abre al superar su mini-jefe (último capítulo del Mundo 8)
+  requiere: ['mvc-4'],
   // Por ahora solo en modo profesor: el juez de Kotlin todavía no está abierto a las clases
   oculta: true,
-  requisito: 'Completar la misión «El panel de control» (MVC en Java)',
-  requisitoCorto: 'Completa la misión MVC',
+  requisito: 'Dominar el patrón MVC, «El panel de control» (Mundo 8)',
+  requisitoCorto: 'Domina el patrón MVC',
   recompensa: 'Antena Android · tus robots se conectan a un teléfono',
   equipo: 'antena',
   codice: 'kotlin',

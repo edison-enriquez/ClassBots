@@ -37,7 +37,7 @@ export function evaluarNivel(nivel, files, { incluirOcultas = false } = {}) {
   let animacion = null, salida = [], errorEjecucion = null;
   if (nivel.animacion) {
     const r = ejecutar(modelo, nivel.animacion);
-    animacion = { ...repasar(r.rt.log), log: r.rt.log, registro: r.rt.registro };
+    animacion = { ...repasar(r.rt.log), log: r.rt.log, registro: r.rt.registro, clases: r.rt.clases || {} };
     salida = r.rt.salida;
     errorEjecucion = r.error || null;
   }
