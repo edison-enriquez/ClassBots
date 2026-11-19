@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { escenaBoveda, escenaConexiones, escenaEstacion, alEntrarEscena } from './escenas2.js';
 import { escenaArena, alEntrarArena, escenaLinea } from './escenas3.js';
 import { escenaAverias } from './escenas4.js';
-import { escenaMando } from './escenas5.js';
+import { escenaMando, escenaHMI } from './escenas5.js';
 import { escenaCalderas } from './escenas6.js';
 import { escenaFabrica } from './escenas7.js';
 import { escenaModulos } from './escenas8.js';
@@ -107,6 +107,7 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
     else if (nivel.escena === 'linea') escenaLinea(ctx, datos);
     else if (nivel.escena === 'averias') escenaAverias(ctx, datos);
     else if (nivel.escena === 'mando') escenaMando(ctx, datos);
+    else if (nivel.escena === 'hmi') escenaHMI(ctx, datos);
     else if (nivel.escena === 'calderas') escenaCalderas(ctx, datos);
     else if (nivel.escena === 'fabrica') escenaFabrica(ctx, datos);
     else if (nivel.escena === 'modulos') escenaModulos(ctx, datos);

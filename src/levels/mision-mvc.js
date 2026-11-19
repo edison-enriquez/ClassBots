@@ -1,7 +1,9 @@
-/* Misión especial · «La sala de mando» (ramal del Mundo 7): la arquitectura MVC.
-   Una clase que recibe órdenes, cambia sus datos e imprime a la vez se parte en tres:
-   el Modelo (datos y reglas), la Vista (mostrar) y el Controlador (traducir órdenes).
-   El modelo avisa a sus vistas por una interfaz (Observer), así que una vista nueva o
+/* Misión especial · «El panel de control» (ramal del Mundo 7): la arquitectura MVC.
+   El escenario es el panel HMI de un tanque gobernado por un PLC. Una clase que lee el botón,
+   cambia el proceso y dibuja la pantalla a la vez se parte en tres:
+   el Modelo (el proceso y su enclavamiento), la Vista (los indicadores del panel) y
+   el Controlador (los botones del operador, o un control automático).
+   El modelo avisa a sus vistas por una interfaz (Observer), así que un indicador nuevo o
    un controlador nuevo entran sin tocar lo que ya funciona. */
 import { caso, corrMain, exigir, previoMain, casoRelacion, sinTexto } from './util.js';
 import { parsePrograma, ejecutar } from '../engine/motor.js';
@@ -16,123 +18,123 @@ function conExtra(archivos, extra, arnes) {
   return { error: r.error, salida: r.rt.salida };
 }
 const GUIA = '<p class="guia-link">Al completar la misión, MVC queda registrado en el <button type="button" class="enlace" data-guia="patrones">Códice de patrones</button>.</p>';
-const ESCENA = 'mando';
+const ESCENA = 'hmi';
 
-/* ---------- Paso 1: el robot que lo hace todo ---------- */
-const ROBOT_OLOR = `public class Robot {
-    private String nombre;
-    private int energia;
-    private int posicion;
+/* ---------- Paso 1: el tanque que lo hace todo ---------- */
+const TANQUE_OLOR = `public class Tanque {
+    private String etiqueta;
+    private int nivel;
+    private int cargas;
 
-    public Robot(String nombre) {
-        this.nombre = nombre;
-        this.energia = 100;
-        this.posicion = 0;
+    public Tanque(String etiqueta) {
+        this.etiqueta = etiqueta;
+        this.nivel = 10;
+        this.cargas = 0;
     }
 
-    // Recibe la orden, cambia los datos e imprime: hace los tres trabajos a la vez
-    public void orden(String texto) {
-        if (texto.equals("avanzar")) {
-            if (energia < 30) {
-                System.out.println("Aviso: sin energía");
+    // Lee el botón, cambia el proceso y dibuja la pantalla: hace los tres trabajos a la vez
+    public void pulsar(String boton) {
+        if (boton.equals("BOMBEAR")) {
+            if (nivel > 70) {
+                System.out.println("Aviso: nivel alto");
             } else {
-                posicion = posicion + 1;
-                energia = energia - 30;
-                System.out.println(nombre + " en " + posicion + " con " + energia + "%");
+                nivel = nivel + 30;
+                cargas = cargas + 1;
+                System.out.println(etiqueta + ": nivel " + nivel + "%, cargas " + cargas);
             }
-        } else if (texto.equals("recargar")) {
-            energia = 100;
-            System.out.println(nombre + " en " + posicion + " con " + energia + "%");
+        } else if (boton.equals("VACIAR")) {
+            nivel = 10;
+            System.out.println(etiqueta + ": nivel " + nivel + "%, cargas " + cargas);
         } else {
-            System.out.println("Aviso: orden desconocida: " + texto);
+            System.out.println("Aviso: botón sin configurar: " + boton);
         }
     }
 }
 `;
-const VISTA_INI = `// VistaRobot.java
-// El contrato de cualquier pantalla. Declara public interface VistaRobot con:
-//   void mostrar(String nombre, int energia, int posicion);
+const VISTA_INI = `// VistaTanque.java
+// El contrato de cualquier indicador del panel. Declara public interface VistaTanque con:
+//   void mostrar(String etiqueta, int nivel, int cargas);
 //   void aviso(String mensaje);
 `;
-const CONSOLA_INI = `// VistaConsola.java
-// La pantalla de texto: implements VistaRobot.
-//   mostrar imprime  Chispa en 1 con 70%
-//   aviso imprime    Aviso: sin energía
-// No conoce al Robot: solo recibe los datos que debe mostrar.
+const TEXTO_INI = `// VistaTexto.java
+// El indicador de texto del panel: implements VistaTanque.
+//   mostrar imprime  TQ-1: nivel 40%, cargas 1
+//   aviso imprime    Aviso: nivel alto
+// No conoce al Tanque: solo recibe los datos que debe mostrar.
 `;
-const CONTROL_INI = `// Controlador.java
-// Recibe las órdenes de texto y se las traduce al modelo.
-// Guarda el Robot y la VistaRobot, y en el constructor suscribe la vista al modelo.
-// No imprime: si algo falla, se lo cuenta a la vista con aviso(...).
+const PANEL_INI = `// ControladorPanel.java
+// Los botones del operador: recibe el botón pulsado y se lo traduce al modelo.
+// Guarda el Tanque y la VistaTanque, y en el constructor suscribe la vista al modelo.
+// No imprime: si el modelo se niega, se lo cuenta a la vista con aviso(...).
 `;
 const MAIN_OLOR = `public class Main {
     public static void main(String[] args) {
-        Robot chispa = new Robot("Chispa");
-        chispa.orden("avanzar");
-        chispa.orden("avanzar");
-        chispa.orden("avanzar");
-        chispa.orden("avanzar");
-        chispa.orden("recargar");
-        chispa.orden("saltar");
+        Tanque tq = new Tanque("TQ-1");
+        tq.pulsar("BOMBEAR");
+        tq.pulsar("BOMBEAR");
+        tq.pulsar("BOMBEAR");
+        tq.pulsar("BOMBEAR");
+        tq.pulsar("VACIAR");
+        tq.pulsar("PURGAR");
     }
 }
 `;
-const VISTA = `public interface VistaRobot {
-    void mostrar(String nombre, int energia, int posicion);
+const VISTA = `public interface VistaTanque {
+    void mostrar(String etiqueta, int nivel, int cargas);
     void aviso(String mensaje);
 }
 `;
-const ROBOT = `import java.util.ArrayList;
+const TANQUE = `import java.util.ArrayList;
 
-public class Robot {
-    private String nombre;
-    private int energia;
-    private int posicion;
-    private ArrayList<VistaRobot> vistas = new ArrayList<>();
+public class Tanque {
+    private String etiqueta;
+    private int nivel;
+    private int cargas;
+    private ArrayList<VistaTanque> vistas = new ArrayList<>();
 
-    public Robot(String nombre) {
-        this.nombre = nombre;
-        this.energia = 100;
-        this.posicion = 0;
+    public Tanque(String etiqueta) {
+        this.etiqueta = etiqueta;
+        this.nivel = 10;
+        this.cargas = 0;
     }
 
-    public void suscribir(VistaRobot vista) {
+    public void suscribir(VistaTanque vista) {
         vistas.add(vista);
     }
 
-    public void avanzar() {
-        if (energia < 30) {
-            throw new IllegalStateException("sin energía");
+    public void bombear() {
+        if (nivel > 70) {
+            throw new IllegalStateException("nivel alto");
         }
-        posicion = posicion + 1;
-        energia = energia - 30;
+        nivel = nivel + 30;
+        cargas = cargas + 1;
         notificar();
     }
 
-    public void recargar() {
-        energia = 100;
+    public void vaciar() {
+        nivel = 10;
         notificar();
     }
 
     private void notificar() {
-        for (VistaRobot v : vistas) {
-            v.mostrar(nombre, energia, posicion);
+        for (VistaTanque v : vistas) {
+            v.mostrar(etiqueta, nivel, cargas);
         }
     }
 
-    public int getEnergia() {
-        return energia;
+    public int getNivel() {
+        return nivel;
     }
 
-    public int getPosicion() {
-        return posicion;
+    public int getCargas() {
+        return cargas;
     }
 }
 `;
-const CONSOLA = `public class VistaConsola implements VistaRobot {
+const TEXTO = `public class VistaTexto implements VistaTanque {
     @Override
-    public void mostrar(String nombre, int energia, int posicion) {
-        System.out.println(nombre + " en " + posicion + " con " + energia + "%");
+    public void mostrar(String etiqueta, int nivel, int cargas) {
+        System.out.println(etiqueta + ": nivel " + nivel + "%, cargas " + cargas);
     }
 
     @Override
@@ -141,24 +143,24 @@ const CONSOLA = `public class VistaConsola implements VistaRobot {
     }
 }
 `;
-const CONTROL = `public class Controlador {
-    private Robot modelo;
-    private VistaRobot vista;
+const PANEL = `public class ControladorPanel {
+    private Tanque modelo;
+    private VistaTanque vista;
 
-    public Controlador(Robot modelo, VistaRobot vista) {
+    public ControladorPanel(Tanque modelo, VistaTanque vista) {
         this.modelo = modelo;
         this.vista = vista;
         modelo.suscribir(vista);
     }
 
-    public void orden(String texto) {
+    public void pulsar(String boton) {
         try {
-            if (texto.equals("avanzar")) {
-                modelo.avanzar();
-            } else if (texto.equals("recargar")) {
-                modelo.recargar();
+            if (boton.equals("BOMBEAR")) {
+                modelo.bombear();
+            } else if (boton.equals("VACIAR")) {
+                modelo.vaciar();
             } else {
-                vista.aviso("orden desconocida: " + texto);
+                vista.aviso("botón sin configurar: " + boton);
             }
         } catch (IllegalStateException e) {
             vista.aviso(e.getMessage());
@@ -168,35 +170,35 @@ const CONTROL = `public class Controlador {
 `;
 const MAIN_1 = `public class Main {
     public static void main(String[] args) {
-        Robot chispa = new Robot("Chispa");
-        VistaConsola pantalla = new VistaConsola();
-        Controlador mando = new Controlador(chispa, pantalla);
-        mando.orden("avanzar");
-        mando.orden("avanzar");
-        mando.orden("avanzar");
-        mando.orden("avanzar");
-        mando.orden("recargar");
-        mando.orden("saltar");
+        Tanque tq = new Tanque("TQ-1");
+        VistaTexto pantalla = new VistaTexto();
+        ControladorPanel panel = new ControladorPanel(tq, pantalla);
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("VACIAR");
+        panel.pulsar("PURGAR");
     }
 }
 `;
-const SALIDA_1 = ['Chispa en 1 con 70%', 'Chispa en 2 con 40%', 'Chispa en 3 con 10%', 'Aviso: sin energía', 'Chispa en 3 con 100%', 'Aviso: orden desconocida: saltar'].join('\n');
+const SALIDA_1 = ['TQ-1: nivel 40%, cargas 1', 'TQ-1: nivel 70%, cargas 2', 'TQ-1: nivel 100%, cargas 3', 'Aviso: nivel alto', 'TQ-1: nivel 10%, cargas 3', 'Aviso: botón sin configurar: PURGAR'].join('\n');
 
-/* ---------- Paso 2: dos pantallas, un robot ---------- */
+/* ---------- Paso 2: dos indicadores, un tanque ---------- */
 const BARRA_INI = `// VistaBarra.java
-// Una segunda pantalla: implements VistaRobot.
-//   mostrar imprime "Energía " seguido de un # por cada 10 de energía
-//   (con 40 de energía:  Energía ####)
+// Un segundo indicador para el panel: implements VistaTanque.
+//   mostrar imprime "Nivel " seguido de un # por cada 10 de nivel
+//   (con 40 de nivel:  Nivel ####)
 //   aviso no muestra nada: la barra no sabe escribir mensajes.
 `;
-const BARRA = `public class VistaBarra implements VistaRobot {
+const BARRA = `public class VistaBarra implements VistaTanque {
     @Override
-    public void mostrar(String nombre, int energia, int posicion) {
+    public void mostrar(String etiqueta, int nivel, int cargas) {
         String barra = "";
-        for (int i = 0; i < energia / 10; i++) {
+        for (int i = 0; i < nivel / 10; i++) {
             barra = barra + "#";
         }
-        System.out.println("Energía " + barra);
+        System.out.println("Nivel " + barra);
     }
 
     @Override
@@ -207,79 +209,79 @@ const BARRA = `public class VistaBarra implements VistaRobot {
 `;
 const MAIN_2_INI = `public class Main {
     public static void main(String[] args) {
-        Robot chispa = new Robot("Chispa");
-        Controlador mando = new Controlador(chispa, new VistaConsola());
-        // Suscribe aquí una VistaBarra al mismo robot
+        Tanque tq = new Tanque("TQ-1");
+        ControladorPanel panel = new ControladorPanel(tq, new VistaTexto());
+        // Configura aquí el segundo indicador: suscribe una VistaBarra al mismo tanque
 
-        mando.orden("avanzar");
-        mando.orden("avanzar");
-        mando.orden("recargar");
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("VACIAR");
     }
 }
 `;
 const MAIN_2 = `public class Main {
     public static void main(String[] args) {
-        Robot chispa = new Robot("Chispa");
-        Controlador mando = new Controlador(chispa, new VistaConsola());
-        chispa.suscribir(new VistaBarra());
-        mando.orden("avanzar");
-        mando.orden("avanzar");
-        mando.orden("recargar");
+        Tanque tq = new Tanque("TQ-1");
+        ControladorPanel panel = new ControladorPanel(tq, new VistaTexto());
+        tq.suscribir(new VistaBarra());
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("BOMBEAR");
+        panel.pulsar("VACIAR");
     }
 }
 `;
-const SALIDA_2 = ['Chispa en 1 con 70%', 'Energía #######', 'Chispa en 2 con 40%', 'Energía ####', 'Chispa en 2 con 100%', 'Energía ##########'].join('\n');
+const SALIDA_2 = ['TQ-1: nivel 40%, cargas 1', 'Nivel ####', 'TQ-1: nivel 70%, cargas 2', 'Nivel #######', 'TQ-1: nivel 10%, cargas 2', 'Nivel #'].join('\n');
 
-/* ---------- Paso 3 (mini-jefe): el piloto automático ---------- */
-const PILOTO_INI = `// ControladorPiloto.java
-// Un controlador nuevo: nadie le da órdenes de texto, decide solo.
-//   public ControladorPiloto(Robot modelo, VistaRobot vista)  guarda el modelo y suscribe la vista
-//   public void piloto(int pasos)  avanza esa cantidad de pasos; si la energía no alcanza
-//                                  para el siguiente (menos de 30), primero recarga
-// Robot, las vistas y Controlador están sellados: no los cambies.
+/* ---------- Paso 3 (mini-jefe): el control automático ---------- */
+const AUTO_INI = `// ControladorAuto.java
+// Un controlador nuevo: nadie pulsa botones, decide solo (como el programa de un PLC).
+//   public ControladorAuto(Tanque modelo, VistaTanque vista)  guarda el modelo y suscribe la vista
+//   public void ciclos(int n)  hace esa cantidad de bombeos; si el tanque no admite otro
+//                              (nivel mayor que 70), primero lo vacía
+// Tanque, las vistas y ControladorPanel están sellados: no los cambies.
 `;
-const PILOTO = `public class ControladorPiloto {
-    private Robot modelo;
+const AUTO = `public class ControladorAuto {
+    private Tanque modelo;
 
-    public ControladorPiloto(Robot modelo, VistaRobot vista) {
+    public ControladorAuto(Tanque modelo, VistaTanque vista) {
         this.modelo = modelo;
         modelo.suscribir(vista);
     }
 
-    public void piloto(int pasos) {
-        for (int i = 0; i < pasos; i++) {
-            if (modelo.getEnergia() < 30) {
-                modelo.recargar();
+    public void ciclos(int n) {
+        for (int i = 0; i < n; i++) {
+            if (modelo.getNivel() > 70) {
+                modelo.vaciar();
             }
-            modelo.avanzar();
+            modelo.bombear();
         }
     }
 }
 `;
 const MAIN_3_INI = `public class Main {
     public static void main(String[] args) {
-        Robot chispa = new Robot("Chispa");
-        // Crea un ControladorPiloto con una VistaConsola y pídele 5 pasos
+        Tanque tq = new Tanque("TQ-1");
+        // Crea un ControladorAuto con una VistaTexto y pídele 5 ciclos
 
     }
 }
 `;
 const MAIN_3 = `public class Main {
     public static void main(String[] args) {
-        Robot chispa = new Robot("Chispa");
-        ControladorPiloto auto = new ControladorPiloto(chispa, new VistaConsola());
-        auto.piloto(5);
+        Tanque tq = new Tanque("TQ-1");
+        ControladorAuto auto = new ControladorAuto(tq, new VistaTexto());
+        auto.ciclos(5);
     }
 }
 `;
-const SALIDA_3 = ['Chispa en 1 con 70%', 'Chispa en 2 con 40%', 'Chispa en 3 con 10%', 'Chispa en 3 con 100%', 'Chispa en 4 con 70%', 'Chispa en 5 con 40%'].join('\n');
+const SALIDA_3 = ['TQ-1: nivel 40%, cargas 1', 'TQ-1: nivel 70%, cargas 2', 'TQ-1: nivel 100%, cargas 3', 'TQ-1: nivel 10%, cargas 3', 'TQ-1: nivel 40%, cargas 4', 'TQ-1: nivel 70%, cargas 5'].join('\n');
 
-/* Clase intrusa de los casos ocultos: una vista que el estudiante no conoce */
-const CONTADOR = `public class VistaContador implements VistaRobot {
+/* Clase intrusa de los casos ocultos: un indicador que el estudiante no conoce */
+const CONTADOR = `public class VistaContador implements VistaTanque {
     public static int cambios = 0;
     public static int avisos = 0;
 
-    public void mostrar(String nombre, int energia, int posicion) {
+    public void mostrar(String etiqueta, int nivel, int cargas) {
         cambios = cambios + 1;
     }
 
@@ -293,7 +295,7 @@ const sellados = (archivos, mapa) => Object.entries(mapa).filter(([a, v]) => NOR
 
 export const MVC = {
   id: 'mision-mvc',
-  titulo: 'La sala de mando',
+  titulo: 'El panel de control',
   corto: 'MVC',
   concepto: 'Arquitectura MVC',
   mundo: 7,
@@ -307,157 +309,157 @@ export const MVC = {
   codice: 'mvc',
   pasos: [
     {
-      id: 'mvc-1', titulo: 'La consola de mando', concepto: 'MVC: modelo, vista y controlador', escena: ESCENA,
-      archivos: ['Robot.java', 'VistaRobot.java', 'VistaConsola.java', 'Controlador.java', 'Main.java'],
-      mentor: 'Este robot lo hace todo: escucha las órdenes, mueve sus datos e imprime en pantalla, todo en un mismo método. Si mañana queremos otra pantalla u otra forma de mandarlo, hay que abrirlo entero. Vamos a repartir el trabajo en tres puestos de la sala de mando.',
-      teoria: `<p>En una aplicación hay tres trabajos distintos, y <strong>MVC</strong> le da a cada uno su propia clase:</p>
-<ul><li><strong>Modelo</strong> (<code>Robot</code>): los datos y las reglas. Decide si se puede avanzar y lanza una excepción si no. No imprime ni sabe qué pantallas existen.</li>
-<li><strong>Vista</strong> (<code>VistaConsola</code>): solo muestra lo que le llega. No cambia el modelo.</li>
-<li><strong>Controlador</strong> (<code>Controlador</code>): recibe lo que hace el usuario (una orden de texto, un botón) y lo traduce en llamadas al modelo. Si el modelo se niega, le pasa el aviso a la vista.</li></ul>
-<p>¿Cómo se entera la vista de que el modelo cambió? El modelo guarda una lista de <code>VistaRobot</code> (una interfaz, Mundo 4) y, después de cada cambio, las <em>notifica</em> a todas. Esa idea se llama <strong>Observer</strong> y es el pegamento de MVC.</p>
+      id: 'mvc-1', titulo: 'El tanque que lo hace todo', concepto: 'MVC: modelo, vista y controlador', escena: ESCENA,
+      archivos: ['Tanque.java', 'VistaTanque.java', 'VistaTexto.java', 'ControladorPanel.java', 'Main.java'],
+      mentor: 'Este es el panel HMI del tanque TQ-1. Hoy una sola clase lee el botón, mueve el proceso y dibuja la pantalla, todo en un mismo método. Si mañana queremos otro indicador u otra forma de mandarlo, hay que abrirla entera. Vamos a configurar el panel como se hace en una planta: el proceso por un lado, los indicadores por otro y los botones por otro.',
+      teoria: `<p>Un panel <strong>HMI</strong> (la pantalla con la que un operador vigila y manda una máquina gobernada por un PLC) reparte el trabajo en tres, y ese reparto se llama <strong>MVC</strong>:</p>
+<ul><li><strong>Modelo</strong> (<code>Tanque</code>): el proceso, con sus datos y sus reglas. Decide si se puede bombear y, si el nivel ya está alto, lanza una excepción: es el <em>enclavamiento</em> que protege el tanque. No imprime ni sabe qué indicadores existen.</li>
+<li><strong>Vista</strong> (<code>VistaTexto</code>): un indicador del panel. Solo muestra lo que le llega; no cambia el proceso.</li>
+<li><strong>Controlador</strong> (<code>ControladorPanel</code>): los botones. Recibe lo que hace el operador y lo traduce en llamadas al modelo. Si el modelo se niega, le pasa el aviso a la vista.</li></ul>
+<p>¿Cómo se entera un indicador de que el proceso cambió? El modelo guarda una lista de <code>VistaTanque</code> (una interfaz, Mundo 4) y, después de cada cambio, las <em>notifica</em> a todas. Esa idea es <strong>Observer</strong>, el pegamento de MVC.</p>
 <p>Las piezas ya las conoces: interfaces (Mundo 4), una lista que el modelo recibe desde fuera (Mundo 3) y excepciones (Mundo 7).</p>`,
-      ejemplo: 'private void notificar() {\n    for (VistaRobot v : vistas) {\n        v.mostrar(nombre, energia, posicion);\n    }\n}',
-      tareas: ['Declara la interfaz <code>VistaRobot</code> con <code>mostrar(String nombre, int energia, int posicion)</code> y <code>aviso(String mensaje)</code>.', 'Cambia <code>Robot</code> en un modelo: <code>avanzar()</code> (cuesta 30 y lanza <code>IllegalStateException("sin energía")</code> si no alcanza), <code>recargar()</code>, <code>suscribir(VistaRobot)</code>, una lista de vistas y <code>getEnergia()</code>. Que no imprima nada.', 'Escribe <code>VistaConsola</code>: imprime <code>Chispa en 1 con 70%</code> y <code>Aviso: …</code>.', 'Escribe <code>Controlador</code> con <code>orden(String)</code>: suscribe la vista en su constructor y, si el modelo lanza la excepción, llama a <code>vista.aviso(e.getMessage())</code>.', 'En <code>Main</code>, crea las tres piezas y da las mismas órdenes por el controlador.'],
-      nota: 'La salida debe ser idéntica a la de antes: lo que cambia es quién hace cada trabajo.',
-      pista: 'En el controlador: <code>try { modelo.avanzar(); } catch (IllegalStateException e) { vista.aviso(e.getMessage()); }</code>',
-      objetivoUML: [['VistaConsola', 'VistaRobot', 'realizacion'], ['Robot', 'VistaRobot', 'agregacion'], ['Controlador', 'Robot', 'asociacion'], ['Controlador', 'VistaRobot', 'asociacion']],
-      inicial: () => ({ 'Robot.java': ROBOT_OLOR, 'VistaRobot.java': VISTA_INI, 'VistaConsola.java': CONSOLA_INI, 'Controlador.java': CONTROL_INI, 'Main.java': MAIN_OLOR }),
-      archivoInicial: 'Robot.java',
-      solucion: { 'Robot.java': ROBOT, 'VistaRobot.java': VISTA, 'VistaConsola.java': CONSOLA, 'Controlador.java': CONTROL, 'Main.java': MAIN_1 },
+      ejemplo: 'private void notificar() {\n    for (VistaTanque v : vistas) {\n        v.mostrar(etiqueta, nivel, cargas);\n    }\n}',
+      tareas: ['Declara la interfaz <code>VistaTanque</code> con <code>mostrar(String etiqueta, int nivel, int cargas)</code> y <code>aviso(String mensaje)</code>.', 'Convierte <code>Tanque</code> en un modelo: <code>bombear()</code> (sube 30 y cuenta una carga; lanza <code>IllegalStateException("nivel alto")</code> si el nivel es mayor que 70), <code>vaciar()</code> (deja el nivel en 10), <code>suscribir(VistaTanque)</code>, una lista de vistas, <code>getNivel()</code> y <code>getCargas()</code>. Que no imprima nada.', 'Escribe <code>VistaTexto</code>: imprime <code>TQ-1: nivel 40%, cargas 1</code> y <code>Aviso: …</code>.', 'Escribe <code>ControladorPanel</code> con <code>pulsar(String boton)</code>: suscribe la vista en su constructor y, si el modelo lanza la excepción, llama a <code>vista.aviso(e.getMessage())</code>. Un botón que no sea <code>BOMBEAR</code> ni <code>VACIAR</code> avisa <code>botón sin configurar: …</code>.', 'En <code>Main</code>, crea las tres piezas y pulsa los mismos botones por el controlador.'],
+      nota: 'La salida debe ser idéntica a la de antes: lo que cambia es quién hace cada trabajo. En la escena, el botón, el tanque y cada indicador se encienden cuando les toca.',
+      pista: 'En el controlador: <code>try { modelo.bombear(); } catch (IllegalStateException e) { vista.aviso(e.getMessage()); }</code>',
+      objetivoUML: [['VistaTexto', 'VistaTanque', 'realizacion'], ['Tanque', 'VistaTanque', 'agregacion'], ['ControladorPanel', 'Tanque', 'asociacion'], ['ControladorPanel', 'VistaTanque', 'asociacion']],
+      inicial: () => ({ 'Tanque.java': TANQUE_OLOR, 'VistaTanque.java': VISTA_INI, 'VistaTexto.java': TEXTO_INI, 'ControladorPanel.java': PANEL_INI, 'Main.java': MAIN_OLOR }),
+      archivoInicial: 'Tanque.java',
+      solucion: { 'Tanque.java': TANQUE, 'VistaTanque.java': VISTA, 'VistaTexto.java': TEXTO, 'ControladorPanel.java': PANEL, 'Main.java': MAIN_1 },
       previo: m => exigir(m, [
-        { clase: 'VistaRobot', interfaz: true, metodos: [['mostrar', 3], ['aviso', 1]] },
-        { clase: 'VistaConsola', implementa: ['VistaRobot'] },
-        { clase: 'Robot', metodos: [['avanzar', 0], ['recargar', 0], ['suscribir', 1], ['getEnergia', 0]] },
-        { clase: 'Controlador', metodos: [['orden', 1]] },
+        { clase: 'VistaTanque', interfaz: true, metodos: [['mostrar', 3], ['aviso', 1]] },
+        { clase: 'VistaTexto', implementa: ['VistaTanque'] },
+        { clase: 'Tanque', metodos: [['bombear', 0], ['vaciar', 0], ['suscribir', 1], ['getNivel', 0], ['getCargas', 0]] },
+        { clase: 'ControladorPanel', metodos: [['pulsar', 1]] },
       ]) || previoMain(m),
       animacion: corrMain,
       pruebas: [
-        casoRelacion('VistaConsola', 'VistaRobot', 'realizacion'),
-        casoRelacion('Controlador', 'Robot', 'asociacion'),
-        { nombre: 'El modelo no imprime ni conoce la consola', prueba: ({ archivos }) => {
-          const ok = sinTexto(archivos, 'Robot.java', /System\.out|VistaConsola|Controlador/);
-          return caso(ok, 'Robot sin println ni clases de vista o control', ok ? 'correcto' : 'Robot todavía imprime o nombra otra pieza');
+        casoRelacion('VistaTexto', 'VistaTanque', 'realizacion'),
+        casoRelacion('ControladorPanel', 'Tanque', 'asociacion'),
+        { nombre: 'El modelo no imprime ni conoce el panel', prueba: ({ archivos }) => {
+          const ok = sinTexto(archivos, 'Tanque.java', /System\.out|VistaTexto|Controlador/);
+          return caso(ok, 'Tanque sin println ni clases de vista o control', ok ? 'correcto' : 'Tanque todavía imprime o nombra otra pieza');
         } },
         { nombre: 'La vista solo muestra: no toca el modelo', prueba: ({ archivos }) => {
-          const ok = sinTexto(archivos, 'VistaConsola.java', /\bRobot\b|Controlador/);
-          return caso(ok, 'VistaConsola recibe datos, no al Robot', ok ? 'correcto' : 'la vista usa el Robot o el Controlador');
+          const ok = sinTexto(archivos, 'VistaTexto.java', /\bTanque\b|Controlador/);
+          return caso(ok, 'VistaTexto recibe datos, no al Tanque', ok ? 'correcto' : 'la vista usa el Tanque o el Controlador');
         } },
         { nombre: 'El controlador no imprime', prueba: ({ archivos }) => {
-          const ok = sinTexto(archivos, 'Controlador.java', /System\.out/);
-          return caso(ok, 'Controlador sin println', ok ? 'correcto' : 'el controlador imprime en vez de avisar a la vista');
+          const ok = sinTexto(archivos, 'ControladorPanel.java', /System\.out/);
+          return caso(ok, 'ControladorPanel sin println', ok ? 'correcto' : 'el controlador imprime en vez de avisar a la vista');
         } },
-        { nombre: 'El modelo protege su energía', entrada: 'avanzar() 4 veces seguidas sobre un Robot', prueba: ({ run }) => {
+        { nombre: 'El enclavamiento protege el tanque', entrada: 'bombear() 4 veces seguidas sobre un Tanque', prueba: ({ run }) => {
           const h = {};
-          run(C => { const r = new C.Robot('R'); r.avanzar(); r.avanzar(); r.avanzar(); try { r.avanzar(); h.v = 'sin excepción'; } catch (e) { h.v = 'excepción'; } h.e = r.getEnergia(); });
-          return caso(h.v === 'excepción' && h.e === 10, 'excepción y energía 10', `${h.v}, energía ${h.e}`);
+          run(C => { const t = new C.Tanque('T'); t.bombear(); t.bombear(); t.bombear(); try { t.bombear(); h.v = 'sin excepción'; } catch (e) { h.v = 'excepción'; } h.n = t.getNivel(); h.c = t.getCargas(); });
+          return caso(h.v === 'excepción' && h.n === 100 && h.c === 3, 'excepción, nivel 100 y 3 cargas', `${h.v}, nivel ${h.n} y ${h.c} cargas`);
         } },
-        { nombre: 'La salida de la consola de mando', prueba: ({ run }) => {
+        { nombre: 'La salida del panel', prueba: ({ run }) => {
           const { rt } = run(corrMain);
           return caso(salidaDe(rt) === SALIDA_1, SALIDA_1.replace(/\n/g, ' / '), rt.salida.join(' / ') || '(sin salida)');
         } },
       ],
-      exito: 'Cada puesto hace un solo trabajo: el modelo decide, la vista muestra y el controlador traduce las órdenes.',
+      exito: 'Cada pieza hace un solo trabajo: el proceso decide, el indicador muestra y los botones traducen lo que pide el operador.',
     },
     {
-      id: 'mvc-2', titulo: 'Dos pantallas, un robot', concepto: 'MVC: varias vistas de un mismo modelo', escena: ESCENA,
-      archivos: ['VistaBarra.java', 'Main.java', 'Robot.java', 'VistaRobot.java', 'VistaConsola.java', 'Controlador.java'],
-      mentor: 'Los operarios piden una barra de energía al lado de la consola. Antes habríamos metido otro println en el robot. Ahora el robot ni se entera: solo hay que conectar otra pantalla.',
-      teoria: `<p>Como el modelo habla con una <strong>interfaz</strong> y no con una pantalla concreta, puede tener <em>varias</em> vistas a la vez: cada <code>notificar()</code> recorre la lista y todas se actualizan solas.</p>
-<p>Agregar una vista es escribir una clase nueva que implemente <code>VistaRobot</code> y suscribirla. <code>Robot</code> no cambia ni una línea: está <strong>cerrado</strong> a modificaciones y <strong>abierto</strong> a extensiones (Mundo 4).</p>
-<p>Así funcionan las apps reales: el mismo dato se ve a la vez en una lista, en un gráfico y en una notificación.</p>`,
-      ejemplo: 'chispa.suscribir(new VistaBarra());',
-      tareas: ['Escribe <code>VistaBarra</code>, que implementa <code>VistaRobot</code>: <code>mostrar</code> imprime <code>Energía </code> y un <code>#</code> por cada 10 de energía; <code>aviso</code> no hace nada.', 'En <code>Main</code>, suscribe una <code>VistaBarra</code> al mismo robot.', 'No modifiques <code>Robot</code>: un caso revisa que no nombre a ninguna vista.'],
-      nota: 'Con 40 de energía la barra es <code>Energía ####</code>. Fíjate en el orden: la consola se suscribió primero, así que habla primero.',
-      pista: 'Arma la barra con un <code>for</code> hasta <code>energia / 10</code>, sumando <code>"#"</code> a un <code>String</code>.',
-      objetivoUML: [['VistaBarra', 'VistaRobot', 'realizacion'], ['VistaConsola', 'VistaRobot', 'realizacion'], ['Robot', 'VistaRobot', 'agregacion']],
-      inicial: prev => ({ 'VistaBarra.java': BARRA_INI, 'Main.java': MAIN_2_INI, 'Robot.java': prev?.['Robot.java'] ?? ROBOT, 'VistaRobot.java': prev?.['VistaRobot.java'] ?? VISTA, 'VistaConsola.java': prev?.['VistaConsola.java'] ?? CONSOLA, 'Controlador.java': prev?.['Controlador.java'] ?? CONTROL }),
+      id: 'mvc-2', titulo: 'Dos indicadores, un tanque', concepto: 'MVC: varias vistas de un mismo modelo', escena: ESCENA,
+      archivos: ['VistaBarra.java', 'Main.java', 'Tanque.java', 'VistaTanque.java', 'VistaTexto.java', 'ControladorPanel.java'],
+      mentor: 'Los operarios piden una barra de nivel al lado del texto. Antes habríamos metido otro println en el tanque. Ahora el tanque ni se entera: configurar el panel es conectar otro indicador a la misma variable.',
+      teoria: `<p>Como el modelo habla con una <strong>interfaz</strong> y no con un indicador concreto, puede tener <em>varias</em> vistas a la vez: cada <code>notificar()</code> recorre la lista y todas se actualizan solas.</p>
+<p>Agregar un indicador es escribir una clase nueva que implemente <code>VistaTanque</code> y suscribirla. <code>Tanque</code> no cambia ni una línea: está <strong>cerrado</strong> a modificaciones y <strong>abierto</strong> a extensiones (Mundo 4).</p>
+<p>Así se arma un HMI de verdad: el nivel del mismo tanque se ve a la vez en un número, en una barra y en una gráfica de tendencia, y ninguno de esos elementos está escrito dentro del programa que controla el proceso.</p>`,
+      ejemplo: 'tq.suscribir(new VistaBarra());',
+      tareas: ['Escribe <code>VistaBarra</code>, que implementa <code>VistaTanque</code>: <code>mostrar</code> imprime <code>Nivel </code> y un <code>#</code> por cada 10 de nivel; <code>aviso</code> no hace nada.', 'En <code>Main</code>, suscribe una <code>VistaBarra</code> al mismo tanque.', 'No modifiques <code>Tanque</code>: un caso revisa que no nombre a ninguna vista.'],
+      nota: 'Con 40 de nivel la barra es <code>Nivel ####</code>. Fíjate en el orden: el texto se suscribió primero, así que se actualiza primero.',
+      pista: 'Arma la barra con un <code>for</code> hasta <code>nivel / 10</code>, sumando <code>"#"</code> a un <code>String</code>.',
+      objetivoUML: [['VistaBarra', 'VistaTanque', 'realizacion'], ['VistaTexto', 'VistaTanque', 'realizacion'], ['Tanque', 'VistaTanque', 'agregacion']],
+      inicial: prev => ({ 'VistaBarra.java': BARRA_INI, 'Main.java': MAIN_2_INI, 'Tanque.java': prev?.['Tanque.java'] ?? TANQUE, 'VistaTanque.java': prev?.['VistaTanque.java'] ?? VISTA, 'VistaTexto.java': prev?.['VistaTexto.java'] ?? TEXTO, 'ControladorPanel.java': prev?.['ControladorPanel.java'] ?? PANEL }),
       archivoInicial: 'VistaBarra.java',
-      solucion: { 'VistaBarra.java': BARRA, 'Main.java': MAIN_2, 'Robot.java': ROBOT, 'VistaRobot.java': VISTA, 'VistaConsola.java': CONSOLA, 'Controlador.java': CONTROL },
-      previo: m => exigir(m, [{ clase: 'VistaBarra', implementa: ['VistaRobot'], metodos: [['mostrar', 3], ['aviso', 1]] }]) || previoMain(m),
+      solucion: { 'VistaBarra.java': BARRA, 'Main.java': MAIN_2, 'Tanque.java': TANQUE, 'VistaTanque.java': VISTA, 'VistaTexto.java': TEXTO, 'ControladorPanel.java': PANEL },
+      previo: m => exigir(m, [{ clase: 'VistaBarra', implementa: ['VistaTanque'], metodos: [['mostrar', 3], ['aviso', 1]] }]) || previoMain(m),
       animacion: corrMain,
       pruebas: [
-        casoRelacion('VistaBarra', 'VistaRobot', 'realizacion'),
-        { nombre: 'El modelo no sabe qué pantallas tiene', prueba: ({ archivos }) => {
-          const ok = sinTexto(archivos, 'Robot.java', /VistaBarra|VistaConsola|System\.out/);
-          return caso(ok, 'Robot sin VistaBarra, VistaConsola ni println', ok ? 'correcto' : 'Robot nombra una vista concreta o imprime');
+        casoRelacion('VistaBarra', 'VistaTanque', 'realizacion'),
+        { nombre: 'El modelo no sabe qué indicadores tiene', prueba: ({ archivos }) => {
+          const ok = sinTexto(archivos, 'Tanque.java', /VistaBarra|VistaTexto|System\.out/);
+          return caso(ok, 'Tanque sin VistaBarra, VistaTexto ni println', ok ? 'correcto' : 'Tanque nombra una vista concreta o imprime');
         } },
-        { nombre: 'La barra dibuja la energía', entrada: 'mostrar("X", 40, 0)', prueba: ({ run }) => {
+        { nombre: 'La barra dibuja el nivel', entrada: 'mostrar("X", 40, 0)', prueba: ({ run }) => {
           const { rt } = run(C => { new C.VistaBarra().mostrar('X', 40, 0); });
-          return caso(salidaDe(rt) === 'Energía ####', 'Energía ####', rt.salida.join(' / ') || '(sin salida)');
+          return caso(salidaDe(rt) === 'Nivel ####', 'Nivel ####', rt.salida.join(' / ') || '(sin salida)');
         } },
-        { nombre: 'Todas las vistas suscritas se enteran', entrada: 'dos VistaBarra en un Robot, avanzar()', prueba: ({ run }) => {
-          const { rt } = run(C => { const r = new C.Robot('R'); r.suscribir(new C.VistaBarra()); r.suscribir(new C.VistaBarra()); r.avanzar(); });
+        { nombre: 'Todas las vistas suscritas se enteran', entrada: 'dos VistaBarra en un Tanque, bombear()', prueba: ({ run }) => {
+          const { rt } = run(C => { const t = new C.Tanque('T'); t.suscribir(new C.VistaBarra()); t.suscribir(new C.VistaBarra()); t.bombear(); });
           return caso(rt.salida.length === 2, '2 barras actualizadas', `${rt.salida.length}`);
         } },
-        { nombre: 'Consola y barra a la vez', prueba: ({ run }) => {
+        { nombre: 'Texto y barra a la vez', prueba: ({ run }) => {
           const { rt } = run(corrMain);
           return caso(salidaDe(rt) === SALIDA_2, SALIDA_2.replace(/\n/g, ' / '), rt.salida.join(' / ') || '(sin salida)');
         } },
       ],
-      exito: 'Una pantalla nueva y el robot ni se enteró: la conectaste desde fuera.',
+      exito: 'Un indicador nuevo y el tanque ni se enteró: lo conectaste desde fuera.',
     },
     {
-      id: 'mvc-3', titulo: 'Mini-jefe: el piloto automático', corto: 'Mini-jefe', jefe: true, concepto: 'MVC: cambiar el controlador', escena: ESCENA,
-      archivos: ['ControladorPiloto.java', 'Main.java', 'Robot.java', 'VistaRobot.java', 'VistaConsola.java', 'VistaBarra.java', 'Controlador.java'],
-      mentor: 'Hay que cruzar la sala sin nadie al mando. Un piloto automático debe recargar a tiempo para no quedarse nunca sin energía. Las vistas y el robot están sellados: si el diseño es bueno, basta con un controlador nuevo.',
-      teoria: `<p>Igual que se pueden agregar vistas, se puede <strong>cambiar el controlador</strong>: el modelo no sabe quién lo maneja. Hoy es un humano con órdenes de texto; mañana, un piloto automático, botones en Android o un servidor web.</p>
+      id: 'mvc-3', titulo: 'Mini-jefe: el control automático', corto: 'Mini-jefe', jefe: true, concepto: 'MVC: cambiar el controlador', escena: ESCENA,
+      archivos: ['ControladorAuto.java', 'Main.java', 'Tanque.java', 'VistaTanque.java', 'VistaTexto.java', 'VistaBarra.java', 'ControladorPanel.java'],
+      mentor: 'El turno de noche no tiene operador. Un control automático debe seguir bombeando y vaciar a tiempo, sin disparar nunca el enclavamiento. El tanque y los indicadores están sellados: si el diseño es bueno, basta con un controlador nuevo.',
+      teoria: `<p>Igual que se pueden agregar vistas, se puede <strong>cambiar el controlador</strong>: el modelo no sabe quién lo maneja. Hoy es un operador con botones; mañana, la lógica automática de un PLC, una app en el teléfono o un servidor web.</p>
 <p>Fíjate en el reparto de trabajo:</p>
-<ul><li>El <strong>modelo</strong> pone la regla: sin energía no se avanza, y si alguien lo intenta, lanza la excepción.</li>
-<li>El <strong>controlador</strong> decide <em>qué hacer</em> con esa regla. El piloto consulta <code>getEnergia()</code> y recarga antes de que el modelo tenga que negarse.</li>
+<ul><li>El <strong>modelo</strong> pone la regla: con el nivel alto no se bombea, y si alguien lo intenta, lanza la excepción.</li>
+<li>El <strong>controlador</strong> decide <em>qué hacer</em> con esa regla. El automático consulta <code>getNivel()</code> y vacía antes de que el modelo tenga que negarse.</li>
 <li>Las <strong>vistas</strong> siguen mostrando todo sin que nadie las toque.</li></ul>
-<p>Esta es la razón de ser de MVC: cada pieza cambia sin arrastrar a las otras dos.</p>`,
-      ejemplo: 'if (modelo.getEnergia() < 30) {\n    modelo.recargar();\n}\nmodelo.avanzar();',
-      tareas: ['Escribe <code>ControladorPiloto</code>: su constructor recibe <code>(Robot modelo, VistaRobot vista)</code>, guarda el modelo y suscribe la vista.', 'Agrega <code>piloto(int pasos)</code>: avanza esa cantidad de pasos y, antes de cada uno, recarga si la energía no alcanza (menos de 30).', 'En <code>Main</code>, conéctale una <code>VistaConsola</code> y pídele 5 pasos.', 'No modifiques <code>Robot</code>, <code>VistaRobot</code>, <code>VistaConsola</code>, <code>VistaBarra</code> ni <code>Controlador</code>. Un caso oculto conectará una vista que no conoces.'],
+<p>Esta es la razón de ser de MVC: cada pieza cambia sin arrastrar a las otras dos. Por eso en una planta se puede pasar de MANUAL a AUTO sin rehacer las pantallas.</p>`,
+      ejemplo: 'if (modelo.getNivel() > 70) {\n    modelo.vaciar();\n}\nmodelo.bombear();',
+      tareas: ['Escribe <code>ControladorAuto</code>: su constructor recibe <code>(Tanque modelo, VistaTanque vista)</code>, guarda el modelo y suscribe la vista.', 'Agrega <code>ciclos(int n)</code>: hace esa cantidad de bombeos y, antes de cada uno, vacía el tanque si no admite otro (nivel mayor que 70).', 'En <code>Main</code>, conéctale una <code>VistaTexto</code> y pídele 5 ciclos.', 'No modifiques <code>Tanque</code>, <code>VistaTanque</code>, <code>VistaTexto</code>, <code>VistaBarra</code> ni <code>ControladorPanel</code>. Un caso oculto conectará un indicador que no conoces.'],
       nota: GUIA,
-      pista: 'Recargar <em>antes</em> de avanzar evita que el modelo lance la excepción: el piloto nunca necesita un <code>catch</code>.',
-      objetivoUML: [['ControladorPiloto', 'Robot', 'asociacion'], ['Robot', 'VistaRobot', 'agregacion'], ['VistaConsola', 'VistaRobot', 'realizacion'], ['Controlador', 'Robot', 'asociacion']],
-      inicial: () => ({ 'ControladorPiloto.java': PILOTO_INI, 'Main.java': MAIN_3_INI, 'Robot.java': ROBOT, 'VistaRobot.java': VISTA, 'VistaConsola.java': CONSOLA, 'VistaBarra.java': BARRA, 'Controlador.java': CONTROL }),
-      archivoInicial: 'ControladorPiloto.java',
-      solucion: { 'ControladorPiloto.java': PILOTO, 'Main.java': MAIN_3, 'Robot.java': ROBOT, 'VistaRobot.java': VISTA, 'VistaConsola.java': CONSOLA, 'VistaBarra.java': BARRA, 'Controlador.java': CONTROL },
-      previo: m => exigir(m, [{ clase: 'ControladorPiloto', ctor: 2, metodos: [['piloto', 1]] }]) || previoMain(m),
+      pista: 'Vaciar <em>antes</em> de bombear evita que el modelo lance la excepción: el control automático nunca necesita un <code>catch</code>.',
+      objetivoUML: [['ControladorAuto', 'Tanque', 'asociacion'], ['Tanque', 'VistaTanque', 'agregacion'], ['VistaTexto', 'VistaTanque', 'realizacion'], ['ControladorPanel', 'Tanque', 'asociacion']],
+      inicial: () => ({ 'ControladorAuto.java': AUTO_INI, 'Main.java': MAIN_3_INI, 'Tanque.java': TANQUE, 'VistaTanque.java': VISTA, 'VistaTexto.java': TEXTO, 'VistaBarra.java': BARRA, 'ControladorPanel.java': PANEL }),
+      archivoInicial: 'ControladorAuto.java',
+      solucion: { 'ControladorAuto.java': AUTO, 'Main.java': MAIN_3, 'Tanque.java': TANQUE, 'VistaTanque.java': VISTA, 'VistaTexto.java': TEXTO, 'VistaBarra.java': BARRA, 'ControladorPanel.java': PANEL },
+      previo: m => exigir(m, [{ clase: 'ControladorAuto', ctor: 2, metodos: [['ciclos', 1]] }]) || previoMain(m),
       animacion: corrMain,
       pruebas: [
-        casoRelacion('ControladorPiloto', 'Robot', 'asociacion'),
-        { nombre: 'El robot, las vistas y el controlador manual no cambiaron', prueba: ({ archivos }) => {
-          const tocados = sellados(archivos, { 'Robot.java': ROBOT, 'VistaRobot.java': VISTA, 'VistaConsola.java': CONSOLA, 'VistaBarra.java': BARRA, 'Controlador.java': CONTROL });
+        casoRelacion('ControladorAuto', 'Tanque', 'asociacion'),
+        { nombre: 'El tanque, los indicadores y el panel manual no cambiaron', prueba: ({ archivos }) => {
+          const tocados = sellados(archivos, { 'Tanque.java': TANQUE, 'VistaTanque.java': VISTA, 'VistaTexto.java': TEXTO, 'VistaBarra.java': BARRA, 'ControladorPanel.java': PANEL });
           return caso(!tocados.length, 'iguales a la versión sellada', tocados.length ? `se modificó ${tocados.join(', ')}` : 'sin cambios');
         } },
-        { nombre: 'El piloto no imprime', prueba: ({ archivos }) => {
-          const ok = sinTexto(archivos, 'ControladorPiloto.java', /System\.out/);
-          return caso(ok, 'ControladorPiloto sin println', ok ? 'correcto' : 'el piloto imprime en vez de dejarlo a las vistas');
+        { nombre: 'El control automático no imprime', prueba: ({ archivos }) => {
+          const ok = sinTexto(archivos, 'ControladorAuto.java', /System\.out/);
+          return caso(ok, 'ControladorAuto sin println', ok ? 'correcto' : 'el controlador imprime en vez de dejarlo a las vistas');
         } },
-        { nombre: 'El piloto nunca se queda sin energía', entrada: 'piloto(10) con una VistaBarra', prueba: ({ run }) => {
+        { nombre: 'El automático nunca dispara el enclavamiento', entrada: 'ciclos(10) con una VistaBarra', prueba: ({ run }) => {
           const h = {};
-          run(C => { const r = new C.Robot('R'); const p = new C.ControladorPiloto(r, new C.VistaBarra()); try { p.piloto(10); h.v = 'completó'; } catch (e) { h.v = 'lanzó una excepción'; } h.p = r.getPosicion(); });
-          return caso(h.v === 'completó' && h.p === 10, 'completó y posición 10', `${h.v}, posición ${h.p}`);
+          run(C => { const t = new C.Tanque('T'); const a = new C.ControladorAuto(t, new C.VistaBarra()); try { a.ciclos(10); h.v = 'completó'; } catch (e) { h.v = 'lanzó una excepción'; } h.c = t.getCargas(); });
+          return caso(h.v === 'completó' && h.c === 10, 'completó y 10 cargas', `${h.v}, ${h.c} cargas`);
         } },
-        { nombre: 'Cinco pasos en piloto automático', prueba: ({ run }) => {
+        { nombre: 'Cinco ciclos en automático', prueba: ({ run }) => {
           const { rt } = run(corrMain);
           return caso(salidaDe(rt) === SALIDA_3, SALIDA_3.replace(/\n/g, ' / '), rt.salida.join(' / ') || '(sin salida)');
         } },
-        { nombre: 'Una vista desconocida sigue al piloto', oculto: true, entrada: 'VistaContador conectada a un piloto de 4 pasos', prueba: ({ archivos }) => {
+        { nombre: 'Un indicador desconocido sigue al automático', oculto: true, entrada: 'VistaContador conectada a un automático de 4 ciclos', prueba: ({ archivos }) => {
           const h = {};
           const r = conExtra(archivos, { 'VistaContador.java': CONTADOR }, C => {
-            new C.ControladorPiloto(new C.Robot('X'), new C.VistaContador()).piloto(4);
+            new C.ControladorAuto(new C.Tanque('X'), new C.VistaContador()).ciclos(4);
             h.v = [C.VistaContador.cambios, C.VistaContador.avisos];
           });
           if (r.error) return caso(false, '5 cambios y 0 avisos', r.error);
           return caso(String(h.v) === '5,0', '5 cambios y 0 avisos', `${h.v?.[0]} cambios y ${h.v?.[1]} avisos`);
         } },
-        { nombre: 'Dos controladores manejan el mismo modelo', oculto: true, entrada: 'Controlador manual y piloto sobre un solo Robot', prueba: ({ archivos }) => {
+        { nombre: 'Dos controladores manejan el mismo modelo', oculto: true, entrada: 'ControladorPanel y ControladorAuto sobre un solo Tanque', prueba: ({ archivos }) => {
           const h = {};
           const r = conExtra(archivos, { 'VistaContador.java': CONTADOR }, C => {
-            const robot = new C.Robot('X');
-            const manual = new C.Controlador(robot, new C.VistaContador());
-            const auto = new C.ControladorPiloto(robot, new C.VistaContador());
-            manual.orden('avanzar'); auto.piloto(3);
-            h.v = [robot.getPosicion(), C.VistaContador.cambios];
+            const tanque = new C.Tanque('X');
+            const manual = new C.ControladorPanel(tanque, new C.VistaContador());
+            const auto = new C.ControladorAuto(tanque, new C.VistaContador());
+            manual.pulsar('BOMBEAR'); auto.ciclos(3);
+            h.v = [tanque.getCargas(), C.VistaContador.cambios];
           });
-          if (r.error) return caso(false, 'posición 4 y 10 cambios', r.error);
-          return caso(String(h.v) === '4,10', 'posición 4 y 10 cambios', `posición ${h.v?.[0]} y ${h.v?.[1]} cambios`);
+          if (r.error) return caso(false, '4 cargas y 10 cambios', r.error);
+          return caso(String(h.v) === '4,10', '4 cargas y 10 cambios', `${h.v?.[0]} cargas y ${h.v?.[1]} cambios`);
         } },
       ],
-      exito: '¡La sala de mando funciona sola! Cambiaste el controlador sin tocar el modelo ni las vistas. Visor de mando instalado.',
+      exito: '¡El panel trabaja solo! Cambiaste el controlador sin tocar el proceso ni los indicadores. Visor de mando instalado.',
     },
   ],
 };

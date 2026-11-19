@@ -150,23 +150,23 @@ public boolean equals(Object otro) {
   mvc: {
     nombre: 'MVC (Modelo-Vista-Controlador)', familia: 'Arquitectura', mision: 'mision-mvc',
     intencion: 'Separar una aplicación en tres piezas: el modelo guarda los datos y las reglas, la vista los muestra y el controlador traduce lo que hace el usuario en cambios del modelo.',
-    problema: 'Una clase recibe órdenes, cambia sus datos e imprime a la vez: cambiar la pantalla o la forma de mandarla obliga a abrirla entera, y no se puede probar sin la interfaz.',
+    problema: 'Una clase lee el botón, cambia el proceso y dibuja la pantalla a la vez: cambiar un indicador o la forma de mandarla obliga a abrirla entera, y no se puede probar sin la interfaz.',
     estructura: ['Modelo con los datos y las reglas, que no imprime ni conoce pantallas concretas', 'Interfaz de vista; el modelo guarda una lista y las notifica después de cada cambio (Observer)', 'Vistas concretas que solo muestran lo que reciben', 'Controlador que recibe las acciones del usuario, llama al modelo y pasa los avisos a la vista'],
-    uml: `Controlador ──> Robot ◇── 0..* VistaRobot «interface»
-                                △ (realización)
-                    VistaConsola   VistaBarra`,
+    uml: `ControladorPanel ──> Tanque ◇── 0..* VistaTanque «interface»
+                                    △ (realización)
+                          VistaTexto   VistaBarra`,
     codigo: `// Modelo: cambia y avisa
-public void avanzar() {
-    if (energia < 30) throw new IllegalStateException("sin energía");
-    posicion = posicion + 1;
-    energia = energia - 30;
-    for (VistaRobot v : vistas) v.mostrar(nombre, energia, posicion);
+public void bombear() {
+    if (nivel > 70) throw new IllegalStateException("nivel alto");
+    nivel = nivel + 30;
+    cargas = cargas + 1;
+    for (VistaTanque v : vistas) v.mostrar(etiqueta, nivel, cargas);
 }
 
-// Controlador: traduce la orden
-try { modelo.avanzar(); }
+// Controlador: traduce el botón
+try { modelo.bombear(); }
 catch (IllegalStateException e) { vista.aviso(e.getMessage()); }`,
-    cuando: 'En casi cualquier aplicación con interfaz (Android, web, escritorio): el mismo modelo se ve en varias pantallas y se maneja desde botones, voz o un piloto automático.',
+    cuando: 'En casi cualquier aplicación con interfaz: el panel HMI de una máquina, una app de Android, una página web. El mismo modelo se ve en varios indicadores y se maneja desde botones, voz o un control automático.',
     cuidado: 'No es un patrón suelto sino una arquitectura que combina Observer y Strategy. En un programa de diez líneas es demasiado; y si la vista empieza a cambiar datos o el modelo a imprimir, las piezas vuelven a mezclarse.',
   },
   kotlin: {

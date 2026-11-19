@@ -1,4 +1,4 @@
-/* Misión especial · «MVC con Kotlin» (sigue a «La sala de mando»).
+/* Misión especial · «MVC con Kotlin» (sigue a «El panel de control», la misión MVC en Java).
    El estudiante construye una app de Android de verdad: modelo y controlador en Kotlin puro y la vista
    con Jetpack Compose. Estos pasos NO se califican en el navegador: el juego envía el código al juez de
    Kotlin (juez-kotlin/, servidor propio) que compila, corre las pruebas con Robolectric y devuelve una
@@ -34,7 +34,7 @@ export const KOTLIN = {
   requiereMision: 'mision-mvc',
   // Por ahora solo en modo profesor: el juez de Kotlin todavía no está abierto a las clases
   oculta: true,
-  requisito: 'Completar la misión «La sala de mando» (MVC en Java)',
+  requisito: 'Completar la misión «El panel de control» (MVC en Java)',
   requisitoCorto: 'Completa la misión MVC',
   recompensa: 'Antena Android · tus robots se conectan a un teléfono',
   equipo: 'antena',
@@ -43,8 +43,8 @@ export const KOTLIN = {
     {
       id: 'kotlin-1', titulo: 'El robot en Kotlin', concepto: 'Modelo y controlador en Kotlin puro', escena: ESCENA, lenguaje: 'kotlin', remoto: { reto: 'kotlin-modelo' },
       archivos: ['Robot.kt', 'VistaRobot.kt', 'ControladorRobot.kt'],
-      mentor: 'Vamos a llevar la sala de mando a un teléfono. Antes de dibujar botones, el robot tiene que vivir en Kotlin sin saber nada de Android: si el modelo depende de la pantalla, no se puede probar ni reusar.',
-      teoria: `<p>Es el mismo diseño de la sala de mando, ahora en <strong>Kotlin</strong>, el lenguaje de las apps de Android:</p>
+      mentor: 'En el panel del tanque separaste modelo, vista y controlador. Ahora vamos a mandar un robot desde un teléfono con ese mismo reparto. Antes de dibujar botones, el robot tiene que vivir en Kotlin sin saber nada de Android: si el modelo depende de la pantalla, no se puede probar ni reusar.',
+      teoria: `<p>Es el mismo diseño MVC del panel de control, con un robot en lugar del tanque y en <strong>Kotlin</strong>, el lenguaje de las apps de Android:</p>
 <ul><li><code>class Robot(val nombre: String)</code> es el <strong>modelo</strong>. Con <code>var energia = 100</code> y <code>private set</code>, solo el robot puede cambiar su energía.</li>
 <li><code>check(energia &gt;= 30) { "sin energía" }</code> lanza <code>IllegalStateException</code> si la condición no se cumple.</li>
 <li><code>interface VistaRobot</code> es el contrato de las pantallas y <code>ControladorRobot</code> traduce las órdenes.</li></ul>
