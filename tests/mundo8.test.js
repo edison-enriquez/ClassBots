@@ -1,18 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MUNDOS, NIVELES, capitulosHechos } from '../src/levels/niveles.js';
-import { MUNDO8, PATRONES, patronCompleto, patronDe } from '../src/levels/mundo8.js';
+import { MUNDO8, PATRONES, patronCompleto, patronDe, papelEnMVC } from '../src/levels/mundo8.js';
 import { MISIONES, PASOS } from '../src/levels/misiones.js';
 import { aProgreso, resumen } from '../src/metricas/metricas.js';
 
-test('Mundo 8: los cinco patrones son capítulos de la ruta y el mapa termina ahí', () => {
+test('Mundo 8: los seis patrones son capítulos de la ruta y el mapa termina ahí', () => {
   assert.deepEqual(MUNDOS.map(m => m.id), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.ok(MUNDOS.every(m => m.niveles?.length), 'no quedan mundos sin capítulos');
-  assert.deepEqual(PATRONES.map(p => p.corto), ['Template Method', 'Strategy', 'Observer', 'Decorator', 'Factory Method']);
-  assert.equal(MUNDO8.length, 16);
+  assert.deepEqual(PATRONES.map(p => p.corto), ['Template Method', 'Strategy', 'Observer', 'Decorator', 'Factory Method', 'MVC']);
+  assert.deepEqual(PATRONES.map(p => p.sigla), ['TM', 'ST', 'OB', 'DE', 'FM', 'MVC']);
+  assert.equal(MUNDO8.length, 20);
   const del8 = NIVELES.filter(n => n.mundo === 8);
   assert.deepEqual(del8.map(n => n.id), MUNDO8.map(n => n.id));
-  assert.deepEqual(del8.map(n => n.enMundo), [...Array(16).keys()]);
+  assert.deepEqual(del8.map(n => n.enMundo), [...Array(20).keys()]);
   assert.equal(NIVELES.indexOf(del8[0]), NIVELES.findIndex(n => n.id === 'averia-jefe') + 1, 'el Mundo 8 sigue al jefe del Mundo 7');
 });
 
@@ -33,7 +34,7 @@ test('Mundo 8: cada patrón es un tramo que cierra con mini-jefe, caso oculto y 
 });
 
 test('Mundo 8: los patrones ya no son misiones-ramal', () => {
-  assert.deepEqual(MISIONES.map(m => m.id), ['mision-object', 'mision-mvc', 'mision-kotlin', 'expedicion-central']);
+  assert.deepEqual(MISIONES.map(m => m.id), ['mision-object', 'mision-kotlin', 'expedicion-central']);
   for (const n of MUNDO8) assert.equal(PASOS.some(p => p.id === n.id), false, `${n.id} sigue siendo paso de misión`);
 });
 
@@ -68,5 +69,17 @@ test('Mundo 8: el panel lee igual los archivos de estudiantes que hicieron los p
   assert.equal(n.ruta, true);
   assert.equal(r.capitulos, 4);
   assert.equal(r.totalCapitulos, NIVELES.length);
-  assert.deepEqual(r.mundos.find(w => w.id === 8), { id: 8, nombre: 'La Forja', superados: 3, total: 16, tiempo: 0 });
+  assert.deepEqual(r.mundos.find(w => w.id === 8), { id: 8, nombre: 'La Forja', superados: 3, total: 20, tiempo: 0 });
+});
+
+test('Mundo 8: MVC cierra el mundo y reúne a los otros cinco patrones', () => {
+  const mvc = PATRONES.at(-1);
+  assert.equal(mvc.id, 'mision-mvc');
+  assert.deepEqual(MUNDO8.slice(-4).map(n => n.id), ['mvc-1', 'mvc-2', 'mvc-3', 'mvc-4']);
+  // Cada uno de los otros patrones tiene un papel dentro de MVC, y MVC no se nombra a sí mismo
+  assert.deepEqual(mvc.reune.map(r => r.id).sort(), PATRONES.slice(0, -1).map(p => p.id).sort());
+  for (const p of PATRONES.slice(0, -1)) assert.ok(papelEnMVC(p.id), `${p.corto} no tiene papel en MVC`);
+  assert.equal(papelEnMVC(mvc.id), null);
+  // Lo que un profesor guardó cuando MVC era una misión cuenta como capítulos
+  assert.deepEqual(capitulosHechos(['plano'], ['mvc-1', 'mvc-2']), ['plano', 'mvc-1', 'mvc-2']);
 });

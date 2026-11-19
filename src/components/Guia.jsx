@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Flecha } from './UmlPanel.jsx';
 import { resaltar } from '../util/resaltar.js';
+import { papelEnMVC } from '../levels/mundo8.js';
 
 /* Guía de consulta: los seis tipos de relación UML, la multiplicidad y las interfaces */
 const RELACIONES = [
@@ -148,26 +149,32 @@ public boolean equals(Object otro) {
     cuidado: 'Con una variable Object solo puedes llamar los métodos de Object: para lo específico, instanceof y cast. Y == compara referencias, no contenido.',
   },
   mvc: {
-    nombre: 'MVC (Modelo-Vista-Controlador)', familia: 'Arquitectura', mision: 'mision-mvc',
+    nombre: 'MVC (Modelo-Vista-Controlador)', familia: 'Arquitectura · reúne cinco patrones', mision: 'mision-mvc',
     intencion: 'Separar una aplicación en tres piezas: el modelo guarda los datos y las reglas, la vista los muestra y el controlador traduce lo que hace el usuario en cambios del modelo.',
-    problema: 'Una clase recibe órdenes, cambia sus datos e imprime a la vez: cambiar la pantalla o la forma de mandarla obliga a abrirla entera, y no se puede probar sin la interfaz.',
-    estructura: ['Modelo con los datos y las reglas, que no imprime ni conoce pantallas concretas', 'Interfaz de vista; el modelo guarda una lista y las notifica después de cada cambio (Observer)', 'Vistas concretas que solo muestran lo que reciben', 'Controlador que recibe las acciones del usuario, llama al modelo y pasa los avisos a la vista'],
-    uml: `Controlador ──> Robot ◇── 0..* VistaRobot «interface»
-                                △ (realización)
-                    VistaConsola   VistaBarra`,
-    codigo: `// Modelo: cambia y avisa
-public void avanzar() {
-    if (energia < 30) throw new IllegalStateException("sin energía");
-    posicion = posicion + 1;
-    energia = energia - 30;
-    for (VistaRobot v : vistas) v.mostrar(nombre, energia, posicion);
-}
+    problema: 'Una clase lee el botón, cambia el proceso y dibuja la pantalla a la vez: cambiar un indicador o la forma de mandarla obliga a abrirla entera, y no se puede probar sin la interfaz.',
+    estructura: ['Modelo ↔ vistas con Observer: el Tanque guarda una lista de VistaTanque y las notifica después de cada cambio', 'Vistas con extras por Decorator: VistaConAlarma es una VistaTanque que envuelve a otra', 'Controlador con Strategy: ControladorPanel guarda un Modo (manual o automático) y lo cambia en ejecución', 'Armado con Template Method y Factory Method: Panel.armar() es la plantilla; crearVista() y crearModo() los decide cada subclase'],
+    uml: `Panel «abstract» ── armar() ──> ControladorPanel ──> Tanque ◇── 0..* VistaTanque «interface»
+  △                                  │                                △
+PanelOperador  PanelNocturno         └──> Modo «interface»     VistaTexto  VistaBarra  VistaConAlarma ──> VistaTanque
+                                           △
+                                  ModoManual  ModoAuto`,
+    codigo: `// Modelo: cambia y avisa (Observer)
+for (VistaTanque v : vistas) v.mostrar(etiqueta, nivel, cargas);
 
-// Controlador: traduce la orden
-try { modelo.avanzar(); }
-catch (IllegalStateException e) { vista.aviso(e.getMessage()); }`,
-    cuando: 'En casi cualquier aplicación con interfaz (Android, web, escritorio): el mismo modelo se ve en varias pantallas y se maneja desde botones, voz o un piloto automático.',
-    cuidado: 'No es un patrón suelto sino una arquitectura que combina Observer y Strategy. En un programa de diez líneas es demasiado; y si la vista empieza a cambiar datos o el modelo a imprimir, las piezas vuelven a mezclarse.',
+// Vista con alarma (Decorator)
+interna.mostrar(etiqueta, nivel, cargas);
+if (nivel > 70) interna.aviso("nivel crítico: " + nivel + "%");
+
+// Controlador: el botón MARCHA delega en el modo (Strategy)
+try { modo.marcha(modelo); }
+catch (IllegalStateException e) { vista.aviso(e.getMessage()); }
+
+// Armado (Template Method + Factory Method)
+public final ControladorPanel armar(Tanque tanque) {
+    return new ControladorPanel(tanque, crearVista(), crearModo());
+}`,
+    cuando: 'En casi cualquier aplicación con interfaz: el panel HMI de una máquina, una app de Android, una página web. El mismo modelo se ve en varios indicadores y se maneja desde botones, voz o un control automático.',
+    cuidado: 'No es un patrón suelto sino una arquitectura que se sostiene en los otros: sin Observer el modelo tendría que conocer sus pantallas, y sin Strategy el controlador se llena de if. En un programa de diez líneas es demasiado; y si la vista empieza a cambiar datos o el modelo a imprimir, las piezas vuelven a mezclarse.',
   },
   kotlin: {
     nombre: 'MVC con Kotlin y Compose', familia: 'Arquitectura · Android', mision: 'mision-kotlin',
@@ -321,6 +328,9 @@ function Codice({ abiertos, misiones }) {
                 <pre className="ejemplo"><code dangerouslySetInnerHTML={{ __html: resaltar(p.codigo) }} /></pre>
               </div>
               <p><strong>Úsalo cuando…</strong> {p.cuando}</p>
+              {/* Cómo se relaciona con MVC, el patrón que cierra el Mundo 8 y reúne a los demás */}
+              {m?.reune?.length > 0 && <p><strong>Se arma con…</strong> {m.reune.map(r => `${misiones.find(x => x.id === r.id)?.corto || r.id} (${r.papel})`).join('; ')}.</p>}
+              {papelEnMVC(p.mision) && <p><strong>En MVC.</strong> En «El panel de control», {papelEnMVC(p.mision)}.</p>}
               <p className="nota"><strong>Cuidado.</strong> {p.cuidado}</p>
             </article>
           );

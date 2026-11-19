@@ -133,6 +133,13 @@ export function dibujarMaquina(ctx, lugar, bloqueado, ahora) {
     rect(ctx, '#5b814b', x + 10, y - 15, 8, 7);
     rect(ctx, '#5b814b', x - 18, y + 10, 8, 5);
     rect(ctx, '#4c703e', x + 10, y + 10, 8, 5);
+  } else if (lugar.forma === 'panel') {
+    // Pantalla de mando: un tanque y dos indicadores
+    rect(ctx, '#101a25', x - 13, y - 10, 26, 17);
+    rect(ctx, bloqueado ? '#4d5864' : '#0e2a3a', x - 11, y - 8, 22, 13);
+    rect(ctx, bloqueado ? '#777' : '#3aa7e0', x - 9, y - 2, 5, 6);
+    rect(ctx, bloqueado ? '#888' : '#7ed6a0', x - 2, y - 6, 10, 2);
+    rect(ctx, bloqueado ? '#888' : '#ffcc33', x - 2, y - 2, 7, 2);
   } else if (lugar.forma === 'taller' || lugar.forma === 'mesa') {
     rect(ctx, '#e3bc69', x - 14, y - 12, 28, 5);
     rect(ctx, '#946e39', x - 11, y - 7, 3, 10);

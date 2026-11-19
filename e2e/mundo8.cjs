@@ -1,4 +1,4 @@
-/* Recorre el Mundo 8 (patrones de diseño): las dos páginas del plano (un sector por patrón), los 16 capítulos con la solución y el Códice.
+/* Recorre el Mundo 8 (patrones de diseño): las dos páginas del plano (un sector por patrón), los 20 capítulos con la solución y el Códice.
    Después abre un avance guardado antes del Mundo 8 (patrones hechos como misiones) y comprueba que se conserva.
    Uso: npm run build:single && node e2e/mundo8.cjs   (deja las capturas en e2e/m8-*.png) */
 const { chromium } = require('playwright');
@@ -42,14 +42,14 @@ const abrir = async (b, antes) => {
   await p.click('.mapa-ir'); await p.waitForSelector('.mapa-modal', { state: 'detached', timeout: 6000 }); await p.waitForTimeout(2600);
   console.log('cabecera del Mundo 8:', (await p.textContent('.plano-btn')).trim(), '· nodos de capítulo arriba:', await p.locator('.mapa-mundo li').count());
   const titulos = [];
-  for (let cap = 1; cap <= 16; cap++) {
+  for (let cap = 1; cap <= 20; cap++) {
     await p.click('text=Mostrar la respuesta'); await p.click('text=Reemplazar'); await p.waitForTimeout(150);
     await p.click('.btn-sec >> text=Ejecutar código'); await p.waitForTimeout(cap === 11 ? 9000 : 1200);
-    if ([1, 4, 7, 11, 14].includes(cap)) await foto(p, `cap${cap}`);
+    if ([1, 4, 7, 11, 14, 17, 20].includes(cap)) await foto(p, `cap${cap}`);
     await p.click('.btn-pri >> text=Enviar'); await p.waitForSelector('.modal.exito', { timeout: 9000 });
     titulos.push(await p.textContent('.modal.exito h2'));
-    if ([3, 16].includes(cap)) await foto(p, `exito${cap}`);
-    if (cap < 16) { await p.click('.modal.exito .btn-pri'); await p.waitForTimeout(250); }
+    if ([3, 20].includes(cap)) await foto(p, `exito${cap}`);
+    if (cap < 20) { await p.click('.modal.exito .btn-pri'); await p.waitForTimeout(250); }
   }
   console.log(titulos.map((t, k) => `${k + 1}: ${t}`).join('\n'));
   await p.click('.modal.exito >> text=Ver el Códice'); await p.waitForTimeout(400);
@@ -75,5 +75,22 @@ const abrir = async (b, antes) => {
   console.log('ficha:', (await e.textContent('.mapa-ficha')).replace(/\s+/g, ' ').slice(0, 170));
   console.log('guardado:', await e.evaluate(() => { const g = JSON.parse(localStorage.getItem('taller-objetos-react-v2')); return JSON.stringify({ hechos: g.hechos, pasosHechos: g.pasosHechos, misionesHechas: g.misionesHechas }); }));
   console.log('errores (estudiante):', e.errores);
+  await e.close();
+
+  /* ---- 3. Estudiante (sin modo profesor) que ya dominó Factory Method: MVC es el sexto sector y está abierto ---- */
+  const { NIVELES } = await import('../src/levels/niveles.js');
+  const ids = NIVELES.map(n => n.id), hasta = ids.slice(0, ids.indexOf('mvc-1'));
+  const m = await abrir(b, `if (!localStorage.getItem('taller-objetos-react-v2')) localStorage.setItem('taller-objetos-react-v2', JSON.stringify({ nivelId: 'factory-3', hechos: ${JSON.stringify(hasta)}, pasosHechos: [], misionesHechas: [], codigo: {}, perfil: { id: 'e2e3', nombre: 'Luz Nueva', grupo: '' }, segmentos: [] }));`);
+  await m.waitForTimeout(600);
+  console.log('estudiante en factory-3 · cabecera:', (await m.textContent('.plano-btn')).trim(), '· pasos arriba:', (await m.locator('.mapa-mundo li .nodo').allTextContents()).join(' '));
+  await m.click('.plano-btn'); await m.waitForTimeout(600);
+  console.log('sectores:', (await m.locator('.mapa-lienzo .mapa-punto').evaluateAll(xs => xs.map(x => x.textContent + ':' + (x.classList.contains('aqui') ? 'aquí' : x.classList.contains('completo') ? 'dominado' : x.classList.contains('cerrado') ? 'cerrado' : 'abierto')))).join(' '));
+  await m.click('.mapa-lienzo .mapa-punto >> nth=5'); await m.waitForTimeout(300);
+  console.log('ficha de MVC:', (await m.textContent('.mapa-ficha')).replace(/\s+/g, ' ').slice(0, 240));
+  await foto(m, 'plano-mvc', '.mapa-modal');
+  await m.click('.mapa-ir'); await m.waitForSelector('.mapa-modal', { state: 'detached', timeout: 6000 }); await m.waitForTimeout(400);
+  console.log('tras viajar:', (await m.textContent('.plano-btn')).trim(), '· capítulo:', (await m.textContent('.marca p')).trim(), '· pasos arriba:', (await m.locator('.mapa-mundo li .nodo').allTextContents()).join(' '));
+  await foto(m, 'mvc-estudiante');
+  console.log('errores (estudiante nuevo):', m.errores);
   await b.close();
 })();

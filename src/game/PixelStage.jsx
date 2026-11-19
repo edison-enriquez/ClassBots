@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { escenaBoveda, escenaConexiones, escenaEstacion, alEntrarEscena } from './escenas2.js';
 import { escenaArena, alEntrarArena, escenaLinea } from './escenas3.js';
 import { escenaAverias } from './escenas4.js';
-import { escenaMando } from './escenas5.js';
+import { escenaMando, escenaHMI, BOTONES_HMI } from './escenas5.js';
+import { repasar } from '../engine/motor.js';
 import { escenaCalderas } from './escenas6.js';
 import { escenaFabrica } from './escenas7.js';
 import { escenaModulos } from './escenas8.js';
@@ -17,18 +18,21 @@ const DUR = { x: 430, energia: 160, llamada: 240, print: 320, crear: 520, set: 1
 const reducido = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PISO_TALLER = 90;
 
-export default function PixelStage({ nivel, modelo, animacion, token, onCaption }) {
+/* Escenas con botones que se pueden pulsar: llaman a un método del programa que se acaba de ejecutar */
+const BOTONES = { hmi: BOTONES_HMI };
+
+export default function PixelStage({ nivel, modelo, animacion, token, onCaption, onInteraccion }) {
   const canvas = useRef(null);
   const st = useRef({ frames: [], i: 0, p: 1, t0: 0, part: [], flash: 0 });
-  const props = useRef({ nivel, modelo });
-  props.current = { nivel, modelo };
+  const props = useRef({ nivel, modelo, animacion });
+  props.current = { nivel, modelo, animacion };
   const [, force] = useState(0);
 
   // Reiniciar la reproducción cuando llega una ejecución nueva
   useEffect(() => {
     const s = st.current;
     s.frames = animacion?.frames || [];
-    s.part = []; s.flash = 0; s.fx = null;
+    s.part = []; s.flash = 0; s.fx = null; s.pulso = null; s.errorVivo = null;
     if (!s.frames.length) { s.i = 0; s.p = 1; onCaption?.(''); return; }
     if (reducido()) { s.i = s.frames.length - 1; s.p = 1; onCaption?.(s.frames[s.i].cap); return; }
     s.i = 0; s.p = 0; s.t0 = performance.now(); s.viejo = -1;
@@ -47,6 +51,46 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* El objeto del programa ejecutado que atiende un botón: el último controlador creado que tenga ese método */
+  const quienAtiende = metodo => {
+    const reg = props.current.animacion?.registro || [];
+    return [...reg].reverse().find(r => /^Controlador/.test(r.cls) && typeof r.raw[metodo] === 'function') || reg.find(r => typeof r.raw[metodo] === 'function') || null;
+  };
+  /* Un botón con `alterna` crea un objeto del programa y lo pasa como argumento: la clase que sigue,
+     en esa lista, a la del objeto de ese tipo que el controlador guarda ahora (el selector MANUAL / AUTO). */
+  const argumento = (b, quien) => {
+    if (!b.alterna) return b.arg;
+    const an = props.current.animacion, reg = an?.registro || [], C = an?.clases || {};
+    const guardados = Object.values(quien.raw).map(v => reg.find(r => v && (r.raw === v || r.proxy === v))?.cls);
+    const ahora = b.alterna.findIndex(c => guardados.includes(c));
+    return new C[b.alterna[(ahora + 1) % b.alterna.length]]();
+  };
+  const disponible = b => !!quienAtiende(b.metodo) && (!b.alterna || b.alterna.every(c => typeof props.current.animacion?.clases?.[c] === 'function'));
+  const acciones = () => Object.fromEntries((BOTONES[props.current.nivel.escena] || []).map(b => [b.metodo, disponible(b)]));
+
+  /* Botón de la escena: llama al programa del estudiante, que sigue vivo después de ejecutar Main,
+     y reproduce los eventos nuevos. La consola y la pestaña de eventos se actualizan con ellos. */
+  function pulsar(b) {
+    const an = props.current.animacion, s = st.current, quien = quienAtiende(b.metodo);
+    if (!an || !quien || !disponible(b)) return;
+    const antes = an.log.length;
+    s.pulso = { id: b.id, t: performance.now() };
+    s.errorVivo = null;
+    try { (quien.proxy || quien.raw)[b.metodo](argumento(b, quien)); }
+    catch (e) { s.errorVivo = e?.java ? e.message : e?.__msg != null ? `excepción sin atrapar: ${e.__msg}` : String(e?.message || e); }
+    if (an.log.length === antes && !s.errorVivo) return;
+    const viejos = s.frames.length;
+    Object.assign(an, repasar(an.log));
+    s.frames = an.frames;
+    if (!s.frames.length) return;
+    if (reducido() || s.errorVivo) { s.i = s.frames.length - 1; s.p = 1; }
+    else { s.i = Math.min(viejos, s.frames.length - 1); s.p = 0; s.t0 = performance.now(); }
+    s.viejo = -1;
+    onCaption?.(s.errorVivo ? `El programa falló: ${s.errorVivo}` : s.frames[s.i].cap);
+    onInteraccion?.();
+    force(n => n + 1);
+  }
 
   function avanzar(now) {
     const s = st.current;
@@ -97,7 +141,7 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
   function dibujar(ctx, now) {
     const { nivel, modelo } = props.current, s = st.current;
     const fr = s.frames[s.i], prev = s.i > 0 ? s.frames[s.i - 1] : null;
-    const datos = { nivel, modelo, fr, prev, s, now };
+    const datos = { nivel, modelo, fr, prev, s, now, acciones: acciones() };
     if (nivel.escena === 'plano') escenaPlano(ctx, modelo, nivel, now);
     else if (nivel.escena === 'taller') escenaTaller(ctx, fr, prev, s, now);
     else if (nivel.escena === 'boveda') escenaBoveda(ctx, datos);
@@ -107,6 +151,7 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
     else if (nivel.escena === 'linea') escenaLinea(ctx, datos);
     else if (nivel.escena === 'averias') escenaAverias(ctx, datos);
     else if (nivel.escena === 'mando') escenaMando(ctx, datos);
+    else if (nivel.escena === 'hmi') escenaHMI(ctx, datos);
     else if (nivel.escena === 'calderas') escenaCalderas(ctx, datos);
     else if (nivel.escena === 'fabrica') escenaFabrica(ctx, datos);
     else if (nivel.escena === 'modulos') escenaModulos(ctx, datos);
@@ -185,7 +230,22 @@ export default function PixelStage({ nivel, modelo, animacion, token, onCaption 
     });
   }
 
-  return <canvas ref={canvas} width={W} height={H} className="pixel-canvas" role="img" aria-label={`Escenario: ${nivel.titulo}`} />;
+  // El lienzo va siempre dentro del mismo contenedor: si cambiara de lugar al pasar a una escena con botones,
+  // React lo volvería a crear y el bucle de dibujo seguiría pintando en el lienzo anterior.
+  const botones = BOTONES[nivel.escena] || [];
+  const vivo = acciones();
+  return (
+    <div className="escena-viva">
+      <canvas ref={canvas} width={W} height={H} className="pixel-canvas" role="img" aria-label={`Escenario: ${nivel.titulo}`} />
+      {botones.map(b => (
+        <button key={b.id} type="button" className="escena-boton" disabled={!vivo[b.metodo]} onClick={() => pulsar(b)}
+          style={{ left: `${(b.x / W) * 100}%`, top: `${(b.y / H) * 100}%`, width: `${(b.w / W) * 100}%`, height: `${(b.h / H) * 100}%` }}
+          aria-label={`Pulsar ${b.id} en el panel`}
+          title={vivo[b.metodo] ? `Pulsar ${b.id}: llama a ${b.metodo}(${b.alterna ? b.alterna.map(c => `new ${c}()`).join(' o ') : `"${b.arg}"`}) en tu controlador`
+            : animacion ? `Tu programa todavía no tiene un controlador con ${b.metodo}(...)` : 'Ejecuta tu código para encender este botón'} />
+      ))}
+    </div>
+  );
 }
 
 function geomPasillo(nivel) {

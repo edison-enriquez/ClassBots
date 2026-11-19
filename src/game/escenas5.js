@@ -1,7 +1,8 @@
-/* Escena de la misión MVC · La sala de mando.
-   Tres puestos en fila: el CONTROL (pupitre con la última orden), el MODELO (el robot sobre su
-   plataforma, con energía y posición) y las VISTAS (un monitor por cada vista creada).
-   Los cables se encienden cuando la orden llega al modelo y cuando el modelo notifica a cada vista. */
+/* Escenas de MVC.
+   - escenaHMI (patrón MVC del Mundo 8 · El panel de control): la pantalla HMI que ve el operador, con botones
+     que se pueden pulsar. Solo se ve la vista; el reparto entre clases está en la pestaña UML.
+   - escenaMando (misión MVC con Kotlin): tres puestos en fila, CONTROL, MODELO y VISTAS, con cables que
+     se encienden cuando la orden llega al modelo y cuando el modelo notifica a cada vista. */
 import { W, P, texto } from './sprites.js';
 import { dibujarRobot, barra, linea } from './dibujo.js';
 import { suelo, muro, placa, bocadillo, plataforma, monitorPared } from './rpg.js';
@@ -12,15 +13,19 @@ const corto = (s, n) => String(s).slice(0, n);
 const sinComillas = s => String(s ?? '').trim().replace(/^"(.*)"$/, '$1');
 const etiquetaVista = cls => String(cls).replace(/^Vista/, '') || cls;
 
-/* Clases que cumplen el contrato de vista (implementan VistaRobot o una interfaz que se llame Vista…) */
+/* Clases que cumplen el contrato de vista (implementan una interfaz que se llame Vista…) */
 function clasesVista(modelo) {
   return new Set(Object.values(modelo?.clases || {})
     .filter(c => c.tipo !== 'interface' && (c.implementa || []).some(i => /^Vista/.test(i.replace(/<.*>/, ''))))
     .map(c => c.nombre));
 }
 
-/* Estado de la sala en el cuadro i: vistas creadas y lo último que mostró cada una, última orden y último cambio del modelo */
-function estadoSala(frames, i, modelo) {
+/* Qué clase es el modelo y con qué métodos llegan las órdenes en cada escena (`textual` recibe la orden como texto) */
+const SALA_ROBOT = { modelo: 'Robot', ordenes: ['orden', 'piloto'], textual: 'orden' };
+
+/* Estado de la sala en el cuadro i: vistas creadas y lo último que mostró cada una, última orden y último cambio del modelo.
+   De mostrar(nombre, valor, cuenta) se guardan el valor de la barra (energía o nivel) y la cuenta (posición o cargas). */
+function estadoSala(frames, i, modelo, cfg = SALA_ROBOT) {
   const esVista = clasesVista(modelo);
   const vistas = [], porId = new Map();
   let orden = null, cambio = null, lanza = null, print = null, controles = 0;
@@ -37,10 +42,10 @@ function estadoSala(frames, i, modelo) {
     const cls = f.objetos?.find(o => o.id === f.quien)?.cls || '';
     const args = (/\((.*)\)$/.exec(f.cap)?.[1] || '').split(', ');
     const v = porId.get(f.quien);
-    if (v && f.metodo === 'mostrar') Object.assign(v, { k, aviso: null, nombre: sinComillas(args[0]), energia: +args[1], posicion: +args[2] });
+    if (v && f.metodo === 'mostrar') Object.assign(v, { k, aviso: null, nombre: sinComillas(args[0]), valor: +args[1], cuenta: +args[2] });
     else if (v && f.metodo === 'aviso') Object.assign(v, { k, aviso: sinComillas(args.join(', ')) });
-    else if (/^Controlador/.test(cls) || ['orden', 'piloto'].includes(f.metodo)) orden = { k, txt: f.metodo === 'orden' ? sinComillas(args[0]) : `${f.metodo}(${args.join(', ')})` };
-    else if (cls === 'Robot' && f.metodo !== 'suscribir' && !/^get/.test(f.metodo)) cambio = { k, metodo: f.metodo };
+    else if (/^Controlador/.test(cls) || cfg.ordenes.includes(f.metodo)) orden = { k, auto: f.metodo !== cfg.textual, txt: f.metodo === cfg.textual ? sinComillas(args[0]) : `${f.metodo}(${args.join(', ')})` };
+    else if (cls === cfg.modelo && f.metodo !== 'suscribir' && !/^get/.test(f.metodo)) cambio = { k, metodo: f.metodo };
   }
   return { vistas, orden, cambio, lanza, print, controles, esVista };
 }
@@ -74,7 +79,7 @@ function pupitre(ctx, activo, now) {
 }
 
 /* Monitor de una vista: su nombre, lo último que mostró o el aviso en rojo */
-function monitor(ctx, x, y, v, activo, now, fantasma = false) {
+function monitor(ctx, x, y, v, activo, now, fantasma = false, letra = 'P') {
   ctx.globalAlpha = fantasma ? 0.45 : 1;
   ctx.fillStyle = activo ? '#ffffff' : P.ink; ctx.fillRect(x, y, MON_W, MON_H);
   ctx.fillStyle = '#0e1a12'; ctx.fillRect(x + 1, y + 1, MON_W - 2, MON_H - 2);
@@ -82,10 +87,10 @@ function monitor(ctx, x, y, v, activo, now, fantasma = false) {
   texto(ctx, corto(etiquetaVista(v.cls), 11), x + 3, y + 2, '#9fe8ff');
   if (v.aviso != null) {
     texto(ctx, corto('! ' + v.aviso, 11), x + 3, y + 10, P.red);
-  } else if (typeof v.energia === 'number' && !Number.isNaN(v.energia)) {
-    texto(ctx, `P${v.posicion}`, x + 3, y + 10, P.white);
-    barra(ctx, x + 13, y + 11, 17, v.energia);
-    texto(ctx, String(v.energia), x + MON_W - 3 - String(v.energia).length * 4 + 1, y + 10, P.green);
+  } else if (typeof v.valor === 'number' && !Number.isNaN(v.valor)) {
+    texto(ctx, `${letra}${v.cuenta}`, x + 3, y + 10, P.white);
+    barra(ctx, x + 13, y + 11, 17, v.valor);
+    texto(ctx, String(v.valor), x + MON_W - 3 - String(v.valor).length * 4 + 1, y + 10, P.green);
   } else {
     texto(ctx, fantasma ? 'SIN CONECTAR' : '...', x + 3, y + 10, '#5d7a6a');
   }
@@ -136,4 +141,180 @@ export function escenaMando(ctx, { modelo, fr, s, now }) {
   }
 
   if (!frames.length) bocadillo(ctx, 96, 34, 'EJECUTA PARA ENCENDER', P.white);
+}
+
+/* ---------- El panel HMI del tanque (patrón MVC del Mundo 8) ----------
+   La escena ES la vista: la pantalla que ve el operador. Solo muestra lo que las vistas del estudiante
+   recibieron del modelo (si ninguna está suscrita, el panel no tiene datos), y sus botones son de verdad:
+   al pulsarlos, PixelStage llama al controlador del programa que se acaba de ejecutar. La arquitectura
+   (quién conoce a quién) se ve en la pestaña UML, no aquí. */
+
+/* Botones del panel en coordenadas del lienzo. `metodo` es lo que se llama en el controlador del estudiante;
+   `alterna` pide crear un objeto de la clase que sigue a la del modo vigente y pasarlo como argumento. */
+export const BOTONES_HMI = [
+  { id: 'BOMBEAR', x: 6, y: 90, w: 42, h: 16, metodo: 'pulsar', arg: 'BOMBEAR', color: '#4ade80' },
+  { id: 'VACIAR', x: 52, y: 90, w: 42, h: 16, metodo: 'pulsar', arg: 'VACIAR', color: '#ffcc33' },
+  { id: 'MARCHA', x: 98, y: 90, w: 42, h: 16, metodo: 'pulsar', arg: 'MARCHA', color: '#b9a4e8' },
+  { id: 'MODO', x: 144, y: 90, w: 42, h: 16, metodo: 'cambiarModo', alterna: ['ModoManual', 'ModoAuto'], color: '#7cd4ff' },
+];
+
+/* Lo que el panel sabe en el cuadro i: qué mostró cada indicador, el último dato recibido, el aviso vigente,
+   el último botón y el modo del mando. Una vista que guarda otra vista es un decorador: no es un indicador
+   aparte, sino una capa (por ejemplo, la alarma) sobre el indicador que envuelve. */
+function estadoPanel(frames, i, modelo) {
+  const esVista = clasesVista(modelo);
+  const todas = [], porId = new Map();
+  let dato = null, aviso = null, boton = null, hablando = null, lanza = null;
+  const hasta = Math.min(i, frames.length - 1);
+  for (let k = 0; k <= hasta; k++) {
+    const f = frames[k];
+    if (f.tipo === 'crear') {
+      if (esVista.has(f.cls)) { const v = { id: f.quien, cls: f.cls, k: -1, texto: null, capas: [] }; todas.push(v); porId.set(f.quien, v); }
+      continue;
+    }
+    if (f.tipo === 'lanza') { lanza = { k, msg: f.msg }; continue; }
+    // Lo que se imprime justo después de mostrar(...) o aviso(...) es lo que esa vista dibuja en el panel
+    if (f.tipo === 'print') {
+      const txt = f.cap.replace(/^System\.out\.println → /, '');
+      if (hablando?.aviso) aviso = { ...aviso, k, txt };
+      else if (hablando) hablando.v.texto = txt;
+      continue;
+    }
+    if (f.tipo !== 'llamada') continue;
+    const cls = f.objetos?.find(o => o.id === f.quien)?.cls || '';
+    const args = (/\((.*)\)$/.exec(f.cap)?.[1] || '').split(', ');
+    const v = porId.get(f.quien);
+    if (v && f.metodo === 'mostrar') {
+      // El indicador conserva lo último que dibujó hasta que imprima de nuevo
+      Object.assign(v, { k, valor: +args[1], cuenta: +args[2] });
+      dato = { k, etiqueta: sinComillas(args[0]), nivel: +args[1], cargas: +args[2] };
+      // Un aviso sigue en la franja mientras los indicadores reciben el mismo dato (la misma ronda de avisos del modelo)
+      if (aviso && aviso.con !== `${dato.nivel}/${dato.cargas}`) aviso = null;
+      hablando = { v };
+    } else if (v && f.metodo === 'aviso') {
+      v.k = k; aviso = { k, txt: 'Aviso: ' + sinComillas(args.join(', ')), con: dato ? `${dato.nivel}/${dato.cargas}` : '' }; hablando = { v, aviso: true };
+    } else {
+      hablando = null;
+      if (/^Controlador/.test(cls) && f.metodo === 'pulsar') boton = { k, id: sinComillas(args[0]).toUpperCase() };
+      else if (/^Controlador/.test(cls) && f.metodo === 'cambiarModo') boton = { k, id: 'MODO' };
+    }
+  }
+  // Con la foto de los objetos en este cuadro: qué vista envuelve a cuál y qué modo guarda el último controlador
+  const objetos = frames[hasta]?.objetos || [];
+  const refs = o => Object.values(o.f || {}).map(x => x && x.ref).filter(Boolean);
+  const dentro = new Map();
+  for (const o of objetos) if (porId.has(o.id)) { const r = refs(o).find(id => porId.has(id) && id !== o.id); if (r) dentro.set(o.id, r); }
+  for (const [fuera] of dentro) {
+    let fondo = fuera, saltos = 0;
+    while (dentro.has(fondo) && saltos++ < 8) fondo = dentro.get(fondo);
+    porId.get(fondo).capas.push(porId.get(fuera).cls);
+  }
+  const vistas = todas.filter(v => !dentro.has(v.id)).slice(0, 3);
+  const clsDe = id => objetos.find(o => o.id === id)?.cls || '';
+  let modo = null;
+  for (const o of objetos) if (/^Controlador/.test(o.cls)) { const m = refs(o).map(clsDe).find(c => /^Modo/.test(c)); if (m) modo = m.replace(/^Modo/, '').toUpperCase(); }
+  return { vistas, dato, aviso, boton, lanza, esVista, modo };
+}
+
+/* Sinóptico: el tanque con el nivel que llegó a las vistas y la marca del enclavamiento (70 %) */
+function sinoptico(ctx, dato, activo, now) {
+  const X = 4, Y = 16, WD = 58, HT = 70;
+  ctx.fillStyle = P.ink; ctx.fillRect(X, Y, WD, HT);
+  ctx.fillStyle = '#101a2c'; ctx.fillRect(X + 1, Y + 1, WD - 2, HT - 2);
+  texto(ctx, dato ? corto(dato.etiqueta, 8) : 'TANQUE', X + 4, Y + 3, '#9fe8ff');
+  const x = X + 6, y = Y + 12, w = 24, h = 52, nivel = dato ? Math.max(0, Math.min(100, dato.nivel)) : 0;
+  ctx.fillStyle = activo ? '#ffffff' : '#8d93b8'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#0a1120'; ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+  const alto = Math.round(((h - 4) * nivel) / 100);
+  ctx.fillStyle = nivel > 70 ? '#ffb347' : '#3aa7e0'; ctx.fillRect(x + 2, y + h - 2 - alto, w - 4, alto);
+  if (alto > 1) { ctx.fillStyle = '#cfefff'; ctx.fillRect(x + 2, y + h - 2 - alto, w - 4, 1 + (activo ? Math.floor(now / 120) % 2 : 0)); }
+  const yLim = y + h - 2 - Math.round(((h - 4) * 70) / 100);
+  for (let px = x + 2; px < x + w - 2; px += 4) { ctx.fillStyle = '#ff5470'; ctx.fillRect(px, yLim, 2, 1); }
+  texto(ctx, '70', x + w + 3, yLim - 2, '#ff8fa3');
+  if (!dato) { texto(ctx, 'SIN', x + w + 3, y + 22, '#5d7a6a'); texto(ctx, 'DATO', x + w + 3, y + 30, '#5d7a6a'); return; }
+  texto(ctx, `${dato.nivel}%`, x + w + 3, y + 22, P.white);
+  texto(ctx, 'CARGA', x + w + 3, y + 34, '#7a83a8');
+  texto(ctx, String(dato.cargas), x + w + 3, y + 42, P.gold);
+}
+
+/* Un indicador del panel por cada vista: su nombre y lo que imprimió (los # se dibujan como bloques de una barra) */
+function indicador(ctx, x, y, w, v, activo, apagado) {
+  ctx.globalAlpha = apagado ? 0.45 : 1;
+  ctx.fillStyle = activo ? '#ffffff' : P.ink; ctx.fillRect(x, y, w, 16);
+  ctx.fillStyle = '#0e1a12'; ctx.fillRect(x + 1, y + 1, w - 2, 14);
+  ctx.fillStyle = '#1d3a2a'; ctx.fillRect(x + 1, y + 1, w - 2, 6);
+  const nombre = corto(etiquetaVista(v.cls).toUpperCase(), 12);
+  texto(ctx, nombre, x + 3, y + 2, '#9fe8ff');
+  // Capas que envuelven al indicador (decoradores): VistaConAlarma se lee «+ALARMA»
+  const capas = (v.capas || []).map(c => '+' + etiquetaVista(c).replace(/^Con/, '').toUpperCase()).join(' ');
+  if (capas) texto(ctx, corto(capas, Math.floor((w - 10) / 4) - nombre.length), x + 7 + nombre.length * 4, y + 2, P.gold);
+  const max = Math.floor((w - 6) / 4);
+  if (apagado) texto(ctx, 'SIN CONECTAR', x + 3, y + 9, '#5d7a6a');
+  else if (v.texto == null) texto(ctx, v.k < 0 ? '...' : '(NO IMPRIME)', x + 3, y + 9, '#5d7a6a');
+  else {
+    const m = /^(.*?)(#+)\s*$/.exec(v.texto);
+    if (m) {
+      const pre = corto(m[1].toUpperCase(), 8);
+      texto(ctx, pre, x + 3, y + 9, P.white);
+      const bx = x + 3 + pre.length * 4 + 1;
+      for (let k = 0; k < Math.min(m[2].length, Math.floor((x + w - 3 - bx) / 6)); k++) { ctx.fillStyle = k >= 7 ? '#ffb347' : P.green; ctx.fillRect(bx + k * 6, y + 9, 5, 5); }
+    } else texto(ctx, corto(v.texto.toUpperCase(), max), x + 3, y + 9, P.white);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function botonHMI(ctx, b, { activo, hundido }) {
+  ctx.fillStyle = P.ink; ctx.fillRect(b.x, b.y, b.w, b.h);
+  const dy = hundido ? 2 : 0;
+  if (!hundido) { ctx.fillStyle = activo ? '#2a3554' : '#1b2238'; ctx.fillRect(b.x + 1, b.y + b.h - 4, b.w - 2, 3); }
+  ctx.fillStyle = hundido ? '#ffffff' : activo ? b.color : '#3a4160'; ctx.fillRect(b.x + 1, b.y + 1 + dy, b.w - 2, b.h - 5);
+  if (activo && !hundido) { ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(b.x + 1, b.y + 1, b.w - 2, 1); }
+  texto(ctx, b.id, b.x + b.w / 2, b.y + 4 + dy, activo || hundido ? P.ink : '#7a83a8', { centrar: true });
+}
+
+/* `acciones` dice qué métodos tiene el controlador vivo ({ pulsar, cambiarModo }); `s.pulso` es el último botón tocado con el ratón */
+export function escenaHMI(ctx, { modelo, s, now, acciones = {} }) {
+  ctx.fillStyle = '#0b0f1c'; ctx.fillRect(0, 0, W, 112);
+  ctx.fillStyle = '#1c2540'; ctx.fillRect(0, 0, W, 13);
+  ctx.fillStyle = '#2f3b63'; ctx.fillRect(0, 12, W, 1);
+  const frames = s.frames || [];
+  const i = s.i ?? -1;
+  const est = estadoPanel(frames, i, modelo);
+  const reciente = (x, n = 1) => !!x && i - x.k <= n;
+  const fin = frames.length > 0 && i >= frames.length - 1 && s.p >= 1;
+
+  // Barra de título: nombre del panel y modo de mando
+  texto(ctx, 'PANEL HMI', 5, 4, '#9fe8ff');
+  const modo = est.modo || 'MANUAL', auto = modo !== 'MANUAL';
+  ctx.fillStyle = !frames.length ? '#3a4160' : auto ? '#7cd4ff' : P.green; ctx.fillRect(W - 49, 4, 5, 5);
+  texto(ctx, !frames.length ? 'APAGADO' : corto(modo, 10), W - 41, 4, frames.length ? P.white : '#7a83a8');
+
+  sinoptico(ctx, est.dato, reciente(est.dato), now);
+
+  // Indicadores: las vistas creadas en la ejecución o, antes de ejecutar, las clases de vista que existen
+  const lista = est.vistas.length ? est.vistas : [...est.esVista].filter(c => !/^VistaCon/.test(c)).slice(0, 3).map(cls => ({ cls, k: -1 }));
+  const apagado = !est.vistas.length;
+  lista.forEach((v, k) => indicador(ctx, 66, 16 + k * 18, 122, v, !apagado && v.k >= 0 && i - v.k <= 1, apagado));
+  if (!lista.length) indicador(ctx, 66, 16, 122, { cls: 'Vista?' }, false, true);
+
+  // Franja de avisos
+  const error = s.errorVivo, alarma = error ? { txt: error } : est.aviso;
+  const parpadea = alarma && (error || reciente(est.aviso, 3)) && Math.floor(now / 200) % 2;
+  ctx.fillStyle = P.ink; ctx.fillRect(66, 72, 122, 14);
+  ctx.fillStyle = alarma ? (parpadea ? '#b0203a' : '#6e1627') : '#0e1a12'; ctx.fillRect(67, 73, 120, 12);
+  if (alarma) {
+    // Señal de aviso y el mensaje, sin el prefijo «Aviso:» que ya da la franja
+    ctx.fillStyle = '#ffd9df'; ctx.fillRect(70, 76, 1, 4); ctx.fillRect(70, 81, 1, 1);
+    texto(ctx, corto(alarma.txt.replace(/^Aviso:\s*/i, '').toUpperCase(), 28), 74, 77, '#ffd9df');
+  }
+  else if (!frames.length) texto(ctx, 'EJECUTA PARA ENCENDER', 70, 77, '#7a83a8');
+  else if (fin && (acciones.pulsar || acciones.cambiarModo)) texto(ctx, 'EN VIVO: PULSA UN BOTON', 70, 77, Math.floor(now / 500) % 2 ? P.green : '#3d6b50');
+  else texto(ctx, 'SIN AVISOS', 70, 77, '#3d6b50');
+
+  // Botones: se hunden cuando los pulsa el programa (Main) o el ratón
+  for (const b of BOTONES_HMI) {
+    const porCodigo = reciente(est.boton) && est.boton.id === b.id;
+    const porRaton = s.pulso?.id === b.id && now - s.pulso.t < 220;
+    botonHMI(ctx, b, { activo: !!acciones[b.metodo], hundido: porCodigo || porRaton });
+  }
 }

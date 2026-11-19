@@ -42,12 +42,13 @@ for (const p of KOTLIN.pasos) {
   });
 }
 
-test('Kotlin: la misión sigue a la de MVC y cierra con un mini-jefe con casos ocultos', () => {
-  assert.equal(KOTLIN.requiereMision, 'mision-mvc');
+test('Kotlin: la misión sigue al patrón MVC y cierra con un mini-jefe con casos ocultos', () => {
+  assert.deepEqual(KOTLIN.requiere, ['mvc-4']);
+  assert.equal(KOTLIN.mundo, 8);
   // Por ahora solo la ve el profesor
   assert.equal(misionVisible(KOTLIN), false);
   assert.equal(misionVisible(KOTLIN, true), true);
-  assert.equal(misionDisponible(KOTLIN, KOTLIN.requiere, false, ['mision-mvc']), false);
+  assert.equal(misionDisponible(KOTLIN, KOTLIN.requiere, false), false);
   assert.equal(misionDisponible(KOTLIN, [], true), true);
   assert.ok(KOTLIN.pasos.at(-1).jefe);
   assert.ok(KOTLIN.pasos.at(-1).pruebas.some(c => c.oculto));
