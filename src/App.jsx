@@ -70,9 +70,6 @@ export default function App() {
   const misionDeNivel = esMision ? MISIONES.find(m => m.id === misionId) : null;
   const mundo = MUNDOS.find(m => m.id === nivel.mundo);
   const [verMundo, setVerMundo] = useState(nivel.mundo);
-  // En un mundo de patrones la cabecera muestra un tramo a la vez: null = el del capítulo actual
-  const [verPatron, setVerPatron] = useState(null);
-  useEffect(() => { setVerPatron(null); }, [nivel.id, verMundo]);
   const [guia, setGuia] = useState(null);
   const [mapa, setMapa] = useState(false);
   const [avance, setAvance] = useState(false);
@@ -332,10 +329,19 @@ export default function App() {
   const nv = prog.hechos.length + 1;
   const delMundo = NIVELES.filter(n => n.mundo === mundo.id);
   const pctMundo = Math.round(100 * delMundo.filter(n => prog.hechos.includes(n.id)).length / delMundo.length);
-  // Tramos del mundo que se está viendo (solo el Mundo 8 los tiene) y cuál se muestra en la cabecera
+  // Un mundo de patrones (el 8) no lista sus capítulos en la cabecera: se eligen en la segunda página del plano
   const patronesVistos = PATRONES.filter(p => p.mundo === verMundo);
-  const patronFoco = !patronesVistos.length ? null
-    : verPatron || (nivel.mundo === verMundo && nivel.patron) || (NIVELES.find(n => n.mundo === verMundo && !hechos.includes(n.id)) || NIVELES.find(n => n.mundo === verMundo)).patron;
+  const mundoPatrones = MUNDOS.find(m => PATRONES.some(p => p.mundo === m.id));
+  const planoPatrones = () => ({
+    mundo: mundoPatrones,
+    patrones: PATRONES.filter(p => p.mundo === mundoPatrones.id).map(p => ({
+      id: p.id, corto: p.corto, titulo: p.titulo, sigla: p.sigla, recompensa: p.recompensa, dominado: patronCompleto(p, hechos),
+      capitulos: NIVELES.flatMap((n, k) => (n.patron !== p.id ? [] : [{
+        k, id: n.id, etiqueta: `${n.mundo}.${n.enMundo + 1}`, paso: n.pasoPatron, titulo: n.titulo, concepto: n.concepto,
+        hecho: hecho(k), abierto: abierto(k), aqui: !esMision && k === i,
+      }])),
+    })),
+  });
   const finDeMundo = nivel.enMundo === nivel.totalMundo - 1;
   // En pantallas angostas la lista de capítulos se desplaza de lado: el capítulo actual queda a la vista
   const rutaRef = useRef(null);
@@ -344,7 +350,7 @@ export default function App() {
     if (!c || !el || c.scrollWidth <= c.clientWidth) return;
     const rc = c.getBoundingClientRect(), re = el.getBoundingClientRect();
     c.scrollLeft += re.left - rc.left - (rc.width - re.width) / 2;
-  }, [nivel.id, verMundo, patronFoco]);
+  }, [nivel.id, verMundo]);
   // Un mundo también cuenta como abierto si ya tiene capítulos superados (patrones hechos cuando eran misiones)
   const mundoAbierto = m => !!m.niveles && (abierto(NIVELES.findIndex(n => n.mundo === m.id)) || m.niveles.some(n => hechos.includes(n.id)));
   const mundoCompleto = m => !!m.niveles && m.niveles.every(n => prog.hechos.includes(n.id));
@@ -469,16 +475,16 @@ export default function App() {
           ) : (
           <div className="mapa-mundo" ref={rutaRef}>
             <span className="mapa-nombre">{MUNDOS.find(m => m.id === verMundo)?.nombre}</span>
-            {patronesVistos.length > 0 && (
-              <div className="patrones" role="tablist" aria-label="Patrones de este mundo">
-                {patronesVistos.map(p => (
-                  <button key={p.id} type="button" role="tab" className={'patron-chip' + (patronCompleto(p, hechos) ? ' completo' : '')} aria-selected={patronFoco === p.id}
-                    title={`${p.corto} · «${p.titulo}»${patronCompleto(p, hechos) ? ' · dominado' : ''}`} onClick={() => setVerPatron(p.id)}>{p.sigla}</button>
-                ))}
-              </div>
-            )}
-            <ol aria-label={patronFoco ? `Capítulos de ${patronesVistos.find(p => p.id === patronFoco).corto}` : undefined}>
-              {NIVELES.map((n, k) => n.mundo !== verMundo || (patronFoco && n.patron !== patronFoco) ? null : (
+            {patronesVistos.length > 0 ? (
+              <button type="button" className="plano-btn" onClick={() => setMapa('patrones')} title={`Abrir el plano de ${MUNDOS.find(m => m.id === verMundo)?.nombre}: los patrones y sus capítulos`}>
+                {nivel.mundo === verMundo && nivel.patron && !esMision
+                  ? <><strong>{nivel.patronCorto}</strong> · paso {nivel.pasoPatron + 1} de {nivel.pasosPatron}</>
+                  : <>{patronesVistos.filter(p => patronCompleto(p, hechos)).length} de {patronesVistos.length} patrones</>}
+                <span aria-hidden="true"> ▸ plano</span>
+              </button>
+            ) : (
+            <ol>
+              {NIVELES.map((n, k) => n.mundo !== verMundo ? null : (
                 <li key={n.id} className={(hecho(k) ? 'hecho' : '') + (vista && n.id === vivoV?.nivel.id ? ' alumno-aqui' : '')}>
                   <button type="button" className={'nodo' + (n.jefe ? ' jefe' : '')} aria-current={(vista ? n.id === nivel.id : k === i) ? 'step' : undefined} disabled={!abierto(k)} onClick={() => (vista ? verNivelVista(n.id) : irNivel(k))} title={(vista && n.id === vivoV?.nivel.id ? `Aquí está ${vivoV.perfil.nombre} · ` : '') + (abierto(k) ? `${n.mundo}.${n.enMundo + 1} ${n.titulo} · ${n.concepto}` : 'Supera el capítulo anterior para abrirlo')}>
                     {n.jefe ? '★' : (n.patron ? n.pasoPatron : n.enMundo) + 1}
@@ -486,6 +492,7 @@ export default function App() {
                 </li>
               ))}
             </ol>
+            )}
           </div>
           )}
         </nav>
@@ -598,7 +605,9 @@ export default function App() {
         onIniciarMision={m => (m.id === misionId ? setMapa(false) : iniciarMision(m))} onViajar={viajar} onCerrar={() => setMapa(false)}
         pasosDe={m => ({ hechos: m.pasos.filter(p => pasosHechos.includes(p.id)).length, total: m.pasos.length })}
         misionActual={misionId} capitulos={m => (m.niveles ? { hechos: m.niveles.filter(n => prog.hechos.includes(n.id)).length, total: m.niveles.length } : null)}
-        patrones={m => { const ps = PATRONES.filter(p => p.mundo === m.id); return ps.length ? { hechos: ps.filter(p => patronCompleto(p, prog.hechos)).length, total: ps.length } : null; }} />}
+        patrones={m => { const ps = PATRONES.filter(p => p.mundo === m.id); return ps.length ? { hechos: ps.filter(p => patronCompleto(p, prog.hechos)).length, total: ps.length } : null; }}
+        plano={mundoPatrones ? planoPatrones() : null} paginaInicial={mapa === 'patrones' ? 2 : null}
+        onIrCapitulo={k => { setMapa(false); if (esMision || k !== i) irNivel(k); }} />}
 
       {!prog.perfil && <Bienvenida prog={prog} onClase={c => setProg(p => ({ ...p, clase: clasePublica(c) }))}
         onListo={perfil => { setProg(p => ({ ...p, perfil })); medir(m => registrarEvento(m, { tipo: 'alta', nombre: perfil.nombre, grupo: perfil.grupo, perfilId: perfil.id, claseId: prog.clase?.id || null })); }} />}
