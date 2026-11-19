@@ -1,6 +1,7 @@
 /* Segunda página del plano: el interior del sector de patrones (Mundo 8 · La Forja).
    Se lee igual que la primera: cada patrón es un sector con su máquina, unidos por la cinta, y se viaja
-   de sector en sector. Los capítulos de cada patrón no son paradas del plano: se ven en la lista de la
+   de sector en sector. Los patrones van en orden libre: todos se abren al terminar el mundo anterior,
+   salvo el que reúne a los demás (MVC), que espera a que estén dominados. Los capítulos de cada patrón no son paradas del plano: se ven en la lista de la
    derecha (y como testigos bajo la máquina) para quien quiera entrar a un paso concreto.
    El último sector (MVC) reúne a los demás: al elegirlo, o al elegir uno de los que usa, se ven los enlaces. */
 import { useEffect, useRef, useState } from 'react';
@@ -99,8 +100,9 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
       banco(ctx, 40, 150, 54, 82);
       for (const [x, y] of [[322, 70], [344, 86], [606, 150], [324, 372], [150, 364], [600, 366]]) caja(ctx, x, y);
       dibujarCodice(ctx, e.patrones, ahora);
+      // Orden libre: un tramo de cinta se enciende cuando los dos sectores que une están abiertos
       dibujarCinta(ctx, ENTRADA, lugarDe(0), e.accesible(e.patrones[0]), ahora);
-      e.patrones.slice(1).forEach((p, k) => dibujarCinta(ctx, lugarDe(k), lugarDe(k + 1), e.patrones[k].dominado, ahora));
+      e.patrones.slice(1).forEach((p, k) => dibujarCinta(ctx, lugarDe(k), lugarDe(k + 1), e.accesible(e.patrones[k]) && e.accesible(p), ahora));
       // Compuerta de entrada
       rect(ctx, '#101a25', ENTRADA.x - 12, ENTRADA.y - 16, 16, 32);
       rect(ctx, '#bd9d55', ENTRADA.x - 9, ENTRADA.y - 13, 10, 26);
@@ -137,7 +139,10 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
   const estadoDe = (p, i) => (i === iAqui ? 'Estás aquí' : p.dominado ? 'Dominado' : !accesible(p) ? 'Bloqueado' : hechosDe(p) ? `Paso ${hechosDe(p) + 1} de ${p.capitulos.length}` : 'Disponible');
   const estadoCap = c => (c.aqui ? 'Estás aquí' : c.hecho ? 'Superado' : c.abierto ? 'Disponible' : 'Bloqueado');
   const claseCap = c => (c.aqui ? 'actual' : c.hecho ? 'completo' : c.abierto ? 'abierto' : 'bloqueado');
-  const boton = sel === iAqui ? 'Seguir aquí' : !accesible(pSel) ? (sel ? `Domina ${patrones[sel - 1].corto}` : `Completa el Mundo ${mundo.id - 1}`) : pSel.dominado ? 'Repetir patrón →' : hechosDe(pSel) ? 'Continuar patrón →' : 'Viajar aquí →';
+  // Lo que le falta a un patrón cerrado: los que reúne sin dominar (MVC) o terminar el mundo anterior
+  const faltan = p => (p.reune?.length ? patrones.filter(x => p.reune.includes(x.id) && !x.dominado) : []);
+  const requisito = p => (faltan(p).length === 1 ? `Domina ${faltan(p)[0].corto}` : faltan(p).length ? `Domina ${faltan(p).length} patrones más` : `Completa el Mundo ${mundo.id - 1}`);
+  const boton = sel === iAqui ? 'Seguir aquí' : !accesible(pSel) ? requisito(pSel) : pSel.dominado ? 'Repetir patrón →' : hechosDe(pSel) ? 'Continuar patrón →' : 'Viajar aquí →';
 
   return (
     <div className={'mapa-contenido' + (viaje ? ' viajando' : '')}>
@@ -166,9 +171,9 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
             <small>«{pSel.titulo}»</small>
             <dl>
               <div><dt>Capítulos</dt><dd>{hechosDe(pSel)} de {pSel.capitulos.length} superados</dd></div>
-              <div><dt>{pSel.dominado ? 'Empieza en' : 'Sigue'}</dt><dd>{meta.etiqueta} · {meta.titulo}</dd></div>
+              <div><dt>{meta.aqui ? 'Estás en' : pSel.dominado ? 'Empieza en' : 'Sigue'}</dt><dd>{meta.etiqueta} · {meta.titulo}</dd></div>
               <div><dt>Recompensa</dt><dd>{pSel.recompensa}</dd></div>
-              {sel === iReune && <div><dt>Reúne</dt><dd>{enlaces(sel).map(k => patrones[k].corto).join(' · ')}</dd></div>}
+              {sel === iReune && <div><dt>Reúne</dt><dd>{enlaces(sel).map(k => patrones[k].corto + (patrones[k].dominado ? ' ✓' : '')).join(' · ')}</dd></div>}
               {sel !== iReune && iReune >= 0 && pSel.papel && <div><dt>En {patrones[iReune].corto}</dt><dd>{pSel.papel}</dd></div>}
             </dl>
           </div>
@@ -180,7 +185,7 @@ export default function PlanoPatrones({ mundo, patrones, onIr, onCerrar }) {
           <span><i className="actual" /> Ubicación actual</span>
           <span><i className="completo" /> Dominado</span>
           <span><i className="cerrado" /> Bloqueado</span>
-          {iReune >= 0 && <span><i className="ramal" /> Se usa en {patrones[iReune].corto}</span>}
+          {iReune >= 0 && <span><i className="ramal" /> Orden libre · {patrones[iReune].corto} usa los otros {enlaces(iReune).length}</span>}
           <span className="mapa-ayuda">Clic para ver la ruta · doble clic o «Viajar» para ir</span>
         </div>
       </section>
