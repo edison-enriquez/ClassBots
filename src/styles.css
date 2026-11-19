@@ -383,8 +383,7 @@ ul.plano { margin: 0 0 10px; padding-left: 18px; font-size: 15px; display: flex;
 .mapa-lienzo .pixel-canvas { width: 100%; height: 100%; }
 .mapa-punto { position: absolute; display: grid; place-items: center; width: clamp(32px, 3.2vw, 48px); aspect-ratio: 1; transform: translate(-50%, -50%); padding: 0; color: var(--ink); background: #25234b; border: 2px solid #f4f1ff; box-shadow: 2px 2px 0 var(--negro); font: 10px var(--f-pixel); cursor: pointer; transition: transform .15s, filter .15s; }
 .mapa-punto:not(:disabled) { border-color: var(--gold); }
-/* Página 2 del plano: paradas de capítulo (pequeñas) y pestañas para cambiar de página */
-.mapa-punto.mapa-paso { width: clamp(22px, 2.3vw, 34px); font-size: 9px; }
+/* Pestañas para cambiar de página del plano (1 · el complejo, 2 · el sector de patrones) */
 .mapa-paginas { display: flex; gap: 4px; flex: none; }
 .mapa-paginas button { height: 32px; padding: 0 12px; font: 9px var(--f-pixel); white-space: nowrap; color: var(--dim); background: rgba(7,5,15,.4); border: 2px solid rgba(244,241,255,.3); cursor: pointer; }
 .mapa-paginas button[aria-selected="true"] { color: var(--gold-ink); background: var(--gold); border-color: var(--gold); }

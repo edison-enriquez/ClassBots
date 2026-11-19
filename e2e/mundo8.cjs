@@ -1,4 +1,4 @@
-/* Recorre el Mundo 8 (patrones de diseño): las dos páginas del plano, los 16 capítulos con la solución y el Códice.
+/* Recorre el Mundo 8 (patrones de diseño): las dos páginas del plano (un sector por patrón), los 16 capítulos con la solución y el Códice.
    Después abre un avance guardado antes del Mundo 8 (patrones hechos como misiones) y comprueba que se conserva.
    Uso: npm run build:single && node e2e/mundo8.cjs   (deja las capturas en e2e/m8-*.png) */
 const { chromium } = require('playwright');
@@ -31,8 +31,13 @@ const abrir = async (b, antes) => {
   console.log('botón del sector 8:', await p.textContent('.mapa-ir'));
   await p.click('.mapa-ir'); await p.waitForSelector('.mapa-paginas [aria-selected=true]:has-text("La Forja")', { timeout: 6000 }); await p.waitForTimeout(400);
   await foto(p, 'plano', '.mapa-modal');
-  console.log('página 2 · paradas:', await p.locator('.mapa-lienzo .mapa-punto').count(), '· patrones:', (await p.locator('.mapa-lista >> nth=0').locator('.mapa-destino-num').allTextContents()).join(' '));
-  // La primera parada pendiente ya viene elegida: el botón de la ficha entra al capítulo
+  console.log('página 2 · sectores:', (await p.locator('.mapa-lienzo .mapa-punto').allTextContents()).join(' '), '· capítulos del elegido:', await p.locator('.mapa-capitulo').count());
+  // Elegir otro patrón cambia la ficha y la lista de capítulos, sin viajar
+  await p.click('.mapa-lienzo .mapa-punto >> nth=2'); await p.waitForTimeout(250);
+  console.log('ficha de Observer:', (await p.textContent('.mapa-ficha')).replace(/\s+/g, ' ').slice(0, 150), '· capítulos:', await p.locator('.mapa-capitulo').count());
+  await foto(p, 'plano-observer', '.mapa-modal');
+  // El primer patrón pendiente: el botón de la ficha lleva a su capítulo en curso
+  await p.click('.mapa-lienzo .mapa-punto >> nth=0'); await p.waitForTimeout(250);
   console.log('ficha del plano:', await p.textContent('.mapa-ficha-num'), await p.textContent('.mapa-ir'));
   await p.click('.mapa-ir'); await p.waitForSelector('.mapa-modal', { state: 'detached', timeout: 6000 }); await p.waitForTimeout(2600);
   console.log('cabecera del Mundo 8:', (await p.textContent('.plano-btn')).trim(), '· nodos de capítulo arriba:', await p.locator('.mapa-mundo li').count());
@@ -63,7 +68,7 @@ const abrir = async (b, antes) => {
   console.log('estudiante antiguo · cabecera:', (await e.textContent('.plano-btn')).trim());
   await e.click('.plano-btn'); await e.waitForTimeout(600);
   console.log('estudiante antiguo · patrones:', (await e.locator('.mapa-lista >> nth=0').locator('.mapa-destino').evaluateAll(xs => xs.map(x => x.querySelector('strong').textContent + ': ' + x.querySelector('.mapa-estado').textContent))).join(' | '));
-  console.log('paradas:', (await e.locator('.mapa-lienzo .mapa-punto').evaluateAll(xs => xs.map(x => (x.classList.contains('completo') ? 'S' : x.classList.contains('cerrado') ? 'x' : 'o')))).join(''), '(S superado, o abierto, x cerrado)');
+  console.log('sectores:', (await e.locator('.mapa-lienzo .mapa-punto').evaluateAll(xs => xs.map(x => x.textContent + ':' + (x.classList.contains('completo') ? 'dominado' : x.classList.contains('cerrado') ? 'cerrado' : 'abierto')))).join(' '));
   await foto(e, 'antiguo-plano', '.mapa-modal');
   await e.click('.mapa-paginas button >> nth=0'); await e.waitForTimeout(400);
   await e.click('.mapa-punto[title*="La Forja"]'); await e.waitForTimeout(300);
