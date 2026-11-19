@@ -1,4 +1,4 @@
-/* Recorre el Mundo 8 (patrones de diseño): mapa, los 16 capítulos con la solución, la cabecera por patrón y el Códice.
+/* Recorre el Mundo 8 (patrones de diseño): las dos páginas del plano, los 16 capítulos con la solución y el Códice.
    Después abre un avance guardado antes del Mundo 8 (patrones hechos como misiones) y comprueba que se conserva.
    Uso: npm run build:single && node e2e/mundo8.cjs   (deja las capturas en e2e/m8-*.png) */
 const { chromium } = require('playwright');
@@ -27,8 +27,15 @@ const abrir = async (b, antes) => {
   await p.click('.mapa-destino:has-text("La Forja")'); await p.waitForTimeout(300);
   await foto(p, 'mapa', '.mapa-modal');
   console.log('sectores:', await p.locator('.mapa-punto:not(.mapa-punto-mision)').count(), '· ramales:', await p.locator('.mapa-punto-mision').count());
-  await p.click('.mapa-ir'); await p.waitForTimeout(3000);
-  console.log('patrones en la cabecera:', (await p.locator('.patron-chip').allTextContents()).join(' '));
+  // El sector de patrones no lleva a un capítulo: abre la segunda página del plano
+  console.log('botón del sector 8:', await p.textContent('.mapa-ir'));
+  await p.click('.mapa-ir'); await p.waitForSelector('.mapa-paginas [aria-selected=true]:has-text("La Forja")', { timeout: 6000 }); await p.waitForTimeout(400);
+  await foto(p, 'plano', '.mapa-modal');
+  console.log('página 2 · paradas:', await p.locator('.mapa-lienzo .mapa-punto').count(), '· patrones:', (await p.locator('.mapa-lista >> nth=0').locator('.mapa-destino-num').allTextContents()).join(' '));
+  // La primera parada pendiente ya viene elegida: el botón de la ficha entra al capítulo
+  console.log('ficha del plano:', await p.textContent('.mapa-ficha-num'), await p.textContent('.mapa-ir'));
+  await p.click('.mapa-ir'); await p.waitForSelector('.mapa-modal', { state: 'detached', timeout: 6000 }); await p.waitForTimeout(2600);
+  console.log('cabecera del Mundo 8:', (await p.textContent('.plano-btn')).trim(), '· nodos de capítulo arriba:', await p.locator('.mapa-mundo li').count());
   const titulos = [];
   for (let cap = 1; cap <= 16; cap++) {
     await p.click('text=Mostrar la respuesta'); await p.click('text=Reemplazar'); await p.waitForTimeout(150);
@@ -53,17 +60,14 @@ const abrir = async (b, antes) => {
   const e = await abrir(b, `if (!localStorage.getItem('taller-objetos-react-v2')) localStorage.setItem('taller-objetos-react-v2', JSON.stringify({ nivelId: 'plano', hechos: ['plano'], pasosHechos: ${JSON.stringify(ant.slice(1))}, misionesHechas: ['mision-strategy', 'mision-decorator'], codigo: {}, perfil: { id: 'e2e', nombre: 'Ana Antigua', grupo: '' }, segmentos: [] }));`);
   await e.waitForTimeout(600);
   await e.click('.mundo-chip >> nth=7'); await e.waitForTimeout(200);
-  const chips = await e.$$eval('.patron-chip', xs => xs.map(x => x.textContent + (x.classList.contains('completo') ? '✓' : '')));
-  console.log('estudiante antiguo · patrones:', chips.join(' '));
-  await e.click('.patron-chip >> text=ST'); await e.waitForTimeout(200);
-  console.log('nodos de Strategy:', await e.$$eval('.mapa-mundo li', xs => xs.map(x => (x.classList.contains('hecho') ? 'hecho' : 'pendiente') + (x.querySelector('button').disabled ? '/cerrado' : '/abierto')).join(' ')));
-  await e.click('.patron-chip >> text=TM'); await e.waitForTimeout(200);
-  console.log('nodos de Template Method:', await e.$$eval('.mapa-mundo li', xs => xs.map(x => (x.classList.contains('hecho') ? 'hecho' : 'pendiente') + (x.querySelector('button').disabled ? '/cerrado' : '/abierto')).join(' ')));
-  await foto(e, 'antiguo-cabecera', 'header.top');
-  await e.click('.mapa-btn'); await e.waitForTimeout(500);
-  await e.click('.mapa-destino:has-text("La Forja")'); await e.waitForTimeout(300);
-  await foto(e, 'antiguo-mapa', '.mapa-modal');
-  console.log('ficha:', (await e.textContent('.mapa-ficha')).replace(/\s+/g, ' ').slice(0, 160));
+  console.log('estudiante antiguo · cabecera:', (await e.textContent('.plano-btn')).trim());
+  await e.click('.plano-btn'); await e.waitForTimeout(600);
+  console.log('estudiante antiguo · patrones:', (await e.locator('.mapa-lista >> nth=0').locator('.mapa-destino').evaluateAll(xs => xs.map(x => x.querySelector('strong').textContent + ': ' + x.querySelector('.mapa-estado').textContent))).join(' | '));
+  console.log('paradas:', (await e.locator('.mapa-lienzo .mapa-punto').evaluateAll(xs => xs.map(x => (x.classList.contains('completo') ? 'S' : x.classList.contains('cerrado') ? 'x' : 'o')))).join(''), '(S superado, o abierto, x cerrado)');
+  await foto(e, 'antiguo-plano', '.mapa-modal');
+  await e.click('.mapa-paginas button >> nth=0'); await e.waitForTimeout(400);
+  await e.click('.mapa-punto[title*="La Forja"]'); await e.waitForTimeout(300);
+  console.log('ficha:', (await e.textContent('.mapa-ficha')).replace(/\s+/g, ' ').slice(0, 170));
   console.log('guardado:', await e.evaluate(() => { const g = JSON.parse(localStorage.getItem('taller-objetos-react-v2')); return JSON.stringify({ hechos: g.hechos, pasosHechos: g.pasosHechos, misionesHechas: g.misionesHechas }); }));
   console.log('errores (estudiante):', e.errores);
   await b.close();
