@@ -799,7 +799,7 @@ function crearRuntime(modelo){
           if(typeof k==='string'&&typeof v==='function'&&mets.has(k))return function(...args){rt.tick();log.push({t:'llamada',id,metodo:k,args:args.map(a=>rt.fmtCorto(a)),argIds:args.map(a=>(a&&typeof a==='object'&&ids.get(a))||null),antes:{...o},foto:foto()});const prev=rt.actual;rt.actual=id;try{return v.apply(this,args);}finally{rt.actual=prev;}};
           return v;}
       });
-      ids.set(raw,id);ids.set(p,id);return p;
+      ids.set(raw,id);ids.set(p,id);registro[id-1].proxy=p;return p;
     }};
   return rt;
 }

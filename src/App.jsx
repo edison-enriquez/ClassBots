@@ -523,7 +523,7 @@ export default function App() {
             <div className="monitor-bisel">
               {nivel.escena === 'android'
                 ? <TelefonoAndroid captura={resultado?.captura} evaluando={evaluando} nivel={nivel} />
-                : <PixelStage nivel={nivel} modelo={diag.modelo} animacion={resultado?.animacion} token={token} onCaption={setCaption} />}
+                : <PixelStage nivel={nivel} modelo={diag.modelo} animacion={resultado?.animacion} token={token} onCaption={setCaption} onInteraccion={() => setResultado(r => (r ? { ...r } : r))} />}
               {exito && <div className="sello">{esMision ? '¡Paso superado!' : '¡Capítulo superado!'}</div>}
             </div>
             <Dialogo caption={caption} reposo={evaluando ? (evaluando.posicion > 1 ? `Tu código está en la fila del juez: hay ${evaluando.posicion - 1} antes que tú.` : 'El juez está compilando tu Kotlin y probando tu pantalla…') : resultado?.remoto ? (resultado.captura ? 'Así se ve tu pantalla en un Android de verdad. Revisa los casos de prueba.' : 'El juez terminó. Revisa los casos de prueba.') : resultado?.animacion ? 'Fin de la escena. Revisa los casos de prueba.' : vista ? `Vista de ${vivoV?.perfil.nombre || 'el estudiante'}: pulsa Ejecutar para ver su escena (no cuenta como intento suyo).` : `${prog.perfil ? `¡Hola, ${prog.perfil.nombre.split(' ')[0]}! ` : ''}Escribe tu código y pulsa Ejecutar para ver la escena.`} />

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MVC } from '../src/levels/mision-mvc.js';
 import { evaluarNivel } from '../src/levels/evaluar.js';
+import { repasar } from '../src/engine/motor.js';
 
 globalThis.performance ??= { now: () => Date.now() };
 
@@ -50,4 +51,18 @@ test('MVC 3: también vale vaciar cuando el nivel llega a 100', () => {
 test('MVC 3: tocar el tanque sellado no pasa', () => {
   const r = juzgar(p3, cambiar(p3, 'Tanque.java', 'if (nivel > 70) {', 'if (nivel > 170) {'));
   assert.ok(fallan(r).includes('El tanque, los indicadores y el panel manual no cambiaron'));
+});
+
+test('MVC: el programa sigue vivo después de Main y el panel puede pulsar sus botones', () => {
+  const r = evaluarNivel(p1, p1.solucion);
+  const an = r.animacion, antes = { eventos: an.log.length, cuadros: an.frames.length, lineas: r.salida.length };
+  const panel = an.registro.find(x => x.cls === 'ControladorPanel');
+  assert.equal(typeof panel.proxy.pulsar, 'function');
+  // Main dejó el tanque en 10 %: tres bombeos lo llenan y el cuarto dispara el enclavamiento, que el controlador atrapa
+  for (let k = 0; k < 4; k++) panel.proxy.pulsar('BOMBEAR');
+  assert.deepEqual(r.salida.slice(antes.lineas), ['TQ-1: nivel 40%, cargas 4', 'TQ-1: nivel 70%, cargas 5', 'TQ-1: nivel 100%, cargas 6', 'Aviso: nivel alto']);
+  assert.ok(an.log.length > antes.eventos);
+  const cuadros = repasar(an.log).frames;
+  assert.ok(cuadros.length > antes.cuadros);
+  assert.ok(cuadros.slice(antes.cuadros).some(f => f.tipo === 'llamada' && f.metodo === 'pulsar'), 'la pulsación queda en el registro de eventos');
 });
