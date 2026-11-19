@@ -17,7 +17,7 @@ Mundos jugables (56 capítulos):
 
 ### Mundo 8 · La Forja: patrones de diseño
 
-Se abre con el jefe del Mundo 7. Cada patrón es un tramo que empieza con código que huele mal, sigue con una o dos variaciones y cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente). Al superar el mini-jefe, el patrón queda en el **Códice de patrones** de la Guía y su recompensa se ve en los robots de todas las escenas. La cabecera muestra una ficha por patrón (TM, ST, OB, DE, FM) y lista solo los capítulos del patrón elegido.
+Se abre con el jefe del Mundo 7. Cada patrón es un tramo que empieza con código que huele mal, sigue con una o dos variaciones y cierra con un mini-jefe con un caso oculto de extensión (algo nuevo entra sin tocar lo existente). Al superar el mini-jefe, el patrón queda en el **Códice de patrones** de la Guía y su recompensa se ve en los robots de todas las escenas. El mapa tiene una **segunda página** con el plano de La Forja, que se lee igual que la primera: cada patrón es un sector con su máquina y se viaja de sector en sector (el botón lleva al capítulo en curso de ese patrón). Los capítulos del patrón elegido aparecen en la lista de la derecha, para entrar directo a un paso. La cabecera del juego no lista los pasos de este mundo, solo muestra el patrón y el paso actual en un botón que abre ese plano.
 
 | Patrón | Retoma | Capítulos | Recompensa |
 |---|---|---|---|
